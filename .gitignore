@@ -1,0 +1,21 @@
+# Зависимости
+/node_modules
+
+# Сборка Next.js
+/.next
+/out
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# Локальная SQLite: поднимается из fixtures командой npm run seed.
+# На Vercel её нет вовсе — там дашборд читает src/generated/snapshot.json,
+# и этот файл, наоборот, коммитится намеренно.
+/data
+
+# Окружение и локальные пожитки
+.env
+.env.local
+.env.*.local
+.vercel
+.DS_Store
+*.log
