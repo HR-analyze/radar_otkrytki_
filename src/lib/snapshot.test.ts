@@ -60,22 +60,31 @@ test('даты в снимке — корректные и непрерывны�
   assert.equal(dates.length, span, `в периоде ${dates[0]}—${dates[dates.length - 1]} пропущены дни`);
 });
 
-test('за дни с сырыми выгрузками статусы посчитаны, а не взяты из легаси-книги', () => {
+test('где есть отметки, статус посчитан, а не взят из легаси-книги', () => {
   const s = readSnapshot();
-  // Строки из журнала отгрузок — не выгрузка отметок: они дают только водителя,
-  // остальные критерии за такой день по-прежнему легаси (19–21.08).
   const computedDays = [
     ...new Set(s.attendance.filter((a) => a.arrivalSource !== 'delivery').map((a) => a.date)),
   ].sort();
   assert.ok(computedDays.length >= 1, 'в снимке нет ни одного дня с сырыми отметками');
 
+  // День теперь бывает смешанным: за 22–24.08 сотрудники посчитаны по табелю,
+  // а водителя нет ни в табеле, ни в журнале отгрузок — он остаётся легаси.
+  // Инвариант формулируется по критерию, а не по дню: есть отметка — есть расчёт.
+  const withMarks = new Set(
+    s.attendance.filter((a) => a.criterion).map((a) => `${a.date}|${a.shopCode}|${a.criterion}`),
+  );
+  const byKey = new Map(s.criteria.map((c) => [`${c.date}|${c.shopCode}|${c.criterion}`, c]));
+  assert.equal(byKey.size, s.criteria.length, 'один критерий лавки за день должен быть один раз');
+
+  for (const key of withMarks) {
+    const row = byKey.get(key);
+    assert.ok(row, `${key}: есть отметки, но нет статуса критерия`);
+    assert.equal(row.origin, 'computed', `${key}: есть отметки, а статус взят из легаси-книги`);
+  }
+
   for (const date of computedDays) {
-    const day = s.criteria.filter((c) => c.date === date && c.criterion !== 'showcase');
-    assert.ok(day.length > 0, `${date}: нет статусов критериев`);
-    assert.ok(
-      day.every((c) => c.origin === 'computed'),
-      `${date}: ролевые критерии должны быть origin=computed`,
-    );
+    const computed = s.criteria.filter((c) => c.date === date && c.origin === 'computed');
+    assert.ok(computed.length > 0, `${date}: за день с выгрузкой нет ни одного расчёта`);
   }
 });
 
