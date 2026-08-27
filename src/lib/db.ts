@@ -65,11 +65,14 @@ function migrate(d: Database.Database): void {
     );
 
     -- Свёрнутый статус критерия у лавки за день — то, что рисует радар.
+    -- score — средний балл сотрудников роли (🟢3/🟡2/🔴1), из которого получен
+    -- статус при стратегии 'average'; NULL, если сворачивали по худшему.
     CREATE TABLE IF NOT EXISTS criterion_status (
       date      TEXT NOT NULL,
       shop_code TEXT NOT NULL,
       criterion TEXT NOT NULL,
       status    TEXT NOT NULL,
+      score     REAL,
       origin    TEXT NOT NULL,
       PRIMARY KEY (date, shop_code, criterion)
     );
@@ -100,6 +103,21 @@ function migrate(d: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS import_runs_by_job ON import_runs(job, started_at DESC);
   `);
+
+  // CREATE TABLE IF NOT EXISTS не достроит колонку в уже существующей БД.
+  addColumn(d, 'criterion_status', 'score', 'REAL');
+}
+
+/** Идемпотентный ALTER: SQLite не умеет ADD COLUMN IF NOT EXISTS. */
+function addColumn(
+  d: Database.Database,
+  table: string,
+  column: string,
+  type: string,
+): void {
+  const columns = d.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (columns.some((c) => c.name === column)) return;
+  d.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
 
 export interface ImportRunHandle {

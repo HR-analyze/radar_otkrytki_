@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import type { CriterionKey, CriterionStatusRow, ShowcaseRow, Status } from '../types';
 import type { ThresholdConfig } from '../types';
 import { parseShop } from '../shops';
-import { normalizeFill, statusForFill, statusFromEmoji } from '../status';
+import { aggregateStatuses, normalizeFill, statusForFill, statusFromEmoji } from '../status';
 import { isoDate } from '../time';
 
 /**
@@ -197,7 +197,7 @@ export function parseLegacyVitriny(
   }
 
   const peopleList = [...people.values()];
-  const criteria = rollUpCriteria(peopleList, showcase);
+  const criteria = rollUpCriteria(peopleList, showcase, config);
   const dates = [
     ...new Set([...peopleList.map((p) => p.date), ...showcase.map((s) => s.date)]),
   ].sort();
@@ -205,10 +205,16 @@ export function parseLegacyVitriny(
   return { shops: [...shops.values()], people: peopleList, showcase, criteria, dates, warnings };
 }
 
-/** Статусы людей → статус критерия у лавки за день (худший побеждает). */
+/**
+ * Статусы людей → статус критерия у лавки за день.
+ *
+ * Правило то же, что и для посчитанных дней (`rules.criterionAggregation`),
+ * иначе история 19–24.08 была бы раскрашена не по действующим правилам.
+ */
 function rollUpCriteria(
   people: readonly LegacyPersonStatus[],
   showcase: readonly ShowcaseRow[],
+  config: ThresholdConfig,
 ): CriterionStatusRow[] {
   const buckets = new Map<string, Status[]>();
   for (const p of people) {
@@ -218,14 +224,17 @@ function rollUpCriteria(
     else buckets.set(k, [p.status]);
   }
 
+  const strategy = config.rules.criterionAggregation.strategy;
   const out: CriterionStatusRow[] = [];
   for (const [k, statuses] of buckets) {
     const [date, shopCode, criterion] = k.split('|');
+    const { status, score } = aggregateStatuses(statuses, strategy, config);
     out.push({
       date,
       shopCode,
       criterion: criterion as CriterionKey,
-      status: worst(statuses),
+      status,
+      score,
       origin: 'legacy',
     });
   }
@@ -235,17 +244,12 @@ function rollUpCriteria(
       shopCode: s.shopCode,
       criterion: 'showcase',
       status: s.status,
+      // Витрина — один процент на лавку, усреднять нечего.
+      score: null,
       origin: 'legacy',
     });
   }
   return out;
-}
-
-function worst(statuses: readonly Status[]): Status {
-  if (statuses.includes('red')) return 'red';
-  if (statuses.includes('yellow')) return 'yellow';
-  if (statuses.includes('green')) return 'green';
-  return 'no_data';
 }
 
 function str(v: unknown): string {

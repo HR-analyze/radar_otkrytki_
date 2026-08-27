@@ -184,7 +184,7 @@ async function readFromSqlite(): Promise<Snapshot> {
 
   const criteria = (
     d
-      .prepare(`SELECT date, shop_code, criterion, status, origin FROM criterion_status`)
+      .prepare(`SELECT date, shop_code, criterion, status, score, origin FROM criterion_status`)
       .all() as Record<string, unknown>[]
   ).map(
     (r): CriterionStatusRow => ({
@@ -192,6 +192,7 @@ async function readFromSqlite(): Promise<Snapshot> {
       shopCode: r.shop_code as string,
       criterion: r.criterion as CriterionStatusRow['criterion'],
       status: r.status as CriterionStatusRow['status'],
+      score: (r.score as number | null) ?? null,
       origin: r.origin as CriterionStatusRow['origin'],
     }),
   );

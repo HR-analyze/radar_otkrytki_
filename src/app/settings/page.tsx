@@ -1,6 +1,6 @@
 import { loadConfig, configPath } from '@/lib/config';
 import { isSnapshotStale, isWritable } from '@/lib/snapshot';
-import { CRITERION_ORDER } from '@/lib/types';
+import { CRITERION_ORDER, type ThresholdConfig } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -109,13 +109,19 @@ export default async function SettingsPage() {
             warn={!config.rules.shopField.confirmed}
           />
           <Rule
+            title="Зоны по среднему баллу"
+            value={zonesLine(config.rules.scoreZones)}
+            note={config.rules.scoreZones.note}
+            warn={!config.rules.scoreZones.confirmed}
+          />
+          <Rule
             title="Агрегация статуса лавки"
-            value={config.rules.shopAggregation.strategy === 'worst' ? 'худший критерий побеждает' : config.rules.shopAggregation.strategy}
+            value={strategyLabel(config.rules.shopAggregation.strategy, 'критериев')}
             note={config.rules.shopAggregation.note}
           />
           <Rule
             title="Агрегация внутри критерия"
-            value="худший статус среди сотрудников роли"
+            value={strategyLabel(config.rules.criterionAggregation.strategy, 'сотрудников роли')}
             note={config.rules.criterionAggregation.note}
           />
         </dl>
@@ -170,6 +176,33 @@ function Rule({
 
 function pct(v: number): number {
   return Math.round(v * 100);
+}
+
+function num(v: number): string {
+  return v.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+}
+
+/** «🟢 3 / 🟡 2 / 🔴 1 → 🔴 0–1,9 · 🟡 1,91–2,6 · 🟢 2,61–3» */
+function zonesLine(z: ThresholdConfig['rules']['scoreZones']): string {
+  const yellowFrom = nextStep(z.redUntil, z.precision);
+  const greenFrom = nextStep(z.yellowUntil, z.precision);
+  return (
+    `баллы 🟢 ${z.green} / 🟡 ${z.yellow} / 🔴 ${z.red}; ` +
+    `🔴 0–${num(z.redUntil)} · 🟡 ${num(yellowFrom)}–${num(z.yellowUntil)} · ` +
+    `🟢 ${num(greenFrom)}–${num(z.green)}`
+  );
+}
+
+/** Границы включительные, поэтому следующая зона начинается на шаг выше. */
+function nextStep(value: number, precision: number): number {
+  const k = 10 ** precision;
+  return Math.round(value * k + 1) / k;
+}
+
+function strategyLabel(strategy: string, of: string): string {
+  if (strategy === 'average') return `средний балл ${of} → зона по баллу`;
+  if (strategy === 'worstOfConfirmed') return 'худший из подтверждённых критериев';
+  return `худший статус среди ${of}`;
 }
 
 /** Границы включительные, поэтому жёлтая зона начинается на минуту позже зелёной. */

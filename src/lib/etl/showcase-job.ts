@@ -62,6 +62,8 @@ export function runShowcaseJob(raw: readonly RawFill[], source: string): Showcas
         shopCode: shop.code,
         criterion: 'showcase',
         status,
+        // Витрина — один процент на лавку, усреднять нечего.
+        score: null,
         origin: 'computed',
       });
     }

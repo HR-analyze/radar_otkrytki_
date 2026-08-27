@@ -1,7 +1,7 @@
 import { loadConfig } from './config';
 import { loadSnapshot, type ImportRunSummary, type Snapshot } from './snapshot';
-import { CRITERION_ORDER, type CriterionKey, type Status } from './types';
-import { worstStatus } from './status';
+import { CRITERION_ORDER, type CriterionKey, type Status, type ThresholdConfig } from './types';
+import { aggregateStatuses } from './status';
 
 /**
  * Чтение для дашборда поверх снимка в памяти (см. snapshot.ts).
@@ -23,6 +23,19 @@ const byShopNumber = (a: ShopRow, b: ShopRow): number =>
 function shopNumber(code: string): number {
   const n = Number(code.replace(/\D/g, ''));
   return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * Статусы критериев → статус лавки за день, по правилу из конфига
+ * (`rules.shopAggregation`). 'worstOfConfirmed' отличается от 'worst' не
+ * способом свёртки, а набором критериев — он отсеивается раньше, при выборке.
+ */
+function aggregateShop(
+  statuses: readonly Status[],
+  config: ThresholdConfig,
+): { status: Status; score: number | null } {
+  const strategy = config.rules.shopAggregation.strategy;
+  return aggregateStatuses(statuses, strategy === 'average' ? 'average' : 'worst', config);
 }
 
 /* ------------------------------- справочники ----------------------------- */
@@ -98,7 +111,8 @@ export interface RadarRow {
 
 /**
  * Таблица-радар: строки — лавки, столбцы — дни.
- * Если критерий не выбран, в ячейке агрегат лавки (по умолчанию — худший критерий).
+ * Если критерий не выбран, в ячейке агрегат лавки по правилу из конфига
+ * (по умолчанию — худший критерий).
  */
 export async function radar(
   filters: RadarFilters,
@@ -147,7 +161,7 @@ export async function radar(
     for (const date of dates) {
       const cell = dayMap?.get(date);
       if (!cell) continue;
-      const status = worstStatus(cell.statuses);
+      const { status } = aggregateShop(cell.statuses, config);
       if (status === 'no_data') continue;
       cells[date] = { status, origin: cell.origin };
       if (status === 'red') redCount++;
@@ -249,8 +263,8 @@ export async function summaryByCriterion(
 }
 
 /**
- * Агрегированный статус лавки (худший критерий), свёрнутый в счётчики.
- * За период — так же среднее за день.
+ * Агрегированный статус лавки (правило — в `rules.shopAggregation`),
+ * свёрнутый в счётчики. За период — так же среднее за день.
  */
 export async function shopTotals(
   from: string,
@@ -258,6 +272,7 @@ export async function shopTotals(
   region?: string,
 ): Promise<ShopTotals> {
   const snap = await loadSnapshot();
+  const config = loadConfig();
   const shops = await shopsIn(region);
   const allowed = new Set(shops.map((s) => s.code));
 
@@ -277,7 +292,7 @@ export async function shopTotals(
   let red = 0;
   for (const shopsOfDay of byDay.values()) {
     for (const statuses of shopsOfDay.values()) {
-      const s = worstStatus(statuses);
+      const { status: s } = aggregateShop(statuses, config);
       if (s === 'green') green++;
       else if (s === 'yellow') yellow++;
       else if (s === 'red') red++;
@@ -425,9 +440,17 @@ export interface ShopDay {
   people: ShopDayPerson[];
   /** Легаси-статусы людей (для дней, где сырых выгрузок нет). */
   legacyPeople: { employeeName: string; criterion: CriterionKey; status: Status }[];
-  criteria: { criterion: CriterionKey; status: Status; origin: 'computed' | 'legacy' }[];
+  criteria: {
+    criterion: CriterionKey;
+    status: Status;
+    /** Средний балл сотрудников роли, если критерий свёрнут по среднему. */
+    score: number | null;
+    origin: 'computed' | 'legacy';
+  }[];
   fill: number | null;
   shopStatus: Status;
+  /** Средний балл критериев, если статус лавки свёрнут по среднему. */
+  shopScore: number | null;
 }
 
 export async function shopHistory(
@@ -436,6 +459,7 @@ export async function shopHistory(
   to: string,
 ): Promise<ShopDay[]> {
   const snap = await loadSnapshot();
+  const config = loadConfig();
   const inRange = (d: string): boolean => d >= from && d <= to;
 
   const people = snap.attendance.filter((r) => r.shopCode === shopCode && inRange(r.date));
@@ -460,7 +484,17 @@ export async function shopHistory(
     const dayCriteria = criteria
       .filter((c) => c.date === date)
       .sort((a, b) => CRITERION_ORDER.indexOf(a.criterion) - CRITERION_ORDER.indexOf(b.criterion))
-      .map((c) => ({ criterion: c.criterion, status: c.status, origin: c.origin }));
+      .map((c) => ({
+        criterion: c.criterion,
+        status: c.status,
+        score: c.score ?? null,
+        origin: c.origin,
+      }));
+
+    const shop = aggregateShop(
+      dayCriteria.map((c) => c.status),
+      config,
+    );
 
     return {
       date,
@@ -488,7 +522,8 @@ export async function shopHistory(
         })),
       criteria: dayCriteria,
       fill: fills.get(date) ?? null,
-      shopStatus: worstStatus(dayCriteria.map((c) => c.status)),
+      shopStatus: shop.status,
+      shopScore: shop.score,
     };
   });
 }

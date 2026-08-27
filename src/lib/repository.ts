@@ -69,13 +69,13 @@ export function upsertShowcase(rows: readonly ShowcaseRow[]): void {
 export function upsertCriterionStatuses(rows: readonly CriterionStatusRow[]): void {
   const d = getDb();
   const stmt = d.prepare(`
-    INSERT INTO criterion_status (date, shop_code, criterion, status, origin)
-    VALUES (@date, @shopCode, @criterion, @status, @origin)
+    INSERT INTO criterion_status (date, shop_code, criterion, status, score, origin)
+    VALUES (@date, @shopCode, @criterion, @status, @score, @origin)
     ON CONFLICT(date, shop_code, criterion) DO UPDATE SET
-      status = excluded.status, origin = excluded.origin
+      status = excluded.status, score = excluded.score, origin = excluded.origin
   `);
   d.transaction((list: readonly CriterionStatusRow[]) => {
-    for (const r of list) stmt.run(r);
+    for (const r of list) stmt.run({ ...r, score: r.score ?? null });
   })(rows);
 }
 

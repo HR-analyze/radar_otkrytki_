@@ -64,6 +64,11 @@ export default async function ShopPage({
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs muted">Статус лавки:</span>
                 <StatusBadge status={day.shopStatus} />
+                {day.shopScore != null && (
+                  <span className="text-xs tabular-nums muted" title={scoreHint(config)}>
+                    балл {formatScore(day.shopScore)}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -88,6 +93,13 @@ export default async function ShopPage({
                       {c === 'showcase' && day.fill != null && (
                         <span className="text-xs tabular-nums muted">
                           {Math.round(day.fill * 100)}%
+                        </span>
+                      )}
+                      {/* Средний балл — то, из чего получилась зона: заказчик
+                          считает так же руками («3+3+1 = 7/3 = 2,33»). */}
+                      {item.score != null && (
+                        <span className="text-xs tabular-nums muted" title={scoreHint(config)}>
+                          балл {formatScore(item.score)}
                         </span>
                       )}
                     </div>
@@ -222,6 +234,21 @@ function sortPeople(people: readonly ShopDayPerson[]): ShopDayPerson[] {
 
 function criterionTitleOf(c: CriterionKey, config: ReturnType<typeof loadConfig>): string {
   return config.criteria[c]?.title ?? c;
+}
+
+/** 2.33 → «2,33», 3 → «3». Как в сообщении заказчика, с запятой. */
+function formatScore(score: number): string {
+  return score.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+}
+
+/** Подсказка к баллу: границы зон берём из конфига, а не из текста. */
+function scoreHint(config: ReturnType<typeof loadConfig>): string {
+  const z = config.rules.scoreZones;
+  const n = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+  return (
+    `Средний балл: 🟢 ${z.green} / 🟡 ${z.yellow} / 🔴 ${z.red}. ` +
+    `Зоны: до ${n(z.redUntil)} — красная, до ${n(z.yellowUntil)} — жёлтая, выше — зелёная.`
+  );
 }
 
 /** «25.08.2026 7:40:55» → «7:40». */

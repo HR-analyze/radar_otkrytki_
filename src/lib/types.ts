@@ -58,6 +58,34 @@ export interface RoleMapEntry {
   trainee: boolean;
 }
 
+/**
+ * Как свернуть несколько статусов в один.
+ *   worst   — худший побеждает;
+ *   average — средний балл 🟢3/🟡2/🔴1 → зона по rules.scoreZones.
+ *
+ * У агрегации лавки есть ещё вариант 'worstOfConfirmed' — тот же worst,
+ * но только по подтверждённым критериям (см. ThresholdConfig.rules).
+ */
+export type AggregationStrategy = 'worst' | 'average';
+
+/** Зоны по среднему баллу. Границы включительные, заданы по верхнему краю. */
+export interface ScoreZonesConfig {
+  /** Балл 🟢. */
+  green: number;
+  /** Балл 🟡. */
+  yellow: number;
+  /** Балл 🔴. */
+  red: number;
+  /** Включительно: score <= redUntil → 🔴 */
+  redUntil: number;
+  /** Включительно: redUntil < score <= yellowUntil → 🟡, выше → 🟢 */
+  yellowUntil: number;
+  /** До скольких знаков округляется балл перед сравнением с границами. */
+  precision: number;
+  confirmed: boolean;
+  note: string;
+}
+
 export interface ThresholdConfig {
   version: number;
   updatedAt: string;
@@ -81,8 +109,12 @@ export interface ThresholdConfig {
       confirmed: boolean;
       note: string;
     };
-    shopAggregation: { strategy: 'worst' | 'worstOfConfirmed'; note: string };
-    criterionAggregation: { strategy: 'worst'; note: string };
+    scoreZones: ScoreZonesConfig;
+    shopAggregation: {
+      strategy: AggregationStrategy | 'worstOfConfirmed';
+      note: string;
+    };
+    criterionAggregation: { strategy: AggregationStrategy; note: string };
   };
 }
 
@@ -119,6 +151,11 @@ export interface CriterionStatusRow {
   shopCode: string;
   criterion: CriterionKey;
   status: Status;
+  /**
+   * Средний балл сотрудников этой роли (🟢3/🟡2/🔴1), из которого получен статус.
+   * null — агрегировали не по среднему (стратегия worst) либо считать было не из чего.
+   */
+  score: number | null;
   /** 'computed' — посчитано из сырых выгрузок; 'legacy' — импортировано из Витрины.xlsx как есть. */
   origin: 'computed' | 'legacy';
 }

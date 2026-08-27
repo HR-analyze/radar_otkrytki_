@@ -1,4 +1,5 @@
 import type {
+  AggregationStrategy,
   ArrivalSource,
   CriterionConfig,
   CriterionKey,
@@ -43,6 +44,18 @@ const SEVERITY: Record<Status, number> = {
 };
 
 /**
+ * Балл статуса для агрегации по среднему: 🟢 3, 🟡 2, 🔴 1.
+ * Нейтральные статусы балла не имеют и в среднее не входят — как и в worstStatus.
+ */
+export const STATUS_SCORE: Record<Status, number | null> = {
+  green: 3,
+  yellow: 2,
+  red: 1,
+  other_schedule: null,
+  no_data: null,
+};
+
+/**
  * Худший статус побеждает. Нейтральные статусы (другой график, нет данных)
  * в агрегат не входят — если кроме них ничего нет, вернётся no_data.
  */
@@ -58,6 +71,78 @@ export function worstStatus(statuses: readonly Status[]): Status {
 /** Входит ли статус в агрегаты 🔴/🟡/🟢. */
 export function countsInAggregate(status: Status): boolean {
   return SEVERITY[status] >= 0;
+}
+
+/**
+ * Средний балл по статусам: 🟢 3, 🟡 2, 🔴 1. Округляется до знаков,
+ * заданных в конфиге (по умолчанию 2) — заказчик считает так же, руками:
+ * «3+3+1 = 7/3 = 2,33».
+ *
+ * null — считать не из чего: только нейтральные статусы либо пусто.
+ */
+export function averageScore(
+  statuses: readonly Status[],
+  config: ThresholdConfig,
+): number | null {
+  let sum = 0;
+  let n = 0;
+  for (const s of statuses) {
+    const score = STATUS_SCORE[s];
+    if (score == null) continue;
+    sum += score;
+    n++;
+  }
+  return n === 0 ? null : roundScore(sum / n, config.rules.scoreZones.precision);
+}
+
+/**
+ * Зона по среднему баллу. Подтверждено заказчиком 27.08.2026:
+ * 0–1,9 🔴, 1,91–2,6 🟡, 2,61–3 🟢.
+ *
+ * Границы включительные и заданы по верхнему краю зоны, поэтому «дырок»
+ * между 1,9 и 1,91 нет: балл сначала округляется до сотых (ровно как в
+ * сообщении заказчика), и уже округлённое значение попадает в зону.
+ */
+export function statusFromScore(score: number | null, config: ThresholdConfig): Status {
+  if (score == null || Number.isNaN(score)) return 'no_data';
+  const zones = config.rules.scoreZones;
+  const rounded = roundScore(score, zones.precision);
+  if (rounded <= zones.redUntil) return 'red';
+  if (rounded <= zones.yellowUntil) return 'yellow';
+  return 'green';
+}
+
+/** Округление «как в калькуляторе»: 2.335 → 2.34, без сюрпризов двоичной дроби. */
+export function roundScore(value: number, precision: number): number {
+  const k = 10 ** precision;
+  return Math.round((value + Number.EPSILON) * k) / k;
+}
+
+export interface Aggregate {
+  status: Status;
+  /** Средний балл, если агрегировали по нему; иначе null. */
+  score: number | null;
+}
+
+/**
+ * Единая точка агрегации статусов — и для сотрудников внутри критерия,
+ * и для критериев внутри лавки. Какую стратегию применить, решает конфиг
+ * (`rules.criterionAggregation` / `rules.shopAggregation`).
+ *
+ *   worst   — худший статус побеждает (исходное правило ТЗ);
+ *   average — средний балл 🟢3/🟡2/🔴1 → зона по rules.scoreZones.
+ */
+export function aggregateStatuses(
+  statuses: readonly Status[],
+  strategy: AggregationStrategy,
+  config: ThresholdConfig,
+): Aggregate {
+  if (strategy !== 'average') return { status: worstStatus(statuses), score: null };
+
+  const score = averageScore(statuses, config);
+  // Считать не из чего (пусто или одни нейтральные) — ведём себя как worst.
+  if (score == null) return { status: worstStatus(statuses), score: null };
+  return { status: statusFromScore(score, config), score };
 }
 
 /** Должность из выгрузки → критерий + признак стажёра. */

@@ -38,7 +38,11 @@ export default async function RadarPage({
         <p className="mt-1 text-sm muted">
           {criterionTitle
             ? `Критерий: ${criterionTitle}`
-            : 'Ячейка — агрегированный статус лавки за день (худший из критериев)'}
+            : `Ячейка — агрегированный статус лавки за день (${
+                config.rules.shopAggregation.strategy === 'average'
+                  ? 'средний балл критериев'
+                  : 'худший из критериев'
+              })`}
           {' · '}
           {rows.length} лавок
         </p>

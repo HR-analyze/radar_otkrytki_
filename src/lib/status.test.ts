@@ -2,13 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadConfig } from './config';
 import {
+  aggregateStatuses,
+  averageScore,
   mapRole,
   resolveArrival,
   statusForFill,
   statusForTime,
+  statusFromScore,
   worstStatus,
   normalizeFill,
 } from './status';
+import { rollUpAttendance } from './rollup';
+import type { AttendanceRow, Status } from './types';
 import { parseShop, normalizeCode } from './shops';
 import { CRITERION_ORDER } from './types';
 import { parseClock, parseStamp, formatClock, dateRange } from './time';
@@ -127,6 +132,97 @@ test('агрегация: худший статус побеждает, нейт
   assert.equal(worstStatus(['green', 'other_schedule']), 'green');
   assert.equal(worstStatus(['other_schedule', 'no_data']), 'no_data');
   assert.equal(worstStatus([]), 'no_data');
+});
+
+test('средний балл: 🟢 3, 🟡 2, 🔴 1, нейтральные не считаются', () => {
+  // Пример заказчика от 27.08.2026: 3+3+1 = 7/3 = 2,33.
+  assert.equal(averageScore(['green', 'green', 'red'], config), 2.33);
+  assert.equal(averageScore(['green', 'green', 'green'], config), 3);
+  assert.equal(averageScore(['red', 'red'], config), 1);
+  // «Другой график» и «нет данных» не должны тянуть балл ни вверх, ни вниз.
+  assert.equal(averageScore(['green', 'green', 'red', 'other_schedule'], config), 2.33);
+  assert.equal(averageScore(['other_schedule', 'no_data'], config), null);
+  assert.equal(averageScore([], config), null);
+});
+
+test('зоны по баллу: 0–1,9 🔴, 1,91–2,6 🟡, 2,61–3 🟢', () => {
+  assert.equal(statusFromScore(0, config), 'red');
+  assert.equal(statusFromScore(1, config), 'red');
+  assert.equal(statusFromScore(1.9, config), 'red');
+  assert.equal(statusFromScore(1.91, config), 'yellow');
+  assert.equal(statusFromScore(2.33, config), 'yellow');
+  assert.equal(statusFromScore(2.6, config), 'yellow');
+  assert.equal(statusFromScore(2.61, config), 'green');
+  assert.equal(statusFromScore(3, config), 'green');
+  assert.equal(statusFromScore(null, config), 'no_data');
+
+  // Между зонами не должно быть «дырок»: балл округляется до сотых,
+  // и округлённое значение всегда попадает ровно в одну зону.
+  assert.equal(statusFromScore(1.905, config), 'yellow');
+  assert.equal(statusFromScore(2.605, config), 'green');
+});
+
+test('агрегация по среднему: три повара 🟢🟢🔴 дают жёлтый, а не красный', () => {
+  const avg = aggregateStatuses(['green', 'green', 'red'], 'average', config);
+  assert.deepEqual(avg, { status: 'yellow', score: 2.33 });
+
+  // Старое правило на тех же данных давало красный — ради этого и правка.
+  assert.deepEqual(aggregateStatuses(['green', 'green', 'red'], 'worst', config), {
+    status: 'red',
+    score: null,
+  });
+
+  // Один человек — балл равен его статусу, зона не меняется.
+  assert.deepEqual(aggregateStatuses(['red'], 'average', config), { status: 'red', score: 1 });
+  assert.deepEqual(aggregateStatuses(['yellow'], 'average', config), {
+    status: 'yellow',
+    score: 2,
+  });
+
+  // Считать не из чего — ведём себя как worst, а не выдумываем балл.
+  assert.deepEqual(aggregateStatuses(['other_schedule'], 'average', config), {
+    status: 'no_data',
+    score: null,
+  });
+  assert.deepEqual(aggregateStatuses([], 'average', config), { status: 'no_data', score: null });
+});
+
+test('свёртка отметок берёт правило из конфига и кладёт балл в строку', () => {
+  const person = (employeeName: string, status: Status): AttendanceRow => ({
+    date: '2026-08-27',
+    shopCode: 'М1',
+    shopName: 'М1 Милютинский',
+    employeeName,
+    role: 'Повар',
+    criterion: 'cook',
+    trainee: false,
+    homeShopCode: null,
+    arrivalMinutes: 360,
+    arrivalSource: 'mark',
+    rawArrival: null,
+    rawDeparture: null,
+    status,
+    note: null,
+  });
+
+  const rows = [person('А', 'green'), person('Б', 'green'), person('В', 'red')];
+  const [cook] = rollUpAttendance('2026-08-27', rows, config);
+  const expected = aggregateStatuses(
+    ['green', 'green', 'red'],
+    config.rules.criterionAggregation.strategy,
+    config,
+  );
+  assert.equal(cook.criterion, 'cook');
+  assert.equal(cook.status, expected.status);
+  assert.equal(cook.score, expected.score);
+});
+
+test('в действующем конфиге внутри критерия считается средний балл', () => {
+  // Подтверждено заказчиком 27.08.2026 — если правило вернут к worst,
+  // тикет по трём поварам 🟢🟢🔴 снова станет красным.
+  assert.equal(config.rules.criterionAggregation.strategy, 'average');
+  assert.equal(config.rules.scoreZones.redUntil, 1.9);
+  assert.equal(config.rules.scoreZones.yellowUntil, 2.6);
 });
 
 test('стажёр маппится на базовую роль с флагом trainee', () => {
