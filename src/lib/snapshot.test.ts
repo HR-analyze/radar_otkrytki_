@@ -62,7 +62,11 @@ test('даты в снимке — корректные и непрерывны�
 
 test('за дни с сырыми выгрузками статусы посчитаны, а не взяты из легаси-книги', () => {
   const s = readSnapshot();
-  const computedDays = [...new Set(s.attendance.map((a) => a.date))].sort();
+  // Строки из журнала отгрузок — не выгрузка отметок: они дают только водителя,
+  // остальные критерии за такой день по-прежнему легаси (19–21.08).
+  const computedDays = [
+    ...new Set(s.attendance.filter((a) => a.arrivalSource !== 'delivery').map((a) => a.date)),
+  ].sort();
   assert.ok(computedDays.length >= 1, 'в снимке нет ни одного дня с сырыми отметками');
 
   for (const date of computedDays) {
@@ -72,6 +76,27 @@ test('за дни с сырыми выгрузками статусы посчи
       day.every((c) => c.origin === 'computed'),
       `${date}: ролевые критерии должны быть origin=computed`,
     );
+  }
+});
+
+test('время из журнала отгрузок подставлено только там, где нет отметки face id', () => {
+  const s = readSnapshot();
+  const delivery = s.attendance.filter((a) => a.arrivalSource === 'delivery');
+  assert.ok(delivery.length > 0, 'подстановок из журнала отгрузок в снимке нет');
+
+  for (const row of delivery) {
+    assert.equal(row.criterion, 'driver', 'журнал отгрузок даёт только водителя');
+    assert.ok(row.arrivalMinutes != null, `${row.shopCode} ${row.date}: подставлено пустое время`);
+
+    const faceId = s.attendance.filter(
+      (a) =>
+        a.date === row.date &&
+        a.shopCode === row.shopCode &&
+        a.criterion === 'driver' &&
+        a.arrivalSource !== 'delivery' &&
+        a.arrivalMinutes != null,
+    );
+    assert.equal(faceId.length, 0, `${row.shopCode} ${row.date}: есть face id, подстановка лишняя`);
   }
 });
 

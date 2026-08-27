@@ -6,6 +6,9 @@ import path from 'node:path';
 import { loadConfig } from '../config';
 import { parseAttendanceBuffer } from './attendance';
 import { parseLegacyVitriny } from './legacy-vitriny';
+import { parseDeliveryTimes } from './delivery';
+import { mergeDeliveryTimes } from '../delivery-merge';
+import type { AttendanceRow } from '../types';
 import { gridToFills } from '../connectors/google-sheets';
 
 const config = loadConfig();
@@ -136,4 +139,82 @@ test('Job наполнения витрин терпит ручной ввод: 
     else process.env.RADAR_DB_PATH = prev;
     fs.rmSync(path.dirname(tmpDb), { recursive: true, force: true });
   }
+});
+
+test('журнал отгрузок: даты берутся из шапки, сломанные колонки пропускаются', () => {
+  const r = parseDeliveryTimes(fx('vremya-postavki.xlsx'));
+
+  assert.ok(r.rows.length > 1000, `строк всего ${r.rows.length}`);
+  assert.ok(r.dates.includes('2026-08-19'), 'нет 19.08 — дня, ради которого журнал и нужен');
+  for (const d of r.dates) assert.match(d, /^\d{4}-\d{2}-\d{2}$/, `битая дата ${d}`);
+
+  // В файле полсотни колонок с нечитаемой датой (формат времени вместо даты) —
+  // они должны быть пропущены, а не превратиться в даты 1899 года.
+  assert.ok(
+    r.warnings.some((w) => /нечитаемой датой/.test(w)),
+    'предупреждение про сломанную шапку потерялось',
+  );
+  assert.ok(r.dates.every((d) => d >= '2026-01-01'), 'в датах есть мусор из шапки');
+
+  for (const row of r.rows) {
+    assert.ok(row.minutes >= 0 && row.minutes < 24 * 60, `время вне суток: ${row.raw}`);
+    assert.match(row.shopCode, /^[А-Я]\d+$/, `код лавки не нормализован: ${row.shopCode}`);
+  }
+});
+
+test('подстановка отгрузок: только там, где нет отметки face id', () => {
+  const config = loadConfig();
+  const driver = (shopCode: string, arrivalMinutes: number | null): AttendanceRow => ({
+    date: '2026-08-19',
+    shopCode,
+    shopName: shopCode,
+    employeeName: `Водитель ${shopCode}`,
+    role: 'Водитель-экспедитор',
+    criterion: 'driver',
+    trainee: false,
+    homeShopCode: null,
+    arrivalMinutes,
+    arrivalSource: arrivalMinutes == null ? 'none' : 'mark',
+    rawArrival: null,
+    rawDeparture: null,
+    status: arrivalMinutes == null ? 'red' : 'green',
+    note: null,
+  });
+
+  const attendance = [driver('М1', 5 * 60 + 50), driver('М2', null)];
+  const delivery = [
+    { date: '2026-08-19', shopCode: 'М1', minutes: 7 * 60, raw: '7:00' },
+    { date: '2026-08-19', shopCode: 'М2', minutes: 6 * 60 + 20, raw: '6:20' },
+    { date: '2026-08-19', shopCode: 'М3', minutes: 6 * 60 + 40, raw: '6:40' },
+    { date: '2026-07-01', shopCode: 'М3', minutes: 6 * 60, raw: '6:00' },
+  ];
+
+  const merged = mergeDeliveryTimes(
+    attendance,
+    delivery,
+    new Set(['2026-08-19']),
+    new Map([['М3', 'М3 Пресня']]),
+    config,
+  );
+
+  assert.equal(merged.applied, 2, 'подставить нужно М2 (нет времени) и М3 (нет строки вовсе)');
+  assert.equal(merged.skippedDates, 1, 'дата вне периода данных должна быть отброшена');
+
+  // У М1 отметка есть — журнал не трогает её.
+  const m1 = merged.rows.filter((r) => r.shopCode === 'М1');
+  assert.equal(m1.length, 1);
+  assert.equal(m1[0].arrivalSource, 'mark');
+  assert.equal(m1[0].arrivalMinutes, 5 * 60 + 50);
+
+  // У М2 строка водителя без отметки уходит в «нет данных», статус даёт подстановка.
+  const m2 = merged.rows.filter((r) => r.shopCode === 'М2');
+  assert.equal(m2.length, 2);
+  assert.equal(m2.find((r) => r.arrivalSource === 'none')?.status, 'no_data');
+  assert.equal(merged.suppressed, 1);
+  const substituted = m2.find((r) => r.arrivalSource === 'delivery');
+  assert.equal(substituted?.arrivalMinutes, 6 * 60 + 20);
+  assert.equal(substituted?.status, 'yellow', '6:20 у водителя — жёлтая зона (🟢 только до 6:09)');
+
+  // Имя лавки подтягивается из справочника, если оно известно.
+  assert.equal(merged.rows.find((r) => r.shopCode === 'М3')?.shopName, 'М3 Пресня');
 });

@@ -1,6 +1,8 @@
 import { loadConfig } from '../config';
 import { startImportRun } from '../db';
 import { parseAttendanceBuffer, type ParseWarning } from '../parsers/attendance';
+import { parseDeliveryTimes } from '../parsers/delivery';
+import { mergeDeliveryTimes } from '../delivery-merge';
 import {
   replaceAttendance,
   rollUpAttendance,
@@ -19,6 +21,20 @@ export interface AttendanceJobResult {
   dates: string[];
   rows: number;
   warnings: ParseWarning[];
+  /** Сколько лавко-дней получили время водителя из журнала отгрузок. */
+  deliveryApplied: number;
+}
+
+export interface AttendanceJobOptions {
+  /** Дата отчёта, если в файле её вывести не из чего. */
+  fallbackDate?: string;
+  /** Журнал отгрузок «Время поставки» — подстановка вместо отсутствующего face id. */
+  delivery?: AttendanceSource;
+  /**
+   * Даты, известные по другим источникам (легаси-книга). Нужны подстановке:
+   * за эти дни отметок нет вовсе, а время отгрузки есть.
+   */
+  knownDates?: readonly string[];
 }
 
 /**
@@ -29,17 +45,18 @@ export interface AttendanceJobResult {
  */
 export function runAttendanceJob(
   sources: readonly AttendanceSource[],
-  fallbackDate?: string,
+  options: AttendanceJobOptions = {},
 ): AttendanceJobResult {
   const config = loadConfig();
-  const run = startImportRun('attendance', sources.map((s) => s.label).join(', '));
+  const labels = [...sources.map((s) => s.label), options.delivery?.label].filter(Boolean);
+  const run = startImportRun('attendance', labels.join(', '));
 
   try {
-    const all: AttendanceRow[] = [];
+    let all: AttendanceRow[] = [];
     const warnings: ParseWarning[] = [];
 
     for (const src of sources) {
-      const parsed = parseAttendanceBuffer(src.buffer, config, fallbackDate);
+      const parsed = parseAttendanceBuffer(src.buffer, config, options.fallbackDate);
       all.push(...parsed.rows);
       warnings.push(
         ...parsed.warnings.map((w) => ({ ...w, message: `[${src.label}] ${w.message}` })),
@@ -55,6 +72,23 @@ export function runAttendanceJob(
     }
     upsertShops([...shops.values()]);
 
+    // Журнал отгрузок: время приезда там, где отметки face id нет.
+    let deliveryApplied = 0;
+    if (options.delivery) {
+      const parsed = parseDeliveryTimes(options.delivery.buffer);
+      warnings.push(
+        ...parsed.warnings.map((message) => ({
+          kind: 'no_stamps' as const,
+          message: `[${options.delivery!.label}] ${message}`,
+        })),
+      );
+      const knownDates = new Set([...(options.knownDates ?? []), ...all.map((r) => r.date)]);
+      const names = new Map([...shops].map(([code, shop]) => [code, shop.name]));
+      const merged = mergeDeliveryTimes(all, parsed.rows, knownDates, names, config);
+      all = merged.rows;
+      deliveryApplied = merged.applied;
+    }
+
     const dates = [...new Set(all.map((r) => r.date))].sort();
     for (const date of dates) {
       const forDate = all.filter((r) => r.date === date);
@@ -63,7 +97,7 @@ export function runAttendanceJob(
     }
 
     run.finish('ok', all.length, warnings.map((w) => w.message));
-    return { dates, rows: all.length, warnings };
+    return { dates, rows: all.length, warnings, deliveryApplied };
   } catch (e) {
     run.finish('error', 0, [], e instanceof Error ? e.message : String(e));
     throw e;

@@ -1,7 +1,14 @@
 import { loadConfig } from './config';
 import { loadSnapshot, type ImportRunSummary, type Snapshot } from './snapshot';
-import { CRITERION_ORDER, type CriterionKey, type Status, type ThresholdConfig } from './types';
+import {
+  CRITERION_ORDER,
+  type ArrivalSource,
+  type CriterionKey,
+  type Status,
+  type ThresholdConfig,
+} from './types';
 import { aggregateStatuses } from './status';
+import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
 
 /**
  * Чтение для дашборда поверх снимка в памяти (см. snapshot.ts).
@@ -27,8 +34,9 @@ function shopNumber(code: string): number {
 
 /**
  * Статусы критериев → статус лавки за день, по правилу из конфига
- * (`rules.shopAggregation`). 'worstOfConfirmed' отличается от 'worst' не
- * способом свёртки, а набором критериев — он отсеивается раньше, при выборке.
+ * (`rules.shopAggregation`). Используется, когда стратегия — не 'components':
+ * 'worstOfConfirmed' отличается от 'worst' не способом свёртки, а набором
+ * критериев — он отсеивается раньше, при выборке.
  */
 function aggregateShop(
   statuses: readonly Status[],
@@ -36,6 +44,66 @@ function aggregateShop(
 ): { status: Status; score: number | null } {
   const strategy = config.rules.shopAggregation.strategy;
   return aggregateStatuses(statuses, strategy === 'average' ? 'average' : 'worst', config);
+}
+
+/** Считать ли итог лавки по формуле «Водитель + Сотрудники + Витрина» / 3. */
+function useComponents(config: ThresholdConfig): boolean {
+  return config.rules.shopAggregation.strategy === 'components';
+}
+
+/**
+ * Люди по лавкам и дням для расчёта рейтинга: за дни с сырыми выгрузками это
+ * отметки, за более ранние — статусы людей из легаси-книги (там времени нет,
+ * но цвет есть, а формуле нужен только он).
+ */
+async function peopleIndex(): Promise<Map<string, RatedPerson[]>> {
+  const snap = await loadSnapshot();
+  const index = new Map<string, RatedPerson[]>();
+
+  const put = (date: string, shopCode: string, person: RatedPerson): void => {
+    const key = `${date}|${shopCode}`;
+    const list = index.get(key);
+    if (list) list.push(person);
+    else index.set(key, [person]);
+  };
+
+  // Посчитанное побеждает легаси на уровне «день + лавка + критерий» — так же,
+  // как статусы критериев в снимке. За 19–21.08 это даёт водителя из таблицы
+  // поставок и остальных сотрудников из легаси-книги в одном расчёте.
+  const computed = new Set<string>();
+  for (const a of snap.attendance) {
+    if (a.criterion) computed.add(`${a.date}|${a.shopCode}|${a.criterion}`);
+    put(a.date, a.shopCode, { criterion: a.criterion, status: a.status });
+  }
+  for (const p of snap.legacyPeople) {
+    if (computed.has(`${p.date}|${p.shopCode}|${p.criterion}`)) continue;
+    put(p.date, p.shopCode, { criterion: p.criterion, status: p.status });
+  }
+
+  return index;
+}
+
+/**
+ * Отметки и легаси-статусы одного дня в один список для формулы рейтинга.
+ * Посчитанное побеждает легаси по критерию — см. peopleIndex.
+ */
+function ratedPeople(
+  attendance: readonly { criterion: CriterionKey | null; status: Status }[],
+  legacy: readonly { criterion: CriterionKey; status: Status }[],
+): RatedPerson[] {
+  const computed = new Set(attendance.map((a) => a.criterion).filter(Boolean));
+  return [
+    ...attendance.map((a) => ({ criterion: a.criterion, status: a.status })),
+    ...legacy
+      .filter((l) => !computed.has(l.criterion))
+      .map((l) => ({ criterion: l.criterion, status: l.status })),
+  ];
+}
+
+/** Наполнение витрины по лавкам и дням — третье слагаемое формулы. */
+async function showcaseIndex(): Promise<Map<string, Status>> {
+  const snap = await loadSnapshot();
+  return new Map(snap.showcase.map((s) => [`${s.date}|${s.shopCode}`, s.status]));
 }
 
 /* ------------------------------- справочники ----------------------------- */
@@ -120,6 +188,10 @@ export async function radar(
   const snap = await loadSnapshot();
   const config = loadConfig();
   const onlyConfirmed = config.rules.shopAggregation.strategy === 'worstOfConfirmed';
+  const wholeShop = !filters.criterion || filters.criterion === 'all';
+  const byComponents = wholeShop && useComponents(config);
+  const people = byComponents ? await peopleIndex() : null;
+  const fills = byComponents ? await showcaseIndex() : null;
 
   const shops = await shopsIn(filters.region);
   const allowedShops = new Set(shops.map((s) => s.code));
@@ -161,7 +233,10 @@ export async function radar(
     for (const date of dates) {
       const cell = dayMap?.get(date);
       if (!cell) continue;
-      const { status } = aggregateShop(cell.statuses, config);
+      const key = `${date}|${shop.code}`;
+      const { status } = byComponents
+        ? rateShopDay(people?.get(key) ?? [], fills?.get(key) ?? null, config)
+        : aggregateShop(cell.statuses, config);
       if (status === 'no_data') continue;
       cells[date] = { status, origin: cell.origin };
       if (status === 'red') redCount++;
@@ -273,6 +348,9 @@ export async function shopTotals(
 ): Promise<ShopTotals> {
   const snap = await loadSnapshot();
   const config = loadConfig();
+  const byComponents = useComponents(config);
+  const people = byComponents ? await peopleIndex() : null;
+  const fills = byComponents ? await showcaseIndex() : null;
   const shops = await shopsIn(region);
   const allowed = new Set(shops.map((s) => s.code));
 
@@ -290,9 +368,12 @@ export async function shopTotals(
   let green = 0;
   let yellow = 0;
   let red = 0;
-  for (const shopsOfDay of byDay.values()) {
-    for (const statuses of shopsOfDay.values()) {
-      const { status: s } = aggregateShop(statuses, config);
+  for (const [date, shopsOfDay] of byDay) {
+    for (const [shopCode, statuses] of shopsOfDay) {
+      const key = `${date}|${shopCode}`;
+      const { status: s } = byComponents
+        ? rateShopDay(people?.get(key) ?? [], fills?.get(key) ?? null, config)
+        : aggregateShop(statuses, config);
       if (s === 'green') green++;
       else if (s === 'yellow') yellow++;
       else if (s === 'red') red++;
@@ -427,7 +508,7 @@ export interface ShopDayPerson {
   criterion: CriterionKey | null;
   trainee: boolean;
   arrivalMinutes: number | null;
-  arrivalSource: 'mark' | 'derived_minus30' | 'none';
+  arrivalSource: ArrivalSource;
   rawArrival: string | null;
   rawDeparture: string | null;
   homeShopCode: string | null;
@@ -449,8 +530,10 @@ export interface ShopDay {
   }[];
   fill: number | null;
   shopStatus: Status;
-  /** Средний балл критериев, если статус лавки свёрнут по среднему. */
+  /** Итоговый балл лавки, если он считается по баллам. */
   shopScore: number | null;
+  /** Разбор итога на слагаемые «Водитель + Сотрудники + Витрина»; null — итог считается иначе. */
+  rating: ShopRating | null;
 }
 
 export async function shopHistory(
@@ -465,11 +548,9 @@ export async function shopHistory(
   const people = snap.attendance.filter((r) => r.shopCode === shopCode && inRange(r.date));
   const legacy = snap.legacyPeople.filter((r) => r.shopCode === shopCode && inRange(r.date));
   const criteria = snap.criteria.filter((c) => c.shopCode === shopCode && inRange(c.date));
-  const fills = new Map(
-    snap.showcase
-      .filter((s) => s.shopCode === shopCode && inRange(s.date))
-      .map((s) => [s.date, s.fill]),
-  );
+  const dayShowcase = snap.showcase.filter((s) => s.shopCode === shopCode && inRange(s.date));
+  const fills = new Map(dayShowcase.map((s) => [s.date, s.fill]));
+  const showcaseStatuses = new Map(dayShowcase.map((s) => [s.date, s.status]));
 
   const dates = [
     ...new Set([
@@ -491,30 +572,33 @@ export async function shopHistory(
         origin: c.origin,
       }));
 
-    const shop = aggregateShop(
-      dayCriteria.map((c) => c.status),
-      config,
-    );
+    const dayPeople = people.filter((x) => x.date === date);
+    const dayLegacy = legacy.filter((x) => x.date === date);
+    const rating = useComponents(config)
+      ? rateShopDay(ratedPeople(dayPeople, dayLegacy), showcaseStatuses.get(date) ?? null, config)
+      : null;
+    const shop = rating ?? aggregateShop(dayCriteria.map((c) => c.status), config);
 
     return {
       date,
-      people: people
-        .filter((p) => p.date === date)
-        .map((p) => ({
-          employeeName: p.employeeName,
-          role: p.role,
-          criterion: p.criterion,
-          trainee: p.trainee,
-          arrivalMinutes: p.arrivalMinutes,
-          arrivalSource: p.arrivalSource,
-          rawArrival: p.rawArrival,
-          rawDeparture: p.rawDeparture,
-          homeShopCode: p.homeShopCode,
-          status: p.status,
-          note: p.note,
-        })),
-      legacyPeople: legacy
-        .filter((p) => p.date === date)
+      people: dayPeople.map((p) => ({
+        employeeName: p.employeeName,
+        role: p.role,
+        criterion: p.criterion,
+        trainee: p.trainee,
+        arrivalMinutes: p.arrivalMinutes,
+        arrivalSource: p.arrivalSource,
+        rawArrival: p.rawArrival,
+        rawDeparture: p.rawDeparture,
+        homeShopCode: p.homeShopCode,
+        status: p.status,
+        note: p.note,
+      })),
+      // Критерии, которые за этот день посчитаны по отметкам, из легаси-списка
+      // убираем: иначе за 19–21.08 водитель показывался бы дважды — реальным
+      // временем из таблицы поставок и раскрашенным вручную статусом.
+      legacyPeople: dayLegacy
+        .filter((p) => !dayPeople.some((x) => x.criterion === p.criterion))
         .map((p) => ({
           employeeName: p.employeeName,
           criterion: p.criterion,
@@ -524,6 +608,7 @@ export async function shopHistory(
       fill: fills.get(date) ?? null,
       shopStatus: shop.status,
       shopScore: shop.score,
+      rating,
     };
   });
 }

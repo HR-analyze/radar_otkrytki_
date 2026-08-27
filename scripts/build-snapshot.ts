@@ -12,7 +12,9 @@ import path from 'node:path';
 import { loadConfig } from '../src/lib/config';
 import { fixturesFingerprint, readFixtures } from '../src/lib/fixtures';
 import { parseAttendanceBuffer } from '../src/lib/parsers/attendance';
+import { parseDeliveryTimes } from '../src/lib/parsers/delivery';
 import { parseLegacyVitriny } from '../src/lib/parsers/legacy-vitriny';
+import { mergeDeliveryTimes } from '../src/lib/delivery-merge';
 import { rollUpAttendance } from '../src/lib/rollup';
 import { configFingerprint, type Snapshot } from '../src/lib/snapshot';
 import type { AttendanceRow, CriterionStatusRow, Shop } from '../src/lib/types';
@@ -35,7 +37,7 @@ function main(): void {
   warnings.push(...legacy.warnings);
 
   // 2. Сырые выгрузки: расчёт по алгоритму за все даты, что в них найдутся.
-  const attendance: AttendanceRow[] = [];
+  let attendance: AttendanceRow[] = [];
   for (const file of files.attendance) {
     const parsed = parseAttendanceBuffer(file.buffer, config);
     attendance.push(...parsed.rows);
@@ -52,6 +54,24 @@ function main(): void {
       name: r.shopName,
       region: prev?.region ?? null,
     });
+  }
+
+  // 3.1. Журнал отгрузок: время приезда водителя там, где нет отметки face id.
+  let deliveryStats = '';
+  if (files.delivery) {
+    const parsed = parseDeliveryTimes(files.delivery.buffer);
+    warnings.push(...parsed.warnings.map((w) => `[${files.delivery!.name}] ${w}`));
+
+    // Дни считаем известными по остальным источникам: в журнале есть даты,
+    // по которым нет ни выгрузок, ни легаси-книги.
+    const knownDates = new Set([...legacy.dates, ...attendance.map((r) => r.date)]);
+    const names = new Map([...shops].map(([code, shop]) => [code, shop.name]));
+    const merged = mergeDeliveryTimes(attendance, parsed.rows, knownDates, names, config);
+    attendance = merged.rows;
+
+    deliveryStats =
+      `  отгрузки: строк ${parsed.rows.length}, подставлено ${merged.applied} лавко-дней, ` +
+      `скрыто отметок без face id ${merged.suppressed}, вне периода ${merged.skippedDates}`;
   }
 
   // 4. Статусы критериев: посчитанные за 25.08 перекрывают легаси за ту же дату.
@@ -78,7 +98,7 @@ function main(): void {
     runs: [
       {
         job: 'snapshot',
-        source: `fixtures: ${[files.legacy?.name, ...files.attendance.map((f) => f.name)]
+        source: `fixtures: ${[files.legacy?.name, files.delivery?.name, ...files.attendance.map((f) => f.name)]
           .filter(Boolean)
           .join(', ')}`,
         startedAt: new Date().toISOString(),
@@ -97,12 +117,14 @@ function main(): void {
 
   console.log(`Снимок собран: ${path.relative(process.cwd(), OUT)} (${sizeKb} КБ)`);
   console.log(`  файлы: ${files.legacy ? files.legacy.name + ' (легаси)' : 'легаси-книги нет'}` +
+    (files.delivery ? `, отгрузки: ${files.delivery.name}` : ', журнала отгрузок нет') +
     (files.attendance.length ? `, выгрузки: ${files.attendance.map((f) => f.name).join(', ')}` : ', выгрузок нет'));
   console.log(
     `  лавок ${snapshot.shops.length}, отметок ${snapshot.attendance.length}, ` +
       `витрин ${snapshot.showcase.length}, статусов критериев ${snapshot.criteria.length}`,
   );
   console.log(`  даты: ${dates.length ? `${dates[0]} — ${dates[dates.length - 1]} (${dates.length})` : 'нет'}`);
+  if (deliveryStats) console.log(deliveryStats);
   if (warnings.length) console.log(`  предупреждений при разборе: ${warnings.length}`);
 }
 

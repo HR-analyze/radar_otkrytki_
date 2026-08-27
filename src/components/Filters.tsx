@@ -95,7 +95,7 @@ export function Filters({
             value={state.criterion ?? 'all'}
             onChange={(e) => apply({ criterion: e.target.value as CriterionKey | 'all' })}
           >
-            <option value="all">Все (агрегат лавки)</option>
+            <option value="all">Общий результат</option>
             {CRITERION_ORDER.map((c) => (
               <option key={c} value={c}>
                 {config.criteria[c]?.title ?? c}

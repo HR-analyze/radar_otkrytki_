@@ -11,11 +11,13 @@ import * as XLSX from 'xlsx';
  * Дата берётся из содержимого отметок, а не из имени файла.
  *
  * Тип файла определяется по листам: легаси-книга «Витрины» опознаётся по листу
- * «Все данные», всё остальное считается выгрузкой отметок (выходы и водители
- * имеют одинаковый формат колонок, различает их только должность).
+ * «Все данные», журнал отгрузок — по листу «Время поставки», всё остальное
+ * считается выгрузкой отметок (выходы и водители имеют одинаковый формат
+ * колонок, различает их только должность).
  */
 
 const LEGACY_SHEET = 'Все данные';
+const DELIVERY_SHEET = 'Время поставки';
 const SUPPORTED = /\.(xls|xlsx)$/i;
 
 export interface FixtureFile {
@@ -26,6 +28,8 @@ export interface FixtureFile {
 export interface FixtureSet {
   /** Легаси-книга «Витрины.xlsx», если лежит в папке. */
   legacy: FixtureFile | null;
+  /** Журнал отгрузок «Время поставки», если лежит в папке. */
+  delivery: FixtureFile | null;
   /** Выгрузки отметок, отсортированные по имени. */
   attendance: FixtureFile[];
   warnings: string[];
@@ -39,8 +43,8 @@ export interface FixtureSet {
  * `npm test` это поймает — иначе данные молча остались бы старыми.
  */
 export function fixturesFingerprint(dir: string): string {
-  const { legacy, attendance } = readFixtures(dir);
-  const parts = [legacy, ...attendance]
+  const { legacy, delivery, attendance } = readFixtures(dir);
+  const parts = [legacy, delivery, ...attendance]
     .filter((f): f is FixtureFile => f !== null)
     .map((f) => `${f.name}:${crypto.createHash('sha1').update(f.buffer).digest('hex')}`)
     .sort();
@@ -50,7 +54,7 @@ export function fixturesFingerprint(dir: string): string {
 
 export function readFixtures(dir: string): FixtureSet {
   if (!fs.existsSync(dir)) {
-    return { legacy: null, attendance: [], warnings: [`Папки ${dir} нет`] };
+    return { legacy: null, delivery: null, attendance: [], warnings: [`Папки ${dir} нет`] };
   }
 
   const names = fs
@@ -59,6 +63,7 @@ export function readFixtures(dir: string): FixtureSet {
     .sort();
 
   let legacy: FixtureFile | null = null;
+  let delivery: FixtureFile | null = null;
   const attendance: FixtureFile[] = [];
   const warnings: string[] = [];
 
@@ -80,14 +85,20 @@ export function readFixtures(dir: string): FixtureSet {
         continue;
       }
       legacy = { name, buffer };
+    } else if (sheets.includes(DELIVERY_SHEET)) {
+      if (delivery) {
+        warnings.push(`${name}: второй журнал отгрузок, используется ${delivery.name}`);
+        continue;
+      }
+      delivery = { name, buffer };
     } else {
       attendance.push({ name, buffer });
     }
   }
 
-  if (!legacy && attendance.length === 0) {
+  if (!legacy && !delivery && attendance.length === 0) {
     warnings.push(`В ${dir} нет ни одного файла .xls/.xlsx`);
   }
 
-  return { legacy, attendance, warnings };
+  return { legacy, delivery, attendance, warnings };
 }

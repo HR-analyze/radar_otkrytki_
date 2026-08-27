@@ -6,6 +6,14 @@ import { getShop, shopHistory, type ShopDayPerson } from '@/lib/queries';
 import { formatClock, shortDate } from '@/lib/time';
 import { StatusBadge, STATUS_TEXT } from '@/components/Status';
 import { CRITERION_ORDER, type CriterionKey } from '@/lib/types';
+import { RATING_COMPONENT_TITLE } from '@/lib/rating';
+
+/**
+ * Колонки списка сотрудников. Одна константа на заголовок и на строки —
+ * иначе они разъезжаются при любой правке ширины.
+ */
+const PEOPLE_GRID =
+  'sm:grid-cols-[minmax(0,2.2fr)_minmax(0,1.1fr)_4.5rem_minmax(0,1.3fr)_7.5rem]';
 
 /** Ролевые критерии — те, что приходят из выгрузок отметок. */
 const ROLE_CRITERIA: CriterionKey[] = ['driver', 'cook', 'cashier', 'barista', 'hallDeputy'];
@@ -15,6 +23,7 @@ export const dynamic = 'force-dynamic';
 const SOURCE_LABEL: Record<ShopDayPerson['arrivalSource'], string> = {
   mark: 'реальная отметка',
   derived_minus30: 'досчитано: уход − 30 мин',
+  delivery: 'из таблицы поставок',
   none: 'отметки нет',
 };
 
@@ -62,7 +71,7 @@ export default async function ShopPage({
                 })}
               </h2>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs muted">Статус лавки:</span>
+                <span className="text-xs muted">Общий результат:</span>
                 <StatusBadge status={day.shopStatus} />
                 {day.shopScore != null && (
                   <span className="text-xs tabular-nums muted" title={scoreHint(config)}>
@@ -108,12 +117,37 @@ export default async function ShopPage({
               })}
             </div>
 
+            {/* Как сложился общий результат: та же формула, что на листе
+                заказчика — (водитель + сотрудники + витрина) / 3. */}
+            {day.rating && day.rating.score != null && (
+              <p className="mt-2 text-xs muted">
+                Общий результат = ({day.rating.components
+                  .filter((c) => c.score != null)
+                  .map(
+                    (c) =>
+                      `${RATING_COMPONENT_TITLE[c.key]} ${formatScore(c.score as number)}` +
+                      (c.key === 'staff' ? ` (по ${c.count} чел.)` : ''),
+                  )
+                  .join(' + ')}) ÷{' '}
+                {day.rating.components.filter((c) => c.score != null).length} ={' '}
+                <b className="tabular-nums">{formatScore(day.rating.score)}</b>
+                {day.rating.components.some((c) => c.score == null) &&
+                  ` · без данных: ${day.rating.components
+                    .filter((c) => c.score == null)
+                    .map((c) => RATING_COMPONENT_TITLE[c.key].toLowerCase())
+                    .join(', ')}`}
+              </p>
+            )}
+
             {/* Роли, по которым за день нет ни одной строки в выгрузке. 1С отдаёт
                 только тех, кто отметился, поэтому «не вышел» и «выходной» выглядят
                 одинаково — отличить их можно только по графику из HR. */}
             {day.people.length > 0 &&
               (() => {
-                const present = new Set(day.people.map((x) => x.criterion));
+                const present = new Set([
+                  ...day.people.map((x) => x.criterion),
+                  ...day.legacyPeople.map((x) => x.criterion),
+                ]);
                 const absent = ROLE_CRITERIA.filter((c) => !present.has(c));
                 if (absent.length === 0) return null;
                 return (
@@ -127,18 +161,18 @@ export default async function ShopPage({
               })()}
 
             {/* Отметки людей — то, ради чего нужен drill-down */}
-            {day.people.length > 0 ? (
+            {day.people.length > 0 && (
               /* Не таблица: на телефоне пять колонок обрезали самое важное —
                  статус. На широком экране строки раскладываются в те же колонки
                  через sm:contents, разметка одна. */
               <div className="mt-4 flex flex-col text-sm">
                 <div
-                  className="hidden border-b pb-1.5 text-xs muted sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto_minmax(0,1.3fr)_auto] sm:gap-x-3"
+                  className={`hidden border-b pb-1.5 text-xs muted sm:grid ${PEOPLE_GRID} sm:gap-x-4`}
                   style={{ borderColor: 'var(--border)' }}
                 >
                   <span>Сотрудник</span>
                   <span>Должность</span>
-                  <span>Приход</span>
+                  <span className="text-right">Приход</span>
                   <span>Откуда время</span>
                   <span>Статус</span>
                 </div>
@@ -146,7 +180,7 @@ export default async function ShopPage({
                 {sortPeople(day.people).map((person, i) => (
                   <div
                     key={`${person.employeeName}-${person.role}-${i}`}
-                    className="grid gap-x-3 gap-y-1 border-b py-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto_minmax(0,1.3fr)_auto] sm:items-baseline"
+                    className={`grid gap-y-1 border-b py-2 sm:gap-x-4 sm:items-baseline ${PEOPLE_GRID}`}
                     style={{ borderColor: 'var(--border)' }}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -172,7 +206,10 @@ export default async function ShopPage({
                         {person.trainee && <span title="Стажёр"> · стажёр</span>}
                       </span>
                       <span aria-hidden className="sm:hidden">·</span>
-                      <span className="tabular-nums sm:text-sm" style={{ color: 'var(--text)' }}>
+                      <span
+                        className="tabular-nums sm:text-right sm:text-sm"
+                        style={{ color: 'var(--text)' }}
+                      >
                         {formatClock(person.arrivalMinutes)}
                       </span>
                       <span aria-hidden className="sm:hidden">·</span>
@@ -194,10 +231,16 @@ export default async function ShopPage({
                   </div>
                 ))}
               </div>
-            ) : day.legacyPeople.length > 0 ? (
+            )}
+
+            {/* Дни до сырых выгрузок: в книге есть цвет, но нет времени.
+                Показываем рядом с отметками, а не вместо них — за 19–21.08
+                время водителя приходит из таблицы поставок, а остальные
+                сотрудники остаются легаси. */}
+            {day.legacyPeople.length > 0 && (
               <div className="mt-4">
                 <p className="text-xs muted">
-                  Времена отметок за этот день недоступны — показаны только статусы.
+                  Времени отметки по этим сотрудникам нет — показаны статусы из легаси-книги.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {day.legacyPeople.map((person, i) => (
@@ -212,7 +255,9 @@ export default async function ShopPage({
                   ))}
                 </div>
               </div>
-            ) : (
+            )}
+
+            {day.people.length === 0 && day.legacyPeople.length === 0 && (
               <p className="mt-4 text-xs muted">Отметок за день нет.</p>
             )}
           </section>

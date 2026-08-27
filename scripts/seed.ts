@@ -2,8 +2,9 @@
  * Ручной запуск ETL по тестовым файлам из fixtures/.
  * Поднимает MVP с реальными данными за 19–25.08 одной командой: npm run seed
  *
- *   19–24.08 — легаси-статусы из Витрины.xlsx (раскрашены руками), origin='legacy'
- *   25.08    — посчитано из сырых выгрузок .xls, origin='computed'
+ *   19–24.08 — легаси-статусы из Витрины.xlsx (раскрашены руками), origin='legacy';
+ *              водитель за 19–21.08 считается по журналу «Время поставки»
+ *   25–27.08 — посчитано из сырых выгрузок .xls, origin='computed'
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,12 +45,14 @@ function main(): void {
   for (const w of files.warnings) console.log(`  ! ${w}`);
 
   /* --- 1. Легаси-книга: справочник лавок + история ------------------------ */
+  let legacyDates: string[] = [];
   if (!files.legacy) {
     console.log('· Легаси-книги в fixtures нет — пропускаю историю');
   } else {
   const run = startImportRun('seed:legacy', files.legacy.name);
   try {
     const legacy = parseLegacyVitriny(files.legacy.buffer, config);
+    legacyDates = legacy.dates;
     upsertShops(legacy.shops);
     upsertLegacyPeople(legacy.people);
     upsertShowcase(legacy.showcase);
@@ -72,7 +75,7 @@ function main(): void {
   }
 
   /* --- 2. Сырые выгрузки: расчёт по алгоритму за все найденные даты ------- */
-  if (files.attendance.length === 0) {
+  if (files.attendance.length === 0 && !files.delivery) {
     console.log('· Выгрузок отметок в fixtures нет — считать нечего');
     printTotals(d);
     return;
@@ -80,12 +83,24 @@ function main(): void {
 
   const result = runAttendanceJob(
     files.attendance.map((f) => ({ label: f.name, buffer: f.buffer })),
+    {
+      delivery: files.delivery
+        ? { label: files.delivery.name, buffer: files.delivery.buffer }
+        : undefined,
+      knownDates: legacyDates,
+    },
   );
 
   console.log(
     `· Выгрузки отметок: строк ${result.rows}, даты ${result.dates.join(', ')}, ` +
       `предупреждений ${result.warnings.length}`,
   );
+  if (files.delivery) {
+    console.log(
+      `· Журнал отгрузок ${files.delivery.name}: время водителя подставлено ` +
+        `в ${result.deliveryApplied} лавко-дней (там, где нет отметки face id)`,
+    );
+  }
   const byKind = new Map<string, number>();
   for (const w of result.warnings) byKind.set(w.kind, (byKind.get(w.kind) ?? 0) + 1);
   for (const [kind, n] of byKind) console.log(`    · ${kind}: ${n}`);

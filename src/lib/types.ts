@@ -26,6 +26,8 @@ export type ArrivalSource =
   | 'mark'
   /** Расчёт: «Уход» − 30 минут (приёмка). */
   | 'derived_minus30'
+  /** Отметки face id нет — время приезда взято из книги «Время поставки». */
+  | 'delivery'
   /** Отметок нет вообще, либо «Уход» вне окна правдоподобия. */
   | 'none';
 
@@ -63,8 +65,10 @@ export interface RoleMapEntry {
  *   worst   — худший побеждает;
  *   average — средний балл 🟢3/🟡2/🔴1 → зона по rules.scoreZones.
  *
- * У агрегации лавки есть ещё вариант 'worstOfConfirmed' — тот же worst,
- * но только по подтверждённым критериям (см. ThresholdConfig.rules).
+ * У агрегации лавки есть ещё два варианта (см. ThresholdConfig.rules):
+ *   components       — методология заказчика: (водитель + сотрудники + витрина) / 3,
+ *                      сотрудники усредняются по людям (см. rating.ts);
+ *   worstOfConfirmed — тот же worst, но только по подтверждённым критериям.
  */
 export type AggregationStrategy = 'worst' | 'average';
 
@@ -111,7 +115,8 @@ export interface ThresholdConfig {
     };
     scoreZones: ScoreZonesConfig;
     shopAggregation: {
-      strategy: AggregationStrategy | 'worstOfConfirmed';
+      strategy: AggregationStrategy | 'components' | 'worstOfConfirmed';
+      confirmed: boolean;
       note: string;
     };
     criterionAggregation: { strategy: AggregationStrategy; note: string };

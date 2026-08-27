@@ -115,9 +115,10 @@ export default async function SettingsPage() {
             warn={!config.rules.scoreZones.confirmed}
           />
           <Rule
-            title="Агрегация статуса лавки"
+            title="Общий результат лавки"
             value={strategyLabel(config.rules.shopAggregation.strategy, 'критериев')}
             note={config.rules.shopAggregation.note}
+            warn={!config.rules.shopAggregation.confirmed}
           />
           <Rule
             title="Агрегация внутри критерия"
@@ -200,6 +201,9 @@ function nextStep(value: number, precision: number): number {
 }
 
 function strategyLabel(strategy: string, of: string): string {
+  if (strategy === 'components') {
+    return '(балл водителя + балл сотрудников + балл витрины) ÷ 3 → зона по баллу';
+  }
   if (strategy === 'average') return `средний балл ${of} → зона по баллу`;
   if (strategy === 'worstOfConfirmed') return 'худший из подтверждённых критериев';
   return `худший статус среди ${of}`;
