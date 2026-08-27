@@ -13,7 +13,7 @@ import {
 import { isWritable } from '@/lib/snapshot';
 import { shortDate } from '@/lib/time';
 import { Filters } from '@/components/Filters';
-import { Legend, StatusBadge, StatusBar } from '@/components/Status';
+import { StatusBadge, StatusBar } from '@/components/Status';
 import { RefreshButton } from '@/components/RefreshButton';
 import { CRITERION_ORDER } from '@/lib/types';
 import { plural } from '@/lib/plural';
@@ -95,10 +95,6 @@ export default async function DashboardPage({
       {/* --- По критериям --- */}
       <section className="surface p-4">
         <h2 className="text-sm font-semibold">Лавки по критериям · {scope}</h2>
-        <p className="mt-0.5 text-xs muted">
-          Агрегат лавки = худший статус из критериев (правило в конфиге).
-          {!singleDay && ' За период счётчики усреднены по дням.'}
-        </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {summary.map((s) => {
             const cfg = config.criteria[s.criterion];
@@ -167,7 +163,7 @@ export default async function DashboardPage({
                     </Link>
                     {r.shop.region && <span className="ml-1.5 text-xs muted">{r.shop.region}</span>}
                     <p className="mt-0.5 text-xs muted">
-                      {r.criteria.map((c) => config.criteria[c]?.title ?? c).join(', ')}
+                      {r.criteria.map((c) => config.criteria[c]?.title ?? c).join(' / ')}
                       {r.fill != null && ` · витрина ${Math.round(r.fill * 100)}%`}
                     </p>
                   </div>
@@ -216,7 +212,6 @@ export default async function DashboardPage({
         </section>
       </div>
 
-      <Legend />
     </div>
   );
 }

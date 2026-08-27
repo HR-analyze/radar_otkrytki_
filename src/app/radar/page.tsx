@@ -4,7 +4,7 @@ import { resolveParams } from '@/lib/params';
 import { listRegions, radar } from '@/lib/queries';
 import { shortDate } from '@/lib/time';
 import { Filters } from '@/components/Filters';
-import { Legend, StatusCell, STATUS_TEXT } from '@/components/Status';
+import { StatusCell, STATUS_TEXT } from '@/components/Status';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,26 +26,10 @@ export default async function RadarPage({
     status: p.status,
   });
 
-  const criterionTitle =
-    p.criterion && p.criterion !== 'all'
-      ? (config.criteria[p.criterion]?.title ?? p.criterion)
-      : null;
-
   return (
     <div className="flex flex-col gap-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Радар по всем лавкам</h1>
-        <p className="mt-1 text-sm muted">
-          {criterionTitle
-            ? `Критерий: ${criterionTitle}`
-            : `Ячейка — агрегированный статус лавки за день (${
-                config.rules.shopAggregation.strategy === 'average'
-                  ? 'средний балл критериев'
-                  : 'худший из критериев'
-              })`}
-          {' · '}
-          {rows.length} лавок
-        </p>
       </div>
 
       <Filters base="/radar" state={p} regions={regions} dates={p.dates} config={config} />
@@ -107,8 +91,6 @@ export default async function RadarPage({
           </table>
         </div>
       )}
-
-      <Legend />
     </div>
   );
 }

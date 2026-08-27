@@ -75,14 +75,3 @@ export function StatusBar({
     </div>
   );
 }
-
-export function Legend() {
-  return (
-    <div className="flex flex-wrap items-center gap-3 text-xs muted">
-      <span className="flex items-center gap-1.5"><span className="dot-green size-2 rounded-full" />зелёная</span>
-      <span className="flex items-center gap-1.5"><span className="dot-yellow size-2 rounded-full" />жёлтая</span>
-      <span className="flex items-center gap-1.5"><span className="dot-red size-2 rounded-full" />красная</span>
-      <span className="flex items-center gap-1.5"><span className="dot-no_data size-2 rounded-full" />нет данных / другой график</span>
-    </div>
-  );
-}
