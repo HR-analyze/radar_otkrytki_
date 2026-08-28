@@ -113,6 +113,9 @@ function main(): void {
     `· Выгрузки отметок: строк ${result.rows}, даты ${result.dates.join(', ')}, ` +
       `предупреждений ${result.warnings.length}`,
   );
+  if (result.deduped > 0) {
+    console.log(`· Повторных отметок одного человека свёрнуто: ${result.deduped}`);
+  }
   if (files.delivery) {
     console.log(
       `· Журнал отгрузок ${files.delivery.name}: время водителя подставлено ` +

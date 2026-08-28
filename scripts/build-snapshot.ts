@@ -15,7 +15,12 @@ import { parseAttendanceBuffer } from '../src/lib/parsers/attendance';
 import { parseDeliveryTimes } from '../src/lib/parsers/delivery';
 import { parseLegacyVitriny } from '../src/lib/parsers/legacy-vitriny';
 import { mergeDeliveryTimes } from '../src/lib/delivery-merge';
-import { exportCoverage, isLegacyStale, rollUpAttendance } from '../src/lib/rollup';
+import {
+  dedupeAttendance,
+  exportCoverage,
+  isLegacyStale,
+  rollUpAttendance,
+} from '../src/lib/rollup';
 import { configFingerprint, type Snapshot } from '../src/lib/snapshot';
 import type { AttendanceRow, CriterionStatusRow, Shop } from '../src/lib/types';
 
@@ -43,6 +48,10 @@ function main(): void {
     attendance.push(...parsed.rows);
     warnings.push(...parsed.warnings.map((w) => `[${file.name}] ${w.message}`));
   }
+
+  // 2.1. Повторные отметки одного человека — в одну строку (см. dedupeAttendance).
+  const deduped = dedupeAttendance(attendance);
+  attendance = deduped.rows;
 
   // 3. Лавки: имя из самой свежей выгрузки, супервайзер — из легаси-книги.
   const shops = new Map<string, Shop>();
@@ -134,6 +143,9 @@ function main(): void {
   );
   console.log(`  даты: ${dates.length ? `${dates[0]} — ${dates[dates.length - 1]} (${dates.length})` : 'нет'}`);
   if (deliveryStats) console.log(deliveryStats);
+  if (deduped.removed > 0) {
+    console.log(`  повторных отметок свёрнуто: ${deduped.removed}`);
+  }
   if (droppedLegacy > 0) {
     console.log(
       `  легаси-статусов отброшено (день закрыт выгрузкой): ${droppedLegacy}`,

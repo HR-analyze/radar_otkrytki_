@@ -71,6 +71,50 @@ export function isLegacyStale(
   return coverage.dates.has(date) && !coverage.shops.has(`${date}|${shopCode}`);
 }
 
+/**
+ * Один человек в лавке за день — одна строка.
+ *
+ * В выгрузках встречаются повторы: у одного и того же сотрудника две отметки за
+ * день (вернулся после перерыва — 06:31 и 17:07) или строка без времени рядом
+ * со строкой с временем (05:59 и «нет отметки» у одной и той же Абдуллаевой
+ * 19.08). Считать их как двух человек нельзя: заказчик делит сумму баллов на
+ * число СОТРУДНИКОВ, а «нет отметки» рядом с реальным приходом ещё и красит
+ * лавку красным на ровном месте.
+ *
+ * Побеждает самый ранний реальный приход: радар меряет открытие, поэтому важна
+ * первая отметка дня, а не последняя строка в файле.
+ */
+export function dedupeAttendance(rows: readonly AttendanceRow[]): {
+  rows: AttendanceRow[];
+  removed: number;
+} {
+  const best = new Map<string, AttendanceRow>();
+  const order: string[] = [];
+  let removed = 0;
+
+  for (const r of rows) {
+    const key = `${r.date}|${r.shopCode}|${r.employeeName}|${r.role}`;
+    const prev = best.get(key);
+    if (!prev) {
+      best.set(key, r);
+      order.push(key);
+      continue;
+    }
+
+    removed++;
+    if (isEarlier(r, prev)) best.set(key, r);
+  }
+
+  return { rows: order.map((k) => best.get(k) as AttendanceRow), removed };
+}
+
+/** Строка со временем всегда лучше строки без времени; дальше — кто раньше. */
+function isEarlier(candidate: AttendanceRow, current: AttendanceRow): boolean {
+  if (candidate.arrivalMinutes == null) return false;
+  if (current.arrivalMinutes == null) return true;
+  return candidate.arrivalMinutes < current.arrivalMinutes;
+}
+
 export function rollUpAttendance(
   date: string,
   rows: readonly AttendanceRow[],

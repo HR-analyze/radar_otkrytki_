@@ -12,7 +12,7 @@ import {
   worstStatus,
   normalizeFill,
 } from './status';
-import { rollUpAttendance } from './rollup';
+import { dedupeAttendance, rollUpAttendance } from './rollup';
 import type { AttendanceRow, Status } from './types';
 import { parseShop, normalizeCode } from './shops';
 import { CRITERION_ORDER } from './types';
@@ -270,4 +270,55 @@ test('форматирование времени и диапазон дат', (
   assert.deepEqual(dateRange('2026-08-23', '2026-08-25'), [
     '2026-08-23', '2026-08-24', '2026-08-25',
   ]);
+});
+
+test('повторные отметки одного человека сворачиваются в самую раннюю', () => {
+  const row = (
+    employeeName: string,
+    arrivalMinutes: number | null,
+    status: Status,
+    date = '2026-08-19',
+    shopCode = 'М16',
+  ): AttendanceRow => ({
+    date,
+    shopCode,
+    shopName: shopCode,
+    employeeName,
+    role: 'Повар',
+    criterion: 'cook',
+    trainee: false,
+    homeShopCode: null,
+    arrivalMinutes,
+    arrivalSource: arrivalMinutes == null ? 'none' : 'mark',
+    rawArrival: null,
+    rawDeparture: null,
+    status,
+    note: null,
+  });
+
+  // Реальный случай 19.08: у одного человека строка без времени и строка 5:59.
+  // Считать их за двух сотрудников нельзя — «нет отметки» красит лавку зря.
+  const a = dedupeAttendance([row('Абдуллаева', null, 'red'), row('Абдуллаева', 359, 'green')]);
+  assert.equal(a.rows.length, 1);
+  assert.equal(a.removed, 1);
+  assert.equal(a.rows[0].arrivalMinutes, 359);
+
+  // Вернулся после перерыва — открытие меряется первой отметкой.
+  const b = dedupeAttendance([row('Комур', 391, 'green'), row('Комур', 1027, 'other_schedule')]);
+  assert.equal(b.rows[0].arrivalMinutes, 391);
+  assert.equal(b.rows[0].status, 'green');
+
+  // Порядок строк в файле роли не играет.
+  const c = dedupeAttendance([row('Комур', 1027, 'other_schedule'), row('Комур', 391, 'green')]);
+  assert.equal(c.rows[0].arrivalMinutes, 391);
+
+  // Разные люди, разные лавки и разные дни остаются как есть.
+  const d = dedupeAttendance([
+    row('Иванов', 360, 'green'),
+    row('Петров', 360, 'green'),
+    row('Иванов', 360, 'green', '2026-08-20'),
+    row('Иванов', 360, 'green', '2026-08-19', 'М17'),
+  ]);
+  assert.equal(d.rows.length, 4);
+  assert.equal(d.removed, 0);
 });

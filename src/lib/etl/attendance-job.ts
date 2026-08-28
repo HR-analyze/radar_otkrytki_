@@ -3,6 +3,7 @@ import { startImportRun } from '../db';
 import { parseAttendanceBuffer, type ParseWarning } from '../parsers/attendance';
 import { parseDeliveryTimes } from '../parsers/delivery';
 import { mergeDeliveryTimes } from '../delivery-merge';
+import { dedupeAttendance } from '../rollup';
 import {
   replaceAttendance,
   rollUpAttendance,
@@ -23,6 +24,8 @@ export interface AttendanceJobResult {
   warnings: ParseWarning[];
   /** Сколько лавко-дней получили время водителя из журнала отгрузок. */
   deliveryApplied: number;
+  /** Сколько повторных отметок одного человека свёрнуто. */
+  deduped: number;
 }
 
 export interface AttendanceJobOptions {
@@ -63,6 +66,11 @@ export function runAttendanceJob(
       );
     }
 
+    // Повторные отметки одного человека сворачиваются до записи в БД —
+    // иначе они разошлись бы со снимком, где ключа-уникальности нет.
+    const deduped = dedupeAttendance(all);
+    all = deduped.rows;
+
     const shops = new Map<string, { code: string; name: string; region: null }>();
     for (const r of all) {
       const prev = shops.get(r.shopCode);
@@ -97,7 +105,7 @@ export function runAttendanceJob(
     }
 
     run.finish('ok', all.length, warnings.map((w) => w.message));
-    return { dates, rows: all.length, warnings, deliveryApplied };
+    return { dates, rows: all.length, warnings, deliveryApplied, deduped: deduped.removed };
   } catch (e) {
     run.finish('error', 0, [], e instanceof Error ? e.message : String(e));
     throw e;
