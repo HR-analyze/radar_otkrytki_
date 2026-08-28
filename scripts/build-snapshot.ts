@@ -15,7 +15,7 @@ import { parseAttendanceBuffer } from '../src/lib/parsers/attendance';
 import { parseDeliveryTimes } from '../src/lib/parsers/delivery';
 import { parseLegacyVitriny } from '../src/lib/parsers/legacy-vitriny';
 import { mergeDeliveryTimes } from '../src/lib/delivery-merge';
-import { rollUpAttendance } from '../src/lib/rollup';
+import { exportCoverage, isLegacyStale, rollUpAttendance } from '../src/lib/rollup';
 import { configFingerprint, type Snapshot } from '../src/lib/snapshot';
 import type { AttendanceRow, CriterionStatusRow, Shop } from '../src/lib/types';
 
@@ -74,9 +74,16 @@ function main(): void {
       `скрыто отметок без face id ${merged.suppressed}, вне периода ${merged.skippedDates}`;
   }
 
-  // 4. Статусы критериев: посчитанные за 25.08 перекрывают легаси за ту же дату.
+  // 4. Статусы критериев: посчитанное перекрывает легаси, а устаревшее
+  //    легаси не берётся вовсе — см. isLegacyStale.
+  const coverage = exportCoverage(attendance);
   const criteria = new Map<string, CriterionStatusRow>();
+  let droppedLegacy = 0;
   for (const c of legacy.criteria) {
+    if (isLegacyStale(coverage, c.date, c.shopCode, c.criterion)) {
+      droppedLegacy++;
+      continue;
+    }
     criteria.set(`${c.date}|${c.shopCode}|${c.criterion}`, c);
   }
   for (const date of new Set(attendance.map((r) => r.date))) {
@@ -94,7 +101,9 @@ function main(): void {
     attendance,
     showcase: legacy.showcase,
     criteria: [...criteria.values()],
-    legacyPeople: legacy.people,
+    legacyPeople: legacy.people.filter(
+      (p) => !isLegacyStale(coverage, p.date, p.shopCode, p.criterion),
+    ),
     runs: [
       {
         job: 'snapshot',
@@ -125,6 +134,11 @@ function main(): void {
   );
   console.log(`  даты: ${dates.length ? `${dates[0]} — ${dates[dates.length - 1]} (${dates.length})` : 'нет'}`);
   if (deliveryStats) console.log(deliveryStats);
+  if (droppedLegacy > 0) {
+    console.log(
+      `  легаси-статусов отброшено (день закрыт выгрузкой): ${droppedLegacy}`,
+    );
+  }
   if (warnings.length) console.log(`  предупреждений при разборе: ${warnings.length}`);
 }
 

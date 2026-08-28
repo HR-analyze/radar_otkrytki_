@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fixturesFingerprint } from './fixtures';
 import { configFingerprint, type Snapshot } from './snapshot';
+import { exportCoverage, isLegacyStale } from './rollup';
 import { CRITERION_ORDER } from './types';
 
 const SNAPSHOT_PATH = path.join(process.cwd(), 'src', 'generated', 'snapshot.json');
@@ -40,7 +41,9 @@ test('снимок содержит все данные, которые рису
   assert.ok(s.attendance.length > 300, 'отметки за 25.08');
   assert.ok(s.showcase.length > 100, 'наполнение витрин');
   assert.ok(s.criteria.length > 1000, 'статусы критериев');
-  assert.ok(s.legacyPeople.length > 2000, 'легаси-статусы людей');
+  // Легаси остаётся только там, где выгрузка день не закрыла: сейчас это
+  // водитель за 19–24.08 (в табеле водителей нет).
+  assert.ok(s.legacyPeople.length > 0, 'легаси-статусы людей');
   assert.ok(s.shops.every((x) => x.region), 'у каждой лавки есть РМ');
 });
 
@@ -126,4 +129,34 @@ test('снимок не тянет за собой better-sqlite3', () => {
     !/^import .*better-sqlite3/m.test(src) && !/^import .*from '\.\/db'/m.test(src),
     'db.ts должен подключаться только динамическим import()',
   );
+});
+
+test('раскрашенное вручную не берётся за дни, которые закрыла выгрузка', () => {
+  const s = readSnapshot();
+  const coverage = exportCoverage(s.attendance);
+
+  const stale = (date: string, shopCode: string, criterion: string): boolean =>
+    isLegacyStale(coverage, date, shopCode, criterion);
+
+  for (const p of s.legacyPeople) {
+    assert.ok(
+      !stale(p.date, p.shopCode, p.criterion),
+      `${p.shopCode} ${p.date}: легаси-статус «${p.employeeName}» пережил выгрузку`,
+    );
+  }
+  for (const c of s.criteria) {
+    if (c.origin !== 'legacy') continue;
+    assert.ok(
+      !stale(c.date, c.shopCode, c.criterion),
+      `${c.shopCode} ${c.date} ${c.criterion}: легаси-статус пережил выгрузку`,
+    );
+  }
+
+  // Лавка, которой в выгрузке за день нет вовсе, в этот день не работала.
+  // 22.08 — суббота, М16 закрыта: ни отметок, ни статусов быть не должно.
+  const closed = (date: string, shopCode: string): number =>
+    s.attendance.filter((a) => a.date === date && a.shopCode === shopCode).length +
+    s.criteria.filter((c) => c.date === date && c.shopCode === shopCode).length +
+    s.legacyPeople.filter((p) => p.date === date && p.shopCode === shopCode).length;
+  assert.equal(closed('2026-08-22', 'М16'), 0, 'М16 22.08: лавка не работала, а данные есть');
 });

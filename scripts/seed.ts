@@ -11,7 +11,9 @@ import path from 'node:path';
 import { loadConfig } from '../src/lib/config';
 import { getDb, dbPath, startImportRun } from '../src/lib/db';
 import { readFixtures } from '../src/lib/fixtures';
+import { parseAttendanceBuffer } from '../src/lib/parsers/attendance';
 import { parseLegacyVitriny } from '../src/lib/parsers/legacy-vitriny';
+import { exportCoverage, isLegacyStale } from '../src/lib/rollup';
 import { runAttendanceJob } from '../src/lib/etl/attendance-job';
 import {
   upsertCriterionStatuses,
@@ -44,6 +46,12 @@ function main(): void {
   const files = readFixtures(FIXTURES);
   for (const w of files.warnings) console.log(`  ! ${w}`);
 
+  // Что из легаси-книги вообще нужно: см. isLegacyStale. Считаем до записи
+  // легаси, поэтому выгрузки разбираются здесь ещё раз.
+  const coverage = exportCoverage(
+    files.attendance.flatMap((f) => parseAttendanceBuffer(f.buffer, config).rows),
+  );
+
   /* --- 1. Легаси-книга: справочник лавок + история ------------------------ */
   let legacyDates: string[] = [];
   if (!files.legacy) {
@@ -53,15 +61,25 @@ function main(): void {
   try {
     const legacy = parseLegacyVitriny(files.legacy.buffer, config);
     legacyDates = legacy.dates;
+    const people = legacy.people.filter(
+      (p) => !isLegacyStale(coverage, p.date, p.shopCode, p.criterion),
+    );
+    const criteria = legacy.criteria.filter(
+      (c) => !isLegacyStale(coverage, c.date, c.shopCode, c.criterion),
+    );
+
     upsertShops(legacy.shops);
-    upsertLegacyPeople(legacy.people);
+    upsertLegacyPeople(people);
     upsertShowcase(legacy.showcase);
-    upsertCriterionStatuses(legacy.criteria);
-    run.finish('ok', legacy.criteria.length, legacy.warnings);
+    upsertCriterionStatuses(criteria);
+    run.finish('ok', criteria.length, legacy.warnings);
 
     console.log(
-      `· Витрины.xlsx: лавок ${legacy.shops.length}, статусов людей ${legacy.people.length}, ` +
-        `витрин ${legacy.showcase.length}, свёрнутых критериев ${legacy.criteria.length}`,
+      `· Витрины.xlsx: лавок ${legacy.shops.length}, статусов людей ${people.length}, ` +
+        `витрин ${legacy.showcase.length}, свёрнутых критериев ${criteria.length}` +
+        (legacy.people.length > people.length
+          ? ` (отброшено ${legacy.people.length - people.length} статусов: день закрыт выгрузкой)`
+          : ''),
     );
     console.log(`  даты: ${legacy.dates.join(', ')}`);
     if (legacy.warnings.length) {
