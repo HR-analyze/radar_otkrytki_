@@ -47,13 +47,59 @@ test('парсер выгрузки водителей: «Уход» запол�
   for (const d of derived) assert.ok(d.arrivalMinutes != null);
 });
 
+test('новый формат 1С: две строки на человека разбираются как отметки', () => {
+  // С 29.08.2026 выгрузка приходит с группировкой: шапка в две строки, строка
+  // сотрудника и отдельные строки отметок под ней.
+  const r = parseAttendanceBuffer(fx('2026-08-29_vyhody.xls'), config);
+
+  assert.equal(r.layout, 'paired');
+  assert.equal(r.rows.length, 1004);
+  assert.deepEqual(r.dates, ['2026-08-29', '2026-08-30']); // две отметки ночной смены
+  assert.ok(!r.rows.some((x) => /итого/i.test(x.shopCode) || /итого/i.test(x.shopName)));
+  assert.ok(r.rows.every((x) => x.employeeName !== ''), 'ФИО берётся из строки сотрудника');
+});
+
+test('старый формат по-прежнему читается и отличается от нового', () => {
+  assert.equal(parseAttendanceBuffer(fx('2026-08-28_vyhody.xls'), config).layout, 'flat');
+  assert.equal(parseAttendanceBuffer(fx('2026-08-30_vyhody.xlsx'), config).layout, 'paired');
+});
+
+test('новый формат: у водителя несколько лавок за смену — это разные отметки', () => {
+  // В плоском формате каждая лавка была отдельной строкой; в парном строки
+  // отметок идут списком под одним водителем, и терять их нельзя.
+  const r = parseAttendanceBuffer(fx('2026-08-30_voditeli.xls'), config);
+  assert.ok(r.rows.every((x) => x.criterion === 'driver'));
+
+  const shopsByDriver = new Map<string, Set<string>>();
+  for (const row of r.rows) {
+    const set = shopsByDriver.get(row.employeeName) ?? new Set<string>();
+    set.add(row.shopCode);
+    shopsByDriver.set(row.employeeName, set);
+  }
+  const multi = [...shopsByDriver.values()].filter((s) => s.size > 1);
+  assert.ok(multi.length >= 15, `водители с несколькими лавками: ${multi.length}`);
+});
+
+test('должности вне критериев радара не считаются пробелом в настройке', () => {
+  // Уборщик и директор в выгрузке есть, но ни к одному критерию не относятся:
+  // предупреждение «должность не найдена» должно означать реальный пробел.
+  const r = parseAttendanceBuffer(fx('2026-08-30_vyhody.xlsx'), config);
+  const unknown = r.warnings.filter((w) => w.kind === 'unknown_role');
+  assert.deepEqual(unknown.map((w) => w.message), []);
+
+  const ignored = r.rows.filter((x) => x.role === 'Уборщик');
+  assert.ok(ignored.length > 0, 'строки уборщиков разбираются');
+  assert.ok(ignored.every((x) => x.criterion === null), 'но ни на какой критерий не влияют');
+});
+
 test('парсер легаси-книги: лавки, даты и дедупликация людей', () => {
   const r = parseLegacyVitriny(fx('vitriny.xlsx'), config);
   assert.equal(r.shops.length, 80);
-  assert.deepEqual(r.dates, [
-    '2026-08-19', '2026-08-20', '2026-08-21', '2026-08-22', '2026-08-23',
-    '2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28',
-  ]);
+  // Даты не перечисляем: книгу заливают заново каждые несколько дней, и тест
+  // не должен краснеть от того, что данных стало больше.
+  assert.equal(r.dates[0], '2026-08-19');
+  assert.ok(r.dates.length >= 10, `дней в книге: ${r.dates.length}`);
+  assert.deepEqual([...r.dates].sort(), r.dates, 'даты отсортированы');
   // В книге блоки сотрудников местами продублированы (М2 Покровка), а у
   // М23 Добрынинский два блока целиком — дублей на выходе быть не должно.
   const keys = r.people.map((p) => `${p.date}|${p.shopCode}|${p.criterion}|${p.employeeName}`);

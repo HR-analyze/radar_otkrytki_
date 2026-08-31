@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { UploadButton } from '@/components/UploadButton';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -24,6 +25,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/radar" className="hover:underline">Радар по лавкам</Link>
               <Link href="/settings" className="hover:underline">Пороги</Link>
             </nav>
+            {/* Загрузка — в шапке: данными занимается вся команда, а не только
+                тот, у кого открыт репозиторий. */}
+            <div className="ml-auto">
+              <UploadButton />
+            </div>
           </div>
         </header>
         <main className="mx-auto max-w-[1600px] px-4 py-6">{children}</main>

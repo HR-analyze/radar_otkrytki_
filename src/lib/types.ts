@@ -95,6 +95,12 @@ export interface ThresholdConfig {
   updatedAt: string;
   criteria: Record<CriterionKey, CriterionConfig>;
   roleMap: Record<string, RoleMapEntry>;
+  /**
+   * Должности, которые в выгрузке есть, но ни к одному критерию не относятся
+   * (уборщик, директор). Нужны, чтобы отличать «должность вне радара» от
+   * «должность забыли завести в roleMap»: второе — повод поправить конфиг.
+   */
+  ignoredRoles?: string[];
   rules: {
     otherSchedule: {
       enabled: boolean;
