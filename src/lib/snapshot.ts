@@ -76,7 +76,11 @@ const GENERATED_PATH =
   process.env.RADAR_SNAPSHOT_PATH ??
   path.join(process.cwd(), 'src', 'generated', 'snapshot.json');
 
-let cached: Snapshot | null = null;
+let cached: { snapshot: Snapshot; stamp: string } | null = null;
+
+function dbPath(): string {
+  return process.env.RADAR_DB_PATH ?? path.join(process.cwd(), 'data', 'radar.db');
+}
 
 /**
  * Что используем как источник:
@@ -90,9 +94,29 @@ export function storageMode(): StorageMode {
   if (explicit === 'sqlite' || explicit === 'snapshot') return explicit;
   if (process.env.VERCEL) return 'snapshot';
 
-  const dbFile =
-    process.env.RADAR_DB_PATH ?? path.join(process.cwd(), 'data', 'radar.db');
-  return fs.existsSync(/* turbopackIgnore: true */ dbFile) ? 'sqlite' : 'snapshot';
+  return fs.existsSync(/* turbopackIgnore: true */ dbPath()) ? 'sqlite' : 'snapshot';
+}
+
+/**
+ * Отпечаток источника данных: время правки и размер файла, из которого снимок
+ * читается.
+ *
+ * Держать кеш до явного сброса нельзя. Страницы и API-роуты Next собирает в
+ * разные бандлы, и этот модуль живёт в каждом своим экземпляром: сброс кеша
+ * после загрузки файла видел только роут, а страница продолжала отдавать
+ * старые цифры. То же самое между процессами, если приложение поднято
+ * несколькими воркерами. Отметка файла — общая для всех: свежий снимок на
+ * диске подхватывают все.
+ */
+function sourceStamp(mode: StorageMode): string {
+  const file = mode === 'sqlite' ? dbPath() : GENERATED_PATH;
+  try {
+    const s = fs.statSync(/* turbopackIgnore: true */ file);
+    return `${file}|${s.mtimeMs}|${s.size}`;
+  } catch {
+    // Файла нет: на Vercel снимок вкомпилирован в сборку и меняется только с ней.
+    return `${file}|bundled`;
+  }
 }
 
 /** Доступна ли запись: ETL и кнопка «Обновить» работают только поверх SQLite. */
@@ -101,14 +125,16 @@ export function isWritable(): boolean {
 }
 
 export async function loadSnapshot(): Promise<Snapshot> {
-  if (cached) return cached;
+  const mode = storageMode();
+  const stamp = sourceStamp(mode);
+  if (cached && cached.stamp === stamp) return cached.snapshot;
 
-  cached =
-    storageMode() === 'sqlite' ? await readFromSqlite() : readFromJson();
-  return cached;
+  const snapshot = mode === 'sqlite' ? await readFromSqlite() : readFromJson();
+  cached = { snapshot, stamp };
+  return snapshot;
 }
 
-/** Сбрасывает кеш после записи в БД, чтобы UI увидел свежие данные. */
+/** Сбрасывает кеш в своём процессе — например, сразу после записи в БД. */
 export function invalidateSnapshot(): void {
   cached = null;
 }
