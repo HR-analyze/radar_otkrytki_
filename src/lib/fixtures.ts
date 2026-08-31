@@ -18,7 +18,21 @@ import * as XLSX from 'xlsx';
 
 const LEGACY_SHEET = 'Все данные';
 const DELIVERY_SHEET = 'Время поставки';
-const SUPPORTED = /\.(xls|xlsx)$/i;
+export const SUPPORTED = /\.(xls|xlsx)$/i;
+
+/** Что за файл нам дали. Кнопка загрузки опознаёт файл этими же правилами. */
+export type FixtureKind = 'legacy' | 'delivery' | 'attendance';
+
+/**
+ * Тип файла определяется по именам листов — единственное место, где это
+ * решается. Кнопка «Загрузить» на дашборде обязана опознавать файл так же,
+ * как сборка снимка, иначе принятый файл потом не попадёт в нужную ветку.
+ */
+export function detectFixtureKind(sheetNames: readonly string[]): FixtureKind {
+  if (sheetNames.includes(LEGACY_SHEET)) return 'legacy';
+  if (sheetNames.includes(DELIVERY_SHEET)) return 'delivery';
+  return 'attendance';
+}
 
 export interface FixtureFile {
   name: string;
@@ -79,13 +93,14 @@ export function readFixtures(dir: string): FixtureSet {
       continue;
     }
 
-    if (sheets.includes(LEGACY_SHEET)) {
+    const kind = detectFixtureKind(sheets);
+    if (kind === 'legacy') {
       if (legacy) {
         warnings.push(`${name}: вторая легаси-книга, используется ${legacy.name}`);
         continue;
       }
       legacy = { name, buffer };
-    } else if (sheets.includes(DELIVERY_SHEET)) {
+    } else if (kind === 'delivery') {
       if (delivery) {
         warnings.push(`${name}: второй журнал отгрузок, используется ${delivery.name}`);
         continue;

@@ -1,0 +1,120 @@
+import { NextResponse } from 'next/server';
+import { loadConfig } from '@/lib/config';
+import { checkUploadToken, saveUploads, uploadCapability } from '@/lib/upload-store';
+import { inspectUpload, MAX_UPLOAD_BYTES, type UploadInspection } from '@/lib/uploads';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
+/**
+ * Приём выгрузок кнопкой с дашборда.
+ *
+ * Файл сначала разбирается теми же парсерами, что и сборка снимка, и только
+ * потом сохраняется: нераспознанное не попадает ни в папку, ни в репозиторий,
+ * а человек получает не «ошибка 500», а строку о том, что именно не так.
+ *
+ * Пачка файлов сохраняется целиком (в режиме github — одним коммитом), но
+ * нераспознанные файлы её не блокируют: они возвращаются со своей причиной,
+ * остальные проходят.
+ */
+export async function POST(req: Request) {
+  const capability = uploadCapability();
+  if (capability.mode === 'unavailable') {
+    // 503, а не 500: это не сбой, а ненастроенная возможность — как у кнопки «Обновить».
+    return NextResponse.json({ ok: false, error: capability.hint }, { status: 503 });
+  }
+
+  const token = checkUploadToken(req);
+  if (!token.ok) {
+    return NextResponse.json({ ok: false, error: token.reason }, { status: 401 });
+  }
+
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          'Не удалось прочитать файлы. Если файл большой, загрузите его отдельно: ' +
+          `на один запрос помещается около ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} МБ.`,
+      },
+      { status: 400 },
+    );
+  }
+
+  const uploaded = form.getAll('files').filter((v): v is File => v instanceof File);
+  if (uploaded.length === 0) {
+    return NextResponse.json({ ok: false, error: 'Файлы не приложены' }, { status: 400 });
+  }
+
+  const config = loadConfig();
+  const accepted: { inspection: UploadInspection; buffer: Buffer }[] = [];
+  const results: FileResult[] = [];
+
+  for (const file of uploaded) {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const inspected = inspectUpload(file.name, buffer, config);
+
+    if (!inspected.ok) {
+      results.push({ ok: false, name: inspected.originalName, error: inspected.error });
+      continue;
+    }
+
+    accepted.push({ inspection: inspected.file, buffer });
+    results.push({
+      ok: true,
+      name: inspected.file.originalName,
+      savedAs: inspected.file.fileName,
+      kind: inspected.file.kind,
+      summary: inspected.file.summary,
+      dates: inspected.file.dates,
+      warnings: inspected.file.warnings.length,
+    });
+  }
+
+  if (accepted.length === 0) {
+    return NextResponse.json(
+      { ok: false, mode: capability.mode, files: results, error: 'Ни один файл не распознан' },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const saved = await saveUploads(accepted, capability);
+    return NextResponse.json({
+      ok: true,
+      mode: saved.mode,
+      visible: saved.visible,
+      notes: saved.notes,
+      commitUrl: saved.commitUrl,
+      files: results,
+    });
+  } catch (e) {
+    return NextResponse.json(
+      {
+        ok: false,
+        mode: capability.mode,
+        files: results,
+        error: `Файлы разобраны, но сохранить их не вышло. ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      },
+      { status: 502 },
+    );
+  }
+}
+
+type FileResult =
+  | {
+      ok: true;
+      name: string;
+      savedAs: string;
+      kind: string;
+      summary: string;
+      dates: string[];
+      warnings: number;
+    }
+  | { ok: false; name: string; error: string };
