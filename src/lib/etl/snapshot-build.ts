@@ -23,8 +23,15 @@ export function defaultFixturesDir(): string {
   return process.env.RADAR_FIXTURES_DIR ?? path.join(process.cwd(), 'fixtures');
 }
 
+/**
+ * Куда пишется снимок. Та же переменная, по которой его читает snapshot.ts:
+ * иначе при заданном RADAR_SNAPSHOT_PATH загрузка писала бы в одно место, а
+ * дашборд читал из другого.
+ */
 export function defaultSnapshotPath(): string {
-  return path.join(process.cwd(), 'src', 'generated', 'snapshot.json');
+  return (
+    process.env.RADAR_SNAPSHOT_PATH ?? path.join(process.cwd(), 'src', 'generated', 'snapshot.json')
+  );
 }
 
 export interface SnapshotBuildResult {

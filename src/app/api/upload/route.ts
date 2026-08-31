@@ -71,7 +71,8 @@ export async function POST(req: Request) {
       kind: inspected.file.kind,
       summary: inspected.file.summary,
       dates: inspected.file.dates,
-      warnings: inspected.file.warnings.length,
+      unknownRoles: inspected.file.unknownRoles,
+      notes: inspected.file.notes,
     });
   }
 
@@ -115,6 +116,9 @@ type FileResult =
       kind: string;
       summary: string;
       dates: string[];
-      warnings: number;
+      /** Должности, которых радар не знает: показываются в панели поимённо. */
+      unknownRoles: { role: string; rows: number }[];
+      /** Что парсер пропустил — короткими фразами. */
+      notes: string[];
     }
   | { ok: false; name: string; error: string };

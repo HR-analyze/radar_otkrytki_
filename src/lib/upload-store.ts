@@ -47,6 +47,13 @@ export function fixturesDir(): string {
   return process.env.RADAR_FIXTURES_DIR ?? path.join(process.cwd(), 'fixtures');
 }
 
+/** Папка выгрузок для показа человеку: «fixtures/», а не путь в три экрана. */
+function shortDir(): string {
+  const rel = path.relative(process.cwd(), fixturesDir());
+  // Папка вынесена за пределы проекта — относительный путь только запутает.
+  return rel && !rel.startsWith('..') ? `${rel}/` : fixturesDir();
+}
+
 /** Есть ли куда писать: на Vercel `/var/task` только для чтения. */
 function fixturesWritable(): boolean {
   if (process.env.VERCEL) return false;
@@ -64,7 +71,7 @@ export function uploadCapability(): UploadCapability {
   if (fixturesWritable()) {
     return {
       mode: 'disk',
-      hint: `Файлы лягут в ${path.relative(process.cwd(), fixturesDir()) || 'fixtures'}/, дашборд обновится сразу.`,
+      hint: `Файлы лягут в ${shortDir()}, дашборд обновится сразу.`,
       tokenRequired,
     };
   }

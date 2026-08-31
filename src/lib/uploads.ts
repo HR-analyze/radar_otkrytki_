@@ -1,9 +1,10 @@
 import * as XLSX from 'xlsx';
 import { detectFixtureKind, SUPPORTED, type FixtureKind } from './fixtures';
-import { parseAttendanceBuffer } from './parsers/attendance';
+import { parseAttendanceBuffer, type ParseWarning } from './parsers/attendance';
 import { parseDeliveryTimes } from './parsers/delivery';
 import { parseLegacyVitriny } from './parsers/legacy-vitriny';
 import { plural } from './plural';
+import { isIgnoredRole } from './status';
 import { shortDate } from './time';
 import type { ThresholdConfig } from './types';
 
@@ -34,7 +35,15 @@ export interface UploadInspection {
   dates: string[];
   rows: number;
   shops: number;
-  /** Предупреждения парсера — их видно в панели загрузки, но приёму они не мешают. */
+  /**
+   * Должности, которых радар не знает: их нет ни среди критериев, ни в списке
+   * заведомо посторонних. Строки по ним разбираются, но ни на что не влияют —
+   * поэтому их видно в панели поимённо, а не общим счётчиком предупреждений.
+   */
+  unknownRoles: { role: string; rows: number }[];
+  /** Что парсер пропустил или посчитал странным — короткими фразами для UI. */
+  notes: string[];
+  /** Предупреждения парсера целиком — для логов и отладки. */
   warnings: string[];
 }
 
@@ -193,9 +202,60 @@ function inspectAttendance(name: string, buffer: Buffer, config: ThresholdConfig
       dates: parsed.dates,
       rows: parsed.rows.length,
       shops,
+      unknownRoles: unknownRoles(parsed.rows, config),
+      notes: describeWarnings(parsed.warnings),
       warnings: parsed.warnings.map((w) => w.message),
     },
   };
+}
+
+/**
+ * Должности, по которым строки разобраны, но ни один критерий их не считает.
+ * Заведомо посторонние (уборщик, директор) сюда не попадают — они в
+ * `ignoredRoles`, и говорить о них каждый раз незачем.
+ */
+function unknownRoles(
+  rows: readonly { role: string; criterion: unknown }[],
+  config: ThresholdConfig,
+): { role: string; rows: number }[] {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    if (r.criterion || isIgnoredRole(r.role, config)) continue;
+    const role = r.role.trim() || 'без должности';
+    counts.set(role, (counts.get(role) ?? 0) + 1);
+  }
+  return [...counts]
+    .sort((a, b) => b[1] - a[1])
+    .map(([role, n]) => ({ role, rows: n }));
+}
+
+/** Предупреждения парсера — в короткие фразы, понятные без чтения кода. */
+function describeWarnings(warnings: readonly ParseWarning[]): string[] {
+  const counts = new Map<ParseWarning['kind'], number>();
+  for (const w of warnings) counts.set(w.kind, (counts.get(w.kind) ?? 0) + 1);
+
+  const notes: string[] = [];
+  const n = (kind: ParseWarning['kind']) => counts.get(kind) ?? 0;
+
+  if (n('no_stamps') > 0) {
+    notes.push(
+      `${n('no_stamps')} ${plural(n('no_stamps'), 'человек', 'человека', 'человек')} без отметки ` +
+        'времени — эти строки пропущены',
+    );
+  }
+  if (n('no_date') > 0) {
+    notes.push(`${n('no_date')} строк без даты — пропущены`);
+  }
+  if (n('no_shop') > 0) {
+    notes.push(`${n('no_shop')} строк без лавки — пропущены`);
+  }
+  if (n('shop_mismatch') > 0) {
+    notes.push(
+      `${n('shop_mismatch')} ${plural(n('shop_mismatch'), 'отметка', 'отметки', 'отметок')} ` +
+        'не в своей лавке — считаем по месту отметки',
+    );
+  }
+  return notes;
 }
 
 function inspectLegacy(name: string, buffer: Buffer, config: ThresholdConfig): InspectResult {
@@ -222,6 +282,8 @@ function inspectLegacy(name: string, buffer: Buffer, config: ThresholdConfig): I
       dates: parsed.dates,
       rows: parsed.people.length + parsed.showcase.length,
       shops: parsed.shops.length,
+      unknownRoles: [],
+      notes: [],
       warnings: parsed.warnings,
     },
   };
@@ -253,6 +315,8 @@ function inspectDelivery(name: string, buffer: Buffer): InspectResult {
       dates: parsed.dates,
       rows: parsed.rows.length,
       shops,
+      unknownRoles: [],
+      notes: [],
       warnings: parsed.warnings,
     },
   };

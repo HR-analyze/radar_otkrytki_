@@ -39,7 +39,10 @@ type FileResult =
       name: string;
       savedAs: string;
       summary: string;
-      warnings: number;
+      /** Должности, которых радар не знает: они ни на какой критерий не влияют. */
+      unknownRoles: { role: string; rows: number }[];
+      /** Что парсер пропустил — короткими фразами. */
+      notes: string[];
     }
   | { ok: false; name: string; error: string };
 
@@ -358,10 +361,43 @@ export function UploadButton() {
                           {r.ok ? (
                             <>
                               <p className="mt-1">{r.summary}</p>
-                              <p className="mt-0.5 text-xs muted">
-                                Сохранён как {r.savedAs}
-                                {r.warnings > 0 && ` · предупреждений при разборе: ${r.warnings}`}
-                              </p>
+                              <p className="mt-0.5 text-xs muted">Сохранён как {r.savedAs}</p>
+
+                              {/* Незнакомая должность — не «предупреждение парсера», а
+                                  пробел в настройке: её строки молча не считаются
+                                  ни одним критерием, и об этом надо сказать вслух. */}
+                              {r.unknownRoles?.length > 0 && (
+                                <div
+                                  className="mt-2 rounded-md p-2 text-xs"
+                                  style={{ background: 'var(--yellow-soft)', color: 'var(--yellow)' }}
+                                >
+                                  <div className="font-medium">
+                                    Должности, которых радар не знает — их отметки ни в один
+                                    критерий не попали:
+                                  </div>
+                                  <ul className="mt-1 flex flex-col gap-0.5">
+                                    {r.unknownRoles.map((u) => (
+                                      <li key={u.role}>
+                                        · {u.role} — {u.rows}{' '}
+                                        {plural(u.rows, 'отметка', 'отметки', 'отметок')}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  <div className="mt-1">
+                                    Если должность должна считаться, добавьте её в
+                                    config/thresholds.json — в roleMap к нужному критерию либо
+                                    в ignoredRoles, чтобы радар про неё больше не спрашивал.
+                                  </div>
+                                </div>
+                              )}
+
+                              {r.notes?.length > 0 && (
+                                <ul className="mt-1.5 flex flex-col gap-0.5 text-xs muted">
+                                  {r.notes.map((n) => (
+                                    <li key={n}>· {n}</li>
+                                  ))}
+                                </ul>
+                              )}
                             </>
                           ) : (
                             <p className="mt-1">{r.error}</p>

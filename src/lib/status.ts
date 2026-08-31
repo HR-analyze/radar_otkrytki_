@@ -163,6 +163,20 @@ export function mapRole(
   return null;
 }
 
+/**
+ * Должность есть в выгрузке, но ни к одному критерию радара не относится
+ * (уборщик, директор). Отличать её от незаведённой важно: вторая — пробел в
+ * настройке, и о ней надо сказать вслух, а первая — норма.
+ */
+export function isIgnoredRole(
+  role: string | null | undefined,
+  config: ThresholdConfig,
+): boolean {
+  if (!role) return false;
+  const key = normalizeRoleKey(String(role).trim());
+  return (config.ignoredRoles ?? []).some((r) => normalizeRoleKey(r) === key);
+}
+
 function normalizeRoleKey(s: string): string {
   return s.toLowerCase().replace(/ё/g, 'е').replace(/[\s\-–—]+/g, '');
 }

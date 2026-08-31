@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import type { AttendanceRow, ThresholdConfig } from '../types';
 import { parseShop } from '../shops';
-import { mapRole, resolveArrival, statusForTime } from '../status';
+import { isIgnoredRole, mapRole, resolveArrival, statusForTime } from '../status';
 import { parseStamp } from '../time';
 
 /**
@@ -313,19 +313,4 @@ function cell(row: readonly unknown[], index: number): unknown {
 
 function isBlank(row: readonly unknown[]): boolean {
   return row.every((c) => c == null || String(c).trim() === '');
-}
-
-/**
- * Должности, которые в выгрузке есть, но ни к одному критерию не относятся
- * (уборщик, директор). Без этого списка каждая их строка давала бы
- * предупреждение «должность не найдена», и настоящие пропуски в нём терялись.
- */
-function isIgnoredRole(role: string | null, config: ThresholdConfig): boolean {
-  if (!role) return false;
-  const key = normalize(role);
-  return (config.ignoredRoles ?? []).some((r) => normalize(r) === key);
-}
-
-function normalize(s: string): string {
-  return s.toLowerCase().replace(/ё/g, 'е').replace(/[\s\-–—]+/g, '');
 }
