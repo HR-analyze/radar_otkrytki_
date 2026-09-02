@@ -5,6 +5,7 @@ import { fixturesFingerprint, readFixtures } from '../fixtures';
 import { parseAttendanceBuffer } from '../parsers/attendance';
 import { parseDeliveryTimes } from '../parsers/delivery';
 import { parseLegacyVitriny } from '../parsers/legacy-vitriny';
+import { parseRoster } from '../parsers/roster';
 import { mergeDeliveryTimes } from '../delivery-merge';
 import { dedupeAttendance, exportCoverage, isLegacyStale, rollUpAttendance } from '../rollup';
 import { configFingerprint, type Snapshot } from '../snapshot';
@@ -38,11 +39,18 @@ export interface SnapshotBuildResult {
   outPath: string;
   sizeKb: number;
   snapshot: Snapshot;
-  files: { legacy: string | null; delivery: string | null; attendance: string[] };
+  files: {
+    legacy: string | null;
+    delivery: string | null;
+    roster: string | null;
+    attendance: string[];
+  };
   dates: string[];
   warnings: string[];
   /** Строка статистики по журналу отгрузок — пустая, если журнала нет. */
   deliveryStats: string;
+  /** Строка статистики по справочнику лавок — пустая, если справочника нет. */
+  rosterStats: string;
   dedupedRemoved: number;
   droppedLegacy: number;
 }
@@ -89,7 +97,31 @@ export function buildSnapshot(
     });
   }
 
-  // 3.1. Журнал отгрузок: время приезда водителя там, где нет отметки face id.
+  // 3.1. Справочник лавок: кто из РМ за какую лавку отвечает.
+  //
+  // Он главнее легаси-книги. В книге РМ проставлен когда-то и там остаются
+  // менеджеры, которые уже не работают; справочник обновляют отдельно, и
+  // «кого нет в справочнике — того нет в радаре» — это его прямое назначение.
+  let rosterStats = '';
+  if (files.roster) {
+    const parsed = parseRoster(files.roster.buffer);
+    warnings.push(...parsed.warnings.map((w) => `[${files.roster!.name}] ${w}`));
+
+    const managers = new Map(parsed.rows.map((r) => [r.shopCode, r.manager]));
+    let matched = 0;
+    for (const [code, shop] of shops) {
+      if (!managers.has(code)) continue;
+      matched++;
+      shops.set(code, { ...shop, region: managers.get(code) ?? null });
+    }
+
+    rosterStats =
+      `  справочник лавок: ${parsed.rows.length} лавок, ` +
+      `${parsed.managers.length} региональных менеджеров, ` +
+      `проставлено в радаре ${matched} из ${shops.size}`;
+  }
+
+  // 3.2. Журнал отгрузок: время приезда водителя там, где нет отметки face id.
   let deliveryStats = '';
   if (files.delivery) {
     const parsed = parseDeliveryTimes(files.delivery.buffer);
@@ -143,6 +175,7 @@ export function buildSnapshot(
         source: `fixtures: ${[
           files.legacy?.name,
           files.delivery?.name,
+          files.roster?.name,
           ...files.attendance.map((f) => f.name),
         ]
           .filter(Boolean)
@@ -165,11 +198,13 @@ export function buildSnapshot(
     files: {
       legacy: files.legacy?.name ?? null,
       delivery: files.delivery?.name ?? null,
+      roster: files.roster?.name ?? null,
       attendance: files.attendance.map((f) => f.name),
     },
     dates: [...new Set(snapshot.criteria.map((c) => c.date))].sort(),
     warnings,
     deliveryStats,
+    rosterStats,
     dedupedRemoved: deduped.removed,
     droppedLegacy,
   };

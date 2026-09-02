@@ -7,6 +7,7 @@ import { loadConfig } from '../config';
 import { parseAttendanceBuffer } from './attendance';
 import { parseLegacyVitriny } from './legacy-vitriny';
 import { parseDeliveryTimes } from './delivery';
+import { parseRoster, personName } from './roster';
 import { mergeDeliveryTimes } from '../delivery-merge';
 import type { AttendanceRow } from '../types';
 import { gridToFills } from '../connectors/google-sheets';
@@ -185,6 +186,49 @@ test('Job наполнения витрин терпит ручной ввод: 
     else process.env.RADAR_DB_PATH = prev;
     fs.rmSync(path.dirname(tmpDb), { recursive: true, force: true });
   }
+});
+
+test('справочник лавок: объединённые ячейки разворачиваются на весь блок', () => {
+  // Один РМ отвечает за 9–11 лавок подряд, и в файле это одна ячейка на блок.
+  // Без разворота 9 лавок из 10 остались бы без менеджера.
+  const r = parseRoster(fx('spravochnik-lavok.xlsx'));
+
+  assert.equal(r.rows.length, 83);
+  assert.equal(r.managers.length, 8);
+  assert.ok(r.rows.filter((x) => x.manager).length >= 80, 'РМ проставлен почти у всех лавок');
+
+  const byManager = new Map<string, number>();
+  for (const row of r.rows) {
+    if (row.manager) byManager.set(row.manager, (byManager.get(row.manager) ?? 0) + 1);
+  }
+  for (const [manager, count] of byManager) {
+    assert.ok(count > 1, `${manager}: ${count} — блок не развернулся`);
+  }
+});
+
+test('справочник лавок: «М09» и «М9» — одна лавка', () => {
+  // В справочнике коды пишут с ведущим нулём, в выгрузках 1С — без него.
+  const r = parseRoster(fx('spravochnik-lavok.xlsx'));
+  const codes = r.rows.map((x) => x.shopCode);
+
+  assert.ok(codes.includes('М9'), 'код нормализован');
+  assert.ok(!codes.some((c) => /^[А-Я]+0\d/.test(c)), 'ведущих нулей не осталось');
+});
+
+test('справочник лавок: пометка вместо имени не становится менеджером', () => {
+  const r = parseRoster(fx('spravochnik-lavok.xlsx'));
+
+  assert.ok(!r.managers.some((m) => /закрыт/i.test(m)), 'ЛАВКА ЗАКРЫТА — не менеджер');
+  assert.match(r.warnings.join('\n'), /не имя/);
+});
+
+test('имя РМ вынимается из ячейки с телефоном и почтой', () => {
+  assert.equal(personName('Шевкун Виктория 8 (916) 253-08-23 v.shevkun@karavaevi.ru'), 'Шевкун Виктория');
+  assert.equal(personName('Малаева Анна 89645372031 <malaeva.a@neftm.ru>'), 'Малаева Анна');
+  assert.equal(personName('Ярцева Олеся 8 (977) 832-72-78\nO.yarceva@karavaevi.ru'), 'Ярцева Олеся');
+  assert.equal(personName('ЛАВКА ЗАКРЫТА !!!!!'), null);
+  assert.equal(personName(''), null);
+  assert.equal(personName('Осин'), null, 'одной фамилии мало — это может быть что угодно');
 });
 
 test('журнал отгрузок: даты берутся из шапки, сломанные колонки пропускаются', () => {

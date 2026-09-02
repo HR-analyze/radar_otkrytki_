@@ -69,9 +69,13 @@ test('за период счётчики усреднены по дням и н�
 });
 
 test('фильтр по РМ сужает выборку и счётчики', async () => {
+  // Имя не зашиваем: РМ приходят из справочника лавок и меняются вместе с ним.
+  const regions = await q.listRegions();
+  assert.ok(regions.length > 0, 'у лавок проставлены РМ');
+
   const all = await q.shopTotals('2026-08-25', '2026-08-25');
-  const one = await q.shopTotals('2026-08-25', '2026-08-25', 'Осин');
-  assert.equal(one.total, 9);
+  const one = await q.shopTotals('2026-08-25', '2026-08-25', regions[0]);
+  assert.ok(one.total > 0 && one.total < all.total, `${regions[0]}: ${one.total} из ${all.total}`);
   assert.ok(one.red <= all.red);
   assert.ok(one.green + one.yellow + one.red <= one.total);
 });

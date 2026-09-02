@@ -3,6 +3,7 @@ import { detectFixtureKind, SUPPORTED, type FixtureKind } from './fixtures';
 import { parseAttendanceBuffer, type ParseWarning } from './parsers/attendance';
 import { parseDeliveryTimes } from './parsers/delivery';
 import { parseLegacyVitriny } from './parsers/legacy-vitriny';
+import { parseRoster } from './parsers/roster';
 import { plural } from './plural';
 import { isIgnoredRole } from './status';
 import { shortDate } from './time';
@@ -91,6 +92,7 @@ export function canonicalFixtureName(
   const ext = extensionOf(originalName);
   if (kind === 'legacy') return `vitriny.${ext}`;
   if (kind === 'delivery') return `vremya-postavki.${ext}`;
+  if (kind === 'roster') return `spravochnik-lavok.${ext}`;
 
   const sorted = [...dates].sort();
   const span =
@@ -141,6 +143,7 @@ export function inspectUpload(
     const kind = detectFixtureKind(sheetNames);
     if (kind === 'legacy') return inspectLegacy(displayName, buffer, config);
     if (kind === 'delivery') return inspectDelivery(displayName, buffer);
+    if (kind === 'roster') return inspectRoster(displayName, buffer);
     return inspectAttendance(displayName, buffer, config);
   } catch (e) {
     return reject(`Разбор не удался: ${e instanceof Error ? e.message : String(e)}`);
@@ -284,6 +287,51 @@ function inspectLegacy(name: string, buffer: Buffer, config: ThresholdConfig): I
       shops: parsed.shops.length,
       unknownRoles: [],
       notes: [],
+      warnings: parsed.warnings,
+    },
+  };
+}
+
+function inspectRoster(name: string, buffer: Buffer): InspectResult {
+  const parsed = parseRoster(buffer);
+
+  if (parsed.rows.length === 0) {
+    return {
+      ok: false,
+      originalName: name,
+      error: 'Лист «Лавки БК» есть, но лавок в нём не нашлось.',
+    };
+  }
+  if (parsed.managers.length === 0) {
+    return {
+      ok: false,
+      originalName: name,
+      error: 'В справочнике не нашлось ни одного регионального менеджера — проверьте колонку «Региональный менеджер».',
+    };
+  }
+
+  const withoutManager = parsed.rows.filter((r) => !r.manager).length;
+
+  return {
+    ok: true,
+    file: {
+      originalName: name,
+      kind: 'roster',
+      fileName: canonicalFixtureName('roster', [], name),
+      summary:
+        `Справочник лавок · ${parsed.rows.length} ${plural(parsed.rows.length, 'лавка', 'лавки', 'лавок')}, ` +
+        `${parsed.managers.length} ${plural(parsed.managers.length, 'региональный менеджер', 'региональных менеджера', 'региональных менеджеров')}: ` +
+        parsed.managers.join(', '),
+      dates: [],
+      rows: parsed.rows.length,
+      shops: parsed.rows.length,
+      unknownRoles: [],
+      notes: withoutManager
+        ? [
+            `${withoutManager} ${plural(withoutManager, 'лавка', 'лавки', 'лавок')} без РМ — ` +
+              'у них фильтр по менеджеру будет пустым',
+          ]
+        : [],
       warnings: parsed.warnings,
     },
   };

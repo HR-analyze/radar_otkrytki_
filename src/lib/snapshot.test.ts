@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fixturesFingerprint } from './fixtures';
 import { configFingerprint, type Snapshot } from './snapshot';
 import { exportCoverage, isLegacyStale } from './rollup';
+import { parseRoster } from './parsers/roster';
 import { CRITERION_ORDER } from './types';
 
 const SNAPSHOT_PATH = path.join(process.cwd(), 'src', 'generated', 'snapshot.json');
@@ -110,6 +111,22 @@ test('время из журнала отгрузок подставлено т�
     );
     assert.equal(faceId.length, 0, `${row.shopCode} ${row.date}: есть face id, подстановка лишняя`);
   }
+});
+
+test('РМ у лавок — только действующие, из справочника', () => {
+  // Справочник — источник правды: менеджеров, которых в нём нет, в радаре
+  // быть не должно, даже если они остались в легаси-книге.
+  const roster = parseRoster(
+    fs.readFileSync(path.join(process.cwd(), 'fixtures', 'spravochnik-lavok.xlsx')),
+  );
+  const current = new Set(roster.managers);
+  const snapshot = readSnapshot();
+
+  for (const shop of snapshot.shops) {
+    if (shop.region == null) continue;
+    assert.ok(current.has(shop.region), `${shop.code}: РМ «${shop.region}» нет в справочнике`);
+  }
+  assert.ok(snapshot.shops.some((s) => s.region), 'РМ проставлен хотя бы у одной лавки');
 });
 
 test('в снимке нет неизвестных критериев и статусов', () => {

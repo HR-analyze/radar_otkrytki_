@@ -30,12 +30,16 @@ export function parseShop(value: unknown): ShopRef | null {
   return { code: normalizeCode(m[1]), name: raw };
 }
 
-/** «м 12» → «М12». Латинская M из раскладки приводится к кириллической. */
+/**
+ * «м 12» → «М12». Латинская M из раскладки приводится к кириллической,
+ * ведущий ноль убирается: в справочнике лавок пишут «М09», в выгрузках — «М9».
+ */
 export function normalizeCode(code: string): string {
   return code
     .replace(/\s+/g, '')
     .toUpperCase()
-    .replace(/^M/, 'М');
+    .replace(/^M/, 'М')
+    .replace(/^([А-ЯA-Z]+)0+(\d)/, '$1$2');
 }
 
 /**

@@ -21,6 +21,7 @@ function main(): void {
   console.log(
     `  файлы: ${r.files.legacy ? r.files.legacy + ' (легаси)' : 'легаси-книги нет'}` +
       (r.files.delivery ? `, отгрузки: ${r.files.delivery}` : ', журнала отгрузок нет') +
+      (r.files.roster ? `, справочник: ${r.files.roster}` : ', справочника лавок нет') +
       (r.files.attendance.length
         ? `, выгрузки: ${r.files.attendance.join(', ')}`
         : ', выгрузок нет'),
@@ -32,6 +33,7 @@ function main(): void {
   console.log(
     `  даты: ${r.dates.length ? `${r.dates[0]} — ${r.dates[r.dates.length - 1]} (${r.dates.length})` : 'нет'}`,
   );
+  if (r.rosterStats) console.log(r.rosterStats);
   if (r.deliveryStats) console.log(r.deliveryStats);
   if (r.dedupedRemoved > 0) {
     console.log(`  повторных отметок свёрнуто: ${r.dedupedRemoved}`);

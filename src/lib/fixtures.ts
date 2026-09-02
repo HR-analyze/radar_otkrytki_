@@ -18,10 +18,11 @@ import * as XLSX from 'xlsx';
 
 const LEGACY_SHEET = 'Все данные';
 const DELIVERY_SHEET = 'Время поставки';
+const ROSTER_SHEET = 'Лавки БК';
 export const SUPPORTED = /\.(xls|xlsx)$/i;
 
 /** Что за файл нам дали. Кнопка загрузки опознаёт файл этими же правилами. */
-export type FixtureKind = 'legacy' | 'delivery' | 'attendance';
+export type FixtureKind = 'legacy' | 'delivery' | 'roster' | 'attendance';
 
 /**
  * Тип файла определяется по именам листов — единственное место, где это
@@ -29,8 +30,11 @@ export type FixtureKind = 'legacy' | 'delivery' | 'attendance';
  * как сборка снимка, иначе принятый файл потом не попадёт в нужную ветку.
  */
 export function detectFixtureKind(sheetNames: readonly string[]): FixtureKind {
-  if (sheetNames.includes(LEGACY_SHEET)) return 'legacy';
-  if (sheetNames.includes(DELIVERY_SHEET)) return 'delivery';
+  // Имена листов в реальных файлах бывают с хвостовым пробелом («Лавки БК »).
+  const names = sheetNames.map((n) => n.trim());
+  if (names.includes(LEGACY_SHEET)) return 'legacy';
+  if (names.includes(DELIVERY_SHEET)) return 'delivery';
+  if (names.includes(ROSTER_SHEET)) return 'roster';
   return 'attendance';
 }
 
@@ -44,6 +48,8 @@ export interface FixtureSet {
   legacy: FixtureFile | null;
   /** Журнал отгрузок «Время поставки», если лежит в папке. */
   delivery: FixtureFile | null;
+  /** Справочник лавок «Лавки БК» — кто из РМ за какую лавку отвечает. */
+  roster: FixtureFile | null;
   /** Выгрузки отметок, отсортированные по имени. */
   attendance: FixtureFile[];
   warnings: string[];
@@ -57,8 +63,8 @@ export interface FixtureSet {
  * `npm test` это поймает — иначе данные молча остались бы старыми.
  */
 export function fixturesFingerprint(dir: string): string {
-  const { legacy, delivery, attendance } = readFixtures(dir);
-  const parts = [legacy, delivery, ...attendance]
+  const { legacy, delivery, roster, attendance } = readFixtures(dir);
+  const parts = [legacy, delivery, roster, ...attendance]
     .filter((f): f is FixtureFile => f !== null)
     .map((f) => `${f.name}:${crypto.createHash('sha1').update(f.buffer).digest('hex')}`)
     .sort();
@@ -68,7 +74,13 @@ export function fixturesFingerprint(dir: string): string {
 
 export function readFixtures(dir: string): FixtureSet {
   if (!fs.existsSync(dir)) {
-    return { legacy: null, delivery: null, attendance: [], warnings: [`Папки ${dir} нет`] };
+    return {
+      legacy: null,
+      delivery: null,
+      roster: null,
+      attendance: [],
+      warnings: [`Папки ${dir} нет`],
+    };
   }
 
   const names = fs
@@ -78,6 +90,7 @@ export function readFixtures(dir: string): FixtureSet {
 
   let legacy: FixtureFile | null = null;
   let delivery: FixtureFile | null = null;
+  let roster: FixtureFile | null = null;
   const attendance: FixtureFile[] = [];
   const warnings: string[] = [];
 
@@ -106,14 +119,20 @@ export function readFixtures(dir: string): FixtureSet {
         continue;
       }
       delivery = { name, buffer };
+    } else if (kind === 'roster') {
+      if (roster) {
+        warnings.push(`${name}: второй справочник лавок, используется ${roster.name}`);
+        continue;
+      }
+      roster = { name, buffer };
     } else {
       attendance.push({ name, buffer });
     }
   }
 
-  if (!legacy && !delivery && attendance.length === 0) {
+  if (!legacy && !delivery && !roster && attendance.length === 0) {
     warnings.push(`В ${dir} нет ни одного файла .xls/.xlsx`);
   }
 
-  return { legacy, delivery, attendance, warnings };
+  return { legacy, delivery, roster, attendance, warnings };
 }
