@@ -21,12 +21,13 @@ import { parseClock, parseStamp, formatClock, dateRange } from './time';
 const config = loadConfig();
 const at = (h: number, m: number) => h * 60 + m;
 
-test('пороги повара по листу: 🟢 до 6:00, 🟡 6:01–6:10, 🔴 6:11+', () => {
+test('пороги повара с 01.09.2026: 🟢 до 6:29, 🟡 6:30–6:45, 🔴 6:46+', () => {
   assert.equal(statusForTime(at(5, 30), 'cook', config), 'green');
-  assert.equal(statusForTime(at(6, 0), 'cook', config), 'green');
-  assert.equal(statusForTime(at(6, 1), 'cook', config), 'yellow');
-  assert.equal(statusForTime(at(6, 10), 'cook', config), 'yellow');
-  assert.equal(statusForTime(at(6, 11), 'cook', config), 'red');
+  assert.equal(statusForTime(at(6, 29), 'cook', config), 'green');
+  // 6:30 назван и концом зелёной, и началом жёлтой — считаем жёлтой (см. note в конфиге).
+  assert.equal(statusForTime(at(6, 30), 'cook', config), 'yellow');
+  assert.equal(statusForTime(at(6, 45), 'cook', config), 'yellow');
+  assert.equal(statusForTime(at(6, 46), 'cook', config), 'red');
 });
 
 test('пороги кассира и бариста совпадают: 🟢 до 7:00, 🟡 7:01–7:10', () => {
