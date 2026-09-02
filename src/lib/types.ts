@@ -108,6 +108,17 @@ export interface ThresholdConfig {
       confirmed: boolean;
       note: string;
     };
+    /**
+     * Согласованная, но ещё не включённая замена критерия «приезд водителя»:
+     * считать выезд с ФК Свобода. Ждёт выгрузку — см. note.
+     */
+    driverDeparture?: {
+      enabled: boolean;
+      greenUntil: string;
+      yellowUntil: string;
+      confirmed: boolean;
+      note: string;
+    };
     derivedArrival: {
       enabled: boolean;
       minutesBeforeDeparture: number;

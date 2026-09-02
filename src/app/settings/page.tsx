@@ -102,6 +102,17 @@ export default async function SettingsPage() {
             value={`уход − ${config.rules.derivedArrival.minutesBeforeDeparture} мин, окно правдоподобия ${config.rules.derivedArrival.plausibleWindow.from}–${config.rules.derivedArrival.plausibleWindow.to}`}
             note={config.rules.derivedArrival.note}
           />
+          {config.rules.driverDeparture && (
+            <Rule
+              title="Выезд с ФК Свобода вместо приезда в лавку"
+              value={
+                config.rules.driverDeparture.enabled
+                  ? `🟢 до ${config.rules.driverDeparture.greenUntil} · 🟡 до ${config.rules.driverDeparture.yellowUntil}`
+                  : 'согласовано, ждёт выгрузку с ФК'
+              }
+              note={config.rules.driverDeparture.note}
+            />
+          )}
           <Rule
             title="Лавка сотрудника"
             value={`поле «${config.rules.shopField.use}»`}
