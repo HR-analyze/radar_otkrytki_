@@ -23,6 +23,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="flex gap-4 text-sm">
               <Link href="/" className="hover:underline">Сводка</Link>
               <Link href="/radar" className="hover:underline">Радар по лавкам</Link>
+              <Link href="/showcase" className="hover:underline">Витрины</Link>
+              <Link href="/history" className="hover:underline">История</Link>
               <Link href="/settings" className="hover:underline">Пороги</Link>
             </nav>
             {/* Загрузка — в шапке: данными занимается вся команда, а не только

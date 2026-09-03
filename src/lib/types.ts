@@ -179,7 +179,11 @@ export interface CriterionStatusRow {
    */
   score: number | null;
   /** 'computed' — посчитано из сырых выгрузок; 'legacy' — импортировано из Витрины.xlsx как есть. */
-  origin: 'computed' | 'legacy';
+  /**
+   * computed — посчитано из выгрузки, legacy — раскрашено руками в книге
+   * «Витрины», manual — введено на сайте (вкладка «Витрины»).
+   */
+  origin: 'computed' | 'legacy' | 'manual';
 }
 
 export interface Shop {

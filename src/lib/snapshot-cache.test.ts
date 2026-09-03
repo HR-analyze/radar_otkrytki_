@@ -43,6 +43,8 @@ test('свежий снимок на диске виден без перезап
   // новый, а на экране прежние цифры.
   process.env.RADAR_STORAGE = 'snapshot';
   process.env.RADAR_SNAPSHOT_PATH = file;
+  // Витрины подмешиваются в снимок из своего файла — в этом тесте он не нужен.
+  process.env.RADAR_SHOWCASE_PATH = path.join(dir, 'showcase.json');
   writeSnapshot(['2026-08-30']);
 
   const { loadSnapshot } = await import('./snapshot');

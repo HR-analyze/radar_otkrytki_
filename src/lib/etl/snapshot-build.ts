@@ -141,10 +141,15 @@ export function buildSnapshot(
 
   // 4. Статусы критериев: посчитанное перекрывает легаси, а устаревшее
   //    легаси не берётся вовсе — см. isLegacyStale.
+  //
+  //    Витрины сюда не попадают: их правят на сайте, и они подмешиваются в
+  //    снимок при чтении (см. showcase-store.ts). Из книги берём только
+  //    раскрашенные вручную статусы сотрудников за дни без выгрузок.
   const coverage = exportCoverage(attendance);
   const criteria = new Map<string, CriterionStatusRow>();
   let droppedLegacy = 0;
   for (const c of legacy.criteria) {
+    if (c.criterion === 'showcase') continue;
     if (isLegacyStale(coverage, c.date, c.shopCode, c.criterion)) {
       droppedLegacy++;
       continue;
@@ -164,7 +169,8 @@ export function buildSnapshot(
     fixturesFingerprint: fixturesFingerprint(fixturesDir),
     shops: [...shops.values()],
     attendance,
-    showcase: legacy.showcase,
+    // Витрины подмешиваются при чтении из fixtures/showcase.json.
+    showcase: [],
     criteria: [...criteria.values()],
     legacyPeople: legacy.people.filter(
       (p) => !isLegacyStale(coverage, p.date, p.shopCode, p.criterion),

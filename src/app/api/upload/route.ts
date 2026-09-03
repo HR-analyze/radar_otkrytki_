@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { loadConfig } from '@/lib/config';
 import { checkUploadToken, saveUploads, uploadCapability } from '@/lib/upload-store';
+import { appendUploadLog } from '@/lib/upload-log';
 import { inspectUpload, MAX_UPLOAD_BYTES, type UploadInspection } from '@/lib/uploads';
 
 export const runtime = 'nodejs';
@@ -85,6 +86,22 @@ export async function POST(req: Request) {
 
   try {
     const saved = await saveUploads(accepted, capability);
+
+    // Журнал для вкладки «История»: что и когда загрузили.
+    const at = new Date().toISOString();
+    appendUploadLog(
+      accepted.map(({ inspection }) => ({
+        at,
+        originalName: inspection.originalName,
+        fileName: inspection.fileName,
+        kind: inspection.kind,
+        summary: inspection.summary,
+        dates: inspection.dates,
+        rows: inspection.rows,
+        mode: saved.mode,
+      })),
+    );
+
     return NextResponse.json({
       ok: true,
       mode: saved.mode,

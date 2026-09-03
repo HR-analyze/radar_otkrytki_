@@ -281,12 +281,18 @@ function inspectLegacy(name: string, buffer: Buffer, config: ThresholdConfig): I
       summary:
         `Книга «Витрины» · ${describeDates(parsed.dates)} · ` +
         `${parsed.shops.length} ${plural(parsed.shops.length, 'лавка', 'лавки', 'лавок')}, ` +
-        `наполнение витрины по ${parsed.showcase.length} лавко-дням`,
+        `${parsed.people.length} раскрашенных вручную статусов сотрудников`,
       dates: parsed.dates,
       rows: parsed.people.length + parsed.showcase.length,
       shops: parsed.shops.length,
       unknownRoles: [],
-      notes: [],
+      // Витрины из книги больше не берутся: их правят на вкладке «Витрины».
+      // Сказать об этом надо здесь — иначе человек перезальёт книгу ради
+      // процентов и будет ждать, что они появятся.
+      notes: [
+        'Наполнение витрины из книги не берётся — оно редактируется на вкладке «Витрины». ' +
+          'Из книги нужны только раскрашенные вручную статусы сотрудников за дни без выгрузок.',
+      ],
       warnings: parsed.warnings,
     },
   };

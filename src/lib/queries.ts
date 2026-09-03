@@ -4,6 +4,7 @@ import {
   CRITERION_ORDER,
   type ArrivalSource,
   type CriterionKey,
+  type CriterionStatusRow,
   type Status,
   type ThresholdConfig,
 } from './types';
@@ -167,7 +168,7 @@ export interface RadarFilters {
 
 export interface RadarCell {
   status: Status;
-  origin: 'computed' | 'legacy';
+  origin: CriterionStatusRow['origin'];
 }
 
 export interface RadarRow {
@@ -209,7 +210,10 @@ export async function radar(
   // Ни одного дня с данными — строки без единой ячейки показывать незачем.
   if (dates.length === 0) return { dates, rows: [] };
 
-  const byShop = new Map<string, Map<string, { statuses: Status[]; origin: 'computed' | 'legacy' }>>();
+  const byShop = new Map<
+    string,
+    Map<string, { statuses: Status[]; origin: CriterionStatusRow['origin'] }>
+  >();
   for (const c of relevant) {
     let dayMap = byShop.get(c.shopCode);
     if (!dayMap) byShop.set(c.shopCode, (dayMap = new Map()));
@@ -526,7 +530,7 @@ export interface ShopDay {
     status: Status;
     /** Средний балл сотрудников роли, если критерий свёрнут по среднему. */
     score: number | null;
-    origin: 'computed' | 'legacy';
+    origin: CriterionStatusRow['origin'];
   }[];
   fill: number | null;
   shopStatus: Status;

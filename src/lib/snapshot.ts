@@ -9,6 +9,7 @@ import type {
   ShowcaseRow,
 } from './types';
 import type { LegacyPersonStatus } from './parsers/legacy-vitriny';
+import { readShowcaseStore, showcaseRowsFromStore, showcaseStoreExists, showcaseStorePath } from './showcase-store';
 import bundledSnapshot from '../generated/snapshot.json';
 
 /**
@@ -109,14 +110,18 @@ export function storageMode(): StorageMode {
  * диске подхватывают все.
  */
 function sourceStamp(mode: StorageMode): string {
-  const file = mode === 'sqlite' ? dbPath() : GENERATED_PATH;
-  try {
-    const s = fs.statSync(/* turbopackIgnore: true */ file);
-    return `${file}|${s.mtimeMs}|${s.size}`;
-  } catch {
-    // Файла нет: на Vercel снимок вкомпилирован в сборку и меняется только с ней.
-    return `${file}|bundled`;
-  }
+  // Витрины лежат отдельным файлом и правятся на сайте — за ними следим так же.
+  return [mode === 'sqlite' ? dbPath() : GENERATED_PATH, showcaseStorePath()]
+    .map((file) => {
+      try {
+        const s = fs.statSync(/* turbopackIgnore: true */ file);
+        return `${file}|${s.mtimeMs}|${s.size}`;
+      } catch {
+        // Файла нет: на Vercel снимок вкомпилирован в сборку и меняется только с ней.
+        return `${file}|bundled`;
+      }
+    })
+    .join('||');
 }
 
 /** Доступна ли запись: ETL и кнопка «Обновить» работают только поверх SQLite. */
@@ -129,7 +134,7 @@ export async function loadSnapshot(): Promise<Snapshot> {
   const stamp = sourceStamp(mode);
   if (cached && cached.stamp === stamp) return cached.snapshot;
 
-  const snapshot = mode === 'sqlite' ? await readFromSqlite() : readFromJson();
+  const snapshot = withShowcase(mode === 'sqlite' ? await readFromSqlite() : readFromJson());
   cached = { snapshot, stamp };
   return snapshot;
 }
@@ -137,6 +142,22 @@ export async function loadSnapshot(): Promise<Snapshot> {
 /** Сбрасывает кеш в своём процессе — например, сразу после записи в БД. */
 export function invalidateSnapshot(): void {
   cached = null;
+}
+
+/**
+ * Наполнение витрин живёт своим файлом, потому что его правят на сайте, а не
+ * выгружают. Подмешиваем при чтении: правка видна сразу, снимок пересобирать
+ * не нужно. Пока файла нет, остаётся то, что положила сборка.
+ */
+function withShowcase(snapshot: Snapshot): Snapshot {
+  if (!showcaseStoreExists()) return snapshot;
+
+  const { showcase, criteria } = showcaseRowsFromStore(readShowcaseStore());
+  return {
+    ...snapshot,
+    showcase,
+    criteria: [...snapshot.criteria.filter((c) => c.criterion !== 'showcase'), ...criteria],
+  };
 }
 
 /**
