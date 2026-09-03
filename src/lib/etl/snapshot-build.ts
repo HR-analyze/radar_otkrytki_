@@ -7,6 +7,7 @@ import { parseDeliveryTimes } from '../parsers/delivery';
 import { parseLegacyVitriny } from '../parsers/legacy-vitriny';
 import { parseRoster } from '../parsers/roster';
 import { mergeDeliveryTimes } from '../delivery-merge';
+import { deriveRegionHistory } from '../roster-history';
 import { dedupeAttendance, exportCoverage, isLegacyStale, rollUpAttendance } from '../rollup';
 import { configFingerprint, type Snapshot } from '../snapshot';
 import type { AttendanceRow, CriterionStatusRow, Shop } from '../types';
@@ -99,15 +100,28 @@ export function buildSnapshot(
 
   // 3.1. Справочник лавок: кто из РМ за какую лавку отвечает.
   //
-  // Он главнее легаси-книги. В книге РМ проставлен когда-то и там остаются
-  // менеджеры, которые уже не работают; справочник обновляют отдельно, и
-  // «кого нет в справочнике — того нет в радаре» — это его прямое назначение.
+  // Он главнее легаси-книги для ТЕКУЩЕГО имени РМ лавки. В книге РМ проставлен
+  // когда-то и там остаются менеджеры, которые уже не работают; справочник
+  // обновляют отдельно, и «кого нет в справочнике — того нет в текущем срезе
+  // радара» — это его прямое назначение.
+  //
+  // Легаси-имена при этом не выбрасываются совсем: они остаются в
+  // regionHistory как РМ, отвечавший за лавку до появления справочника (см.
+  // roster-history.ts) — иначе смена РМ стирала бы его из всех прошлых
+  // месяцев радара, и сравнить его показатели с показателями преемника было
+  // бы уже нельзя.
+  const legacyAssignments = new Map<string, string>();
+  for (const s of legacy.shops) if (s.region) legacyAssignments.set(s.code, s.region);
+
   let rosterStats = '';
+  let rosterAssignments = new Map<string, string>();
   if (files.roster) {
     const parsed = parseRoster(files.roster.buffer);
     warnings.push(...parsed.warnings.map((w) => `[${files.roster!.name}] ${w}`));
 
     const managers = new Map(parsed.rows.map((r) => [r.shopCode, r.manager]));
+    rosterAssignments = new Map([...managers].filter((e): e is [string, string] => e[1] != null));
+
     let matched = 0;
     for (const [code, shop] of shops) {
       if (!managers.has(code)) continue;
@@ -120,6 +134,8 @@ export function buildSnapshot(
       `${parsed.managers.length} региональных менеджеров, ` +
       `проставлено в радаре ${matched} из ${shops.size}`;
   }
+
+  const regionHistory = deriveRegionHistory(legacyAssignments, rosterAssignments);
 
   // 3.2. Журнал отгрузок: время приезда водителя там, где нет отметки face id.
   let deliveryStats = '';
@@ -172,6 +188,9 @@ export function buildSnapshot(
     // Витрины подмешиваются при чтении из базы ручных данных.
     showcase: [],
     criteria: [...criteria.values()],
+    // Живая история РМ (там, где есть база ручных данных) подмешивается при
+    // чтении поверх этой базовой — см. withRegionHistory в snapshot.ts.
+    regionHistory,
     legacyPeople: legacy.people.filter(
       (p) => !isLegacyStale(coverage, p.date, p.shopCode, p.criterion),
     ),

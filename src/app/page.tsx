@@ -32,7 +32,7 @@ export default async function DashboardPage({
 
   const [regions, summary, totals, top, weak, fill, runAttendance, runShowcase] =
     await Promise.all([
-      listRegions(),
+      listRegions(p.from, p.to),
       summaryByCriterion(p.from, p.to, p.region),
       shopTotals(p.from, p.to, p.region),
       antiTop(p.from, p.to, 12, p.region),

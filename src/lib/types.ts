@@ -191,3 +191,17 @@ export interface Shop {
   name: string;
   region: string | null;
 }
+
+/**
+ * Один период, когда лавкой управлял конкретный РМ — см. roster-history.ts.
+ * Уходящий менеджер не стирается из истории: закрывается его период, а новый
+ * открывается с даты смены, поэтому старые дни остаются под прежним именем.
+ */
+export interface RegionPeriod {
+  shopCode: string;
+  manager: string;
+  /** YYYY-MM-DD, включительно. */
+  from: string;
+  /** YYYY-MM-DD, включительно; null — период ещё действует. */
+  to: string | null;
+}

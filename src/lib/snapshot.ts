@@ -5,10 +5,12 @@ import { loadConfig } from './config';
 import type {
   AttendanceRow,
   CriterionStatusRow,
+  RegionPeriod,
   Shop,
   ShowcaseRow,
 } from './types';
 import type { LegacyPersonStatus } from './parsers/legacy-vitriny';
+import { reconcileRegionHistory } from './roster-history';
 import { readShowcase, showcaseRowsFromStore, showcaseVersion } from './showcase-store';
 import bundledSnapshot from '../generated/snapshot.json';
 
@@ -40,6 +42,8 @@ export interface Snapshot {
   criteria: CriterionStatusRow[];
   legacyPeople: LegacyPersonStatus[];
   runs: ImportRunSummary[];
+  /** Кто из РМ отвечал за какую лавку когда — см. roster-history.ts. */
+  regionHistory: RegionPeriod[];
 }
 
 export interface ImportRunSummary {
@@ -135,7 +139,7 @@ export async function loadSnapshot(): Promise<Snapshot> {
   if (cached && cached.stamp === stamp && cached.showcase === showcase) return cached.snapshot;
 
   const base = mode === 'sqlite' ? await readFromSqlite() : readFromJson();
-  const snapshot = await withShowcase(base);
+  const snapshot = await withRegionHistory(await withShowcase(base));
   cached = { snapshot, stamp, showcase };
   return snapshot;
 }
@@ -162,6 +166,25 @@ async function withShowcase(snapshot: Snapshot): Promise<Snapshot> {
 }
 
 /**
+ * История РМ живёт в базе ручных данных так же, как наполнение витрин: там,
+ * где есть диск, каждая сборка снимка сверяет текущих менеджеров лавок с
+ * действующими периодами в базе и фиксирует смену датой сборки — вместо
+ * заранее известных двух глав из статической `deriveRegionHistory`.
+ *
+ * Без диска (Vercel) возвращает снимок как есть — там и так уже верная
+ * история из этих двух глав, посчитанная при сборке (см. snapshot-build.ts).
+ */
+async function withRegionHistory(snapshot: Snapshot): Promise<Snapshot> {
+  const current = new Map<string, string>();
+  for (const s of snapshot.shops) if (s.region) current.set(s.code, s.region);
+
+  const history = await reconcileRegionHistory(current, snapshot.regionHistory ?? []);
+  if (!history) return snapshot;
+
+  return { ...snapshot, regionHistory: history };
+}
+
+/**
  * Снимок вкомпилирован в сборку и параллельно лежит на диске. Импорт гарантирует,
  * что данные доедут до serverless-функции; чтение с диска даёт возможность
  * подложить свежий снимок без пересборки.
@@ -171,9 +194,10 @@ function readFromJson(): Snapshot {
     const raw = JSON.parse(
       fs.readFileSync(/* turbopackIgnore: true */ GENERATED_PATH, 'utf8'),
     ) as Snapshot;
-    return { ...raw, source: 'json' };
+    return { ...raw, source: 'json', regionHistory: raw.regionHistory ?? [] };
   } catch {
-    return { ...(bundledSnapshot as unknown as Snapshot), source: 'json' };
+    const raw = bundledSnapshot as unknown as Snapshot;
+    return { ...raw, source: 'json', regionHistory: raw.regionHistory ?? [] };
   }
 }
 
@@ -291,5 +315,9 @@ async function readFromSqlite(): Promise<Snapshot> {
     criteria,
     legacyPeople,
     runs,
+    // ETL-путь роутер не наполняет: справочник лавок читается только в
+    // сборке снимка (snapshot-build.ts). withRegionHistory достроит историю
+    // из базы ручных данных там, где она есть.
+    regionHistory: [],
   };
 }

@@ -5,6 +5,7 @@ import {
   type ArrivalSource,
   type CriterionKey,
   type CriterionStatusRow,
+  type RegionPeriod,
   type Status,
   type ThresholdConfig,
 } from './types';
@@ -114,11 +115,135 @@ export async function listShops(): Promise<ShopRow[]> {
   return [...s.shops].sort(byShopNumber);
 }
 
-export async function listRegions(): Promise<string[]> {
+export interface RegionOptions {
+  /** РМ выбранного периода, которые есть и в действующем справочнике. */
+  current: string[];
+  /**
+   * РМ выбранного периода, которых в справочнике уже нет: они ушли, но за свои
+   * месяцы остаются в радаре — иначе сравнить их показатели с показателями
+   * преемника было бы нельзя (см. roster-history.ts).
+   */
+  past: string[];
+}
+
+/**
+ * РМ для выпадающего списка фильтра — только те, кто отвечал хотя бы за одну
+ * лавку в выбранном периоде.
+ *
+ * Справочник обновляют раз в месяц, поэтому список привязан к периоду, а не к
+ * «сейчас»: выбрали август — видно менеджеров августа, включая ушедших;
+ * выбрали текущий месяц — видно нынешний состав.
+ */
+export async function listRegions(from: string, to: string): Promise<RegionOptions> {
   const s = await loadSnapshot();
-  const regions = new Set<string>();
-  for (const shop of s.shops) if (shop.region) regions.add(shop.region);
-  return [...regions].sort((a, b) => a.localeCompare(b, 'ru'));
+  const sort = (names: Iterable<string>): string[] =>
+    [...names].sort((a, b) => a.localeCompare(b, 'ru'));
+
+  if (s.regionHistory.length === 0) {
+    // Страховка на случай снимка без истории (старая сборка): как раньше,
+    // одни только текущие РМ лавок, без привязки к периоду.
+    const current = new Set<string>();
+    for (const shop of s.shops) if (shop.region) current.add(shop.region);
+    return { current: sort(current), past: [] };
+  }
+
+  // Действующие — те, у кого есть незакрытый период хоть по одной лавке.
+  const stillCurrent = new Set<string>();
+  for (const p of s.regionHistory) if (p.to === null) stillCurrent.add(p.manager);
+
+  const current = new Set<string>();
+  const past = new Set<string>();
+  for (const p of s.regionHistory) {
+    if (p.from > to || (p.to !== null && p.to < from)) continue;
+    (stillCurrent.has(p.manager) ? current : past).add(p.manager);
+  }
+
+  return { current: sort(current), past: sort(past) };
+}
+
+/** Периоды РМ, сгруппированные по коду лавки — для точечных проверок по дате. */
+function regionIndexOf(snap: Snapshot): Map<string, RegionPeriod[]> {
+  const idx = new Map<string, RegionPeriod[]>();
+  for (const p of snap.regionHistory) {
+    const list = idx.get(p.shopCode);
+    if (list) list.push(p);
+    else idx.set(p.shopCode, [p]);
+  }
+  return idx;
+}
+
+/** Кто из РМ отвечал за лавку в конкретный день — null, если периода нет. */
+function regionAt(periods: readonly RegionPeriod[] | undefined, date: string): string | null {
+  if (!periods) return null;
+  for (const p of periods) {
+    if (date >= p.from && (p.to === null || date <= p.to)) return p.manager;
+  }
+  return null;
+}
+
+/** Был ли РМ хоть раз действующим для лавки в пределах периода [from, to]. */
+function everInRegion(
+  periods: readonly RegionPeriod[] | undefined,
+  region: string,
+  from: string,
+  to: string,
+): boolean {
+  if (!periods) return false;
+  return periods.some((p) => p.manager === region && p.from <= to && (p.to === null || p.to >= from));
+}
+
+/**
+ * Проверка «этот день у этой лавки принадлежит выбранному РМ» — для построчной
+ * фильтрации отметок и критериев по фильтру «РМ». Без фильтра пропускает всё.
+ */
+async function regionDayMatcher(
+  region: string | undefined,
+): Promise<(shopCode: string, date: string) => boolean> {
+  if (!region) return () => true;
+
+  const s = await loadSnapshot();
+  if (s.regionHistory.length === 0) {
+    // Страховка без истории: сравниваем с текущим РМ лавки, без учёта дат.
+    const allowed = new Set(s.shops.filter((x) => x.region === region).map((x) => x.code));
+    return (shopCode) => allowed.has(shopCode);
+  }
+
+  const idx = regionIndexOf(s);
+  return (shopCode, date) => regionAt(idx.get(shopCode), date) === region;
+}
+
+export interface RegionTransition {
+  shopCode: string;
+  shopName: string;
+  /** Кто передал лавку. */
+  from: string;
+  /** Кто принял. */
+  to: string;
+  /** С какого числа новый РМ считается действующим. */
+  since: string;
+}
+
+/** Смены РМ по всем лавкам — для вкладки «История» (см. roster-history.ts). */
+export async function regionTransitions(): Promise<RegionTransition[]> {
+  const s = await loadSnapshot();
+  const names = new Map(s.shops.map((x) => [x.code, x.name]));
+  const byShop = regionIndexOf(s);
+
+  const out: RegionTransition[] = [];
+  for (const [shopCode, periods] of byShop) {
+    const sorted = [...periods].sort((a, b) => a.from.localeCompare(b.from));
+    for (let i = 1; i < sorted.length; i++) {
+      out.push({
+        shopCode,
+        shopName: names.get(shopCode) ?? shopCode,
+        from: sorted[i - 1].manager,
+        to: sorted[i].manager,
+        since: sorted[i].from,
+      });
+    }
+  }
+
+  return out.sort((a, b) => b.since.localeCompare(a.since) || a.shopCode.localeCompare(b.shopCode));
 }
 
 export async function listDates(): Promise<string[]> {
@@ -151,9 +276,31 @@ export async function snapshotInfo(): Promise<{
 
 /* -------------------------------- фильтры -------------------------------- */
 
-async function shopsIn(region?: string, shop?: string): Promise<ShopRow[]> {
+/**
+ * Лавки под фильтром «РМ»: не только те, кем он управляет сейчас, а все, кем
+ * он управлял хоть один день в пределах [from, to] — иначе выбрать прежнего
+ * РМ из выпадающего списка и не увидеть ни одной строки было бы странно.
+ * Какие именно дни ему принадлежат — решает regionDayMatcher построчно.
+ */
+async function shopsIn(
+  region: string | undefined,
+  shop: string | undefined,
+  from: string,
+  to: string,
+): Promise<ShopRow[]> {
   const shops = await listShops();
-  const byRegion = region ? shops.filter((s) => s.region === region) : shops;
+  let byRegion = shops;
+
+  if (region) {
+    const s = await loadSnapshot();
+    if (s.regionHistory.length === 0) {
+      byRegion = shops.filter((x) => x.region === region);
+    } else {
+      const idx = regionIndexOf(s);
+      byRegion = shops.filter((x) => everInRegion(idx.get(x.code), region, from, to));
+    }
+  }
+
   return shop ? byRegion.filter((s) => matchesShop(s, shop)) : byRegion;
 }
 
@@ -217,16 +364,18 @@ export async function radar(
 
   // Точный код важнее подстроки: «М1» — это М1, а не М1 вместе с М10–М19.
   const exact = filters.shop ? await hasExactShop(filters.shop) : false;
-  const shops = (await shopsIn(filters.region, filters.shop)).filter(
+  const shops = (await shopsIn(filters.region, filters.shop, filters.from, filters.to)).filter(
     (s) => !exact || s.code.toLowerCase() === filters.shop!.trim().toLowerCase(),
   );
   const allowedShops = new Set(shops.map((s) => s.code));
+  const inRegion = await regionDayMatcher(filters.region);
 
   const relevant = snap.criteria.filter(
     (c) =>
       c.date >= filters.from &&
       c.date <= filters.to &&
       allowedShops.has(c.shopCode) &&
+      inRegion(c.shopCode, c.date) &&
       (!filters.criterion || filters.criterion === 'all' || c.criterion === filters.criterion) &&
       (!onlyConfirmed || config.criteria[c.criterion]?.confirmed),
   );
@@ -315,15 +464,16 @@ export async function summaryByCriterion(
   region?: string,
 ): Promise<CriterionSummary[]> {
   const snap = await loadSnapshot();
-  const shops = await shopsIn(region);
+  const shops = await shopsIn(region, undefined, from, to);
   const allowed = new Set(shops.map((s) => s.code));
+  const inRegion = await regionDayMatcher(region);
 
   // критерий → день → статус → множество лавок
   const perDay = new Map<CriterionKey, Map<string, Map<Status, Set<string>>>>();
   const days = new Set<string>();
 
   for (const c of snap.criteria) {
-    if (c.date < from || c.date > to || !allowed.has(c.shopCode)) continue;
+    if (c.date < from || c.date > to || !allowed.has(c.shopCode) || !inRegion(c.shopCode, c.date)) continue;
     days.add(c.date);
 
     let byDay = perDay.get(c.criterion);
@@ -380,13 +530,14 @@ export async function shopTotals(
   const byComponents = useComponents(config);
   const people = byComponents ? await peopleIndex() : null;
   const fills = byComponents ? await showcaseIndex() : null;
-  const shops = await shopsIn(region);
+  const shops = await shopsIn(region, undefined, from, to);
   const allowed = new Set(shops.map((s) => s.code));
+  const inRegion = await regionDayMatcher(region);
 
   // день → лавка → статусы её критериев
   const byDay = new Map<string, Map<string, Status[]>>();
   for (const c of snap.criteria) {
-    if (c.date < from || c.date > to || !allowed.has(c.shopCode)) continue;
+    if (c.date < from || c.date > to || !allowed.has(c.shopCode) || !inRegion(c.shopCode, c.date)) continue;
     let shopsOfDay = byDay.get(c.date);
     if (!shopsOfDay) byDay.set(c.date, (shopsOfDay = new Map()));
     const list = shopsOfDay.get(c.shopCode);
@@ -434,12 +585,14 @@ export async function antiTop(
   region?: string,
 ): Promise<AntiTopRow[]> {
   const snap = await loadSnapshot();
-  const shops = await shopsIn(region);
+  const shops = await shopsIn(region, undefined, from, to);
   const byCode = new Map(shops.map((s) => [s.code, s]));
+  const inRegion = await regionDayMatcher(region);
 
   const agg = new Map<string, { redCount: number; criteria: Set<CriterionKey> }>();
   for (const c of snap.criteria) {
     if (c.status !== 'red' || c.date < from || c.date > to || !byCode.has(c.shopCode)) continue;
+    if (!inRegion(c.shopCode, c.date)) continue;
     const cur = agg.get(c.shopCode) ?? { redCount: 0, criteria: new Set<CriterionKey>() };
     cur.redCount++;
     cur.criteria.add(c.criterion);
@@ -448,7 +601,7 @@ export async function antiTop(
 
   const fillSums = new Map<string, { sum: number; n: number }>();
   for (const s of snap.showcase) {
-    if (s.date < from || s.date > to || !byCode.has(s.shopCode)) continue;
+    if (s.date < from || s.date > to || !byCode.has(s.shopCode) || !inRegion(s.shopCode, s.date)) continue;
     const cur = fillSums.get(s.shopCode) ?? { sum: 0, n: 0 };
     cur.sum += s.fill;
     cur.n++;
@@ -476,11 +629,12 @@ export async function weakestCriteria(
   region?: string,
 ): Promise<{ criterion: CriterionKey; red: number; total: number; share: number }[]> {
   const snap = await loadSnapshot();
-  const allowed = new Set((await shopsIn(region)).map((s) => s.code));
+  const allowed = new Set((await shopsIn(region, undefined, from, to)).map((s) => s.code));
+  const inRegion = await regionDayMatcher(region);
 
   const agg = new Map<CriterionKey, { red: number; total: number }>();
   for (const c of snap.criteria) {
-    if (c.date < from || c.date > to || !allowed.has(c.shopCode)) continue;
+    if (c.date < from || c.date > to || !allowed.has(c.shopCode) || !inRegion(c.shopCode, c.date)) continue;
     if (c.status !== 'red' && c.status !== 'yellow' && c.status !== 'green') continue;
 
     const cur = agg.get(c.criterion) ?? { red: 0, total: 0 };
@@ -509,11 +663,12 @@ export async function showcaseStats(
   region?: string,
 ): Promise<{ avg: number | null; min: number | null; minShop: string | null; filled: number }> {
   const snap = await loadSnapshot();
-  const shops = await shopsIn(region);
+  const shops = await shopsIn(region, undefined, from, to);
   const byCode = new Map(shops.map((s) => [s.code, s]));
+  const inRegion = await regionDayMatcher(region);
 
   const rows = snap.showcase.filter(
-    (s) => s.date >= from && s.date <= to && byCode.has(s.shopCode),
+    (s) => s.date >= from && s.date <= to && byCode.has(s.shopCode) && inRegion(s.shopCode, s.date),
   );
   if (rows.length === 0) return { avg: null, min: null, minShop: null, filled: 0 };
 
@@ -547,6 +702,8 @@ export interface ShopDayPerson {
 
 export interface ShopDay {
   date: string;
+  /** РМ, отвечавший за лавку именно в этот день — может отличаться от текущего. */
+  region: string | null;
   people: ShopDayPerson[];
   /** Легаси-статусы людей (для дней, где сырых выгрузок нет). */
   legacyPeople: { employeeName: string; criterion: CriterionKey; status: Status }[];
@@ -573,6 +730,7 @@ export async function shopHistory(
   const snap = await loadSnapshot();
   const config = loadConfig();
   const inRange = (d: string): boolean => d >= from && d <= to;
+  const shopPeriods = regionIndexOf(snap).get(shopCode);
 
   const people = snap.attendance.filter((r) => r.shopCode === shopCode && inRange(r.date));
   const legacy = snap.legacyPeople.filter((r) => r.shopCode === shopCode && inRange(r.date));
@@ -610,6 +768,7 @@ export async function shopHistory(
 
     return {
       date,
+      region: regionAt(shopPeriods, date),
       people: dayPeople.map((p) => ({
         employeeName: p.employeeName,
         role: p.role,

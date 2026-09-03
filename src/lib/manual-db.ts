@@ -103,6 +103,19 @@ function migrate(db: BetterSqlite3.Database): void {
 
     CREATE INDEX IF NOT EXISTS uploads_at ON uploads (at DESC);
 
+    -- История «какой РМ отвечал за лавку» — см. roster-history.ts.
+    -- to_date IS NULL значит «период ещё действует».
+    CREATE TABLE IF NOT EXISTS region_periods (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_code  TEXT NOT NULL,
+      manager    TEXT NOT NULL,
+      from_date  TEXT NOT NULL,
+      to_date    TEXT,
+      source     TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS region_periods_shop ON region_periods (shop_code, from_date);
+
     -- Разовые отметки: например, что сид из репозитория уже залит.
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,

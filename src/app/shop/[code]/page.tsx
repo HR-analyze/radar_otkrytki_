@@ -52,7 +52,7 @@ export default async function ShopPage({
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{shop.name}</h1>
         <p className="mt-1 text-sm muted">
-          РМ: {shop.region ?? '—'} · код {shop.code} · период {shortDate(p.from)} —{' '}
+          РМ сейчас: {shop.region ?? '—'} · код {shop.code} · период {shortDate(p.from)} —{' '}
           {shortDate(p.to)}
         </p>
       </div>
@@ -63,13 +63,22 @@ export default async function ShopPage({
         history.map((day) => (
           <section key={day.date} className="surface p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold">
-                {new Date(`${day.date}T00:00:00`).toLocaleDateString('ru-RU', {
-                  day: '2-digit',
-                  month: 'long',
-                  weekday: 'short',
-                })}
-              </h2>
+              <div>
+                <h2 className="text-base font-semibold">
+                  {new Date(`${day.date}T00:00:00`).toLocaleDateString('ru-RU', {
+                    day: '2-digit',
+                    month: 'long',
+                    weekday: 'short',
+                  })}
+                </h2>
+                {/* Показываем, только если РМ в этот день отличается от текущего:
+                    иначе строка повторялась бы на каждой карточке без пользы. */}
+                {day.region && day.region !== shop.region && (
+                  <p className="text-xs muted" title="РМ, отвечавший за лавку в этот день">
+                    РМ тогда: {day.region}
+                  </p>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs muted">Общий результат:</span>
                 <StatusBadge status={day.shopStatus} />

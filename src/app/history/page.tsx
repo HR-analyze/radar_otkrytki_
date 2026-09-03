@@ -3,6 +3,7 @@ import path from 'node:path';
 import { readUploadLog, type UploadLogEntry } from '@/lib/upload-log';
 import { fixturesDir } from '@/lib/upload-store';
 import { readShowcase } from '@/lib/showcase-store';
+import { regionTransitions } from '@/lib/queries';
 import { shortDate } from '@/lib/time';
 import { plural } from '@/lib/plural';
 
@@ -25,6 +26,7 @@ export default async function HistoryPage() {
   const log = await readUploadLog();
   const files = readFixtureFiles();
   const showcase = await readShowcase();
+  const transitions = await regionTransitions();
 
   const showcaseDays = Object.entries(showcase.touched)
     .sort((a, b) => b[1].localeCompare(a[1]))
@@ -119,6 +121,46 @@ export default async function HistoryPage() {
           )}
         </section>
       </div>
+
+      <section className="surface p-4">
+        <h2 className="text-sm font-semibold">Смены РМ</h2>
+        <p className="mt-0.5 text-xs muted">
+          Ушедший РМ из радара не пропадает: дни, где он реально отвечал за лавку, остаются под его
+          именем — фильтр «РМ» в радаре и на дашборде находит и прежних менеджеров.
+        </p>
+        {transitions.length === 0 ? (
+          <p className="mt-3 text-sm muted">Смен РМ пока не было.</p>
+        ) : (
+          <div className="mt-3 max-h-96 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs muted">
+                  <th className="pb-1.5 text-left font-medium">Лавка</th>
+                  <th className="pb-1.5 text-left font-medium">Было</th>
+                  <th className="pb-1.5 text-left font-medium">Стало</th>
+                  <th className="pb-1.5 text-right font-medium">С какого числа</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transitions.map((t) => (
+                  <tr
+                    key={`${t.shopCode}-${t.since}`}
+                    className="border-t"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <td className="py-1.5 pr-3 whitespace-nowrap">{t.shopName}</td>
+                    <td className="py-1.5 pr-3 whitespace-nowrap muted">{t.from}</td>
+                    <td className="py-1.5 pr-3 whitespace-nowrap">{t.to}</td>
+                    <td className="py-1.5 text-right text-xs tabular-nums muted">
+                      {shortDate(t.since)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

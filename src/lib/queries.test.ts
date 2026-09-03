@@ -81,14 +81,52 @@ test('за период счётчики усреднены по дням и н�
 
 test('фильтр по РМ сужает выборку и счётчики', async () => {
   // Имя не зашиваем: РМ приходят из справочника лавок и меняются вместе с ним.
-  const regions = await q.listRegions();
-  assert.ok(regions.length > 0, 'у лавок проставлены РМ');
+  const regions = await q.listRegions('2026-08-25', '2026-08-25');
+  assert.ok(regions.current.length > 0, 'у лавок проставлены РМ');
 
   const all = await q.shopTotals('2026-08-25', '2026-08-25');
-  const one = await q.shopTotals('2026-08-25', '2026-08-25', regions[0]);
-  assert.ok(one.total > 0 && one.total < all.total, `${regions[0]}: ${one.total} из ${all.total}`);
+  const one = await q.shopTotals('2026-08-25', '2026-08-25', regions.current[0]);
+  assert.ok(
+    one.total > 0 && one.total < all.total,
+    `${regions.current[0]}: ${one.total} из ${all.total}`,
+  );
   assert.ok(one.red <= all.red);
   assert.ok(one.green + one.yellow + one.red <= one.total);
+});
+
+test('список РМ зависит от периода: справочник обновляют каждый месяц', async () => {
+  // Выбрали август — видно менеджеров августа, включая ушедших. Выбрали
+  // сентябрь — только нынешний состав. Иначе сравнить показатели прошлого
+  // РМ с показателями преемника было бы не с кем.
+  const august = await q.listRegions('2026-08-19', '2026-08-31');
+  const september = await q.listRegions('2026-09-01', '2026-09-03');
+
+  assert.ok(august.past.length > 0, 'в августе были РМ, которых сейчас нет');
+  assert.equal(september.past.length, 0, 'в сентябре ушедших быть не должно');
+  assert.ok(
+    august.current.length + august.past.length > september.current.length,
+    'в августе менеджеров больше, чем в сентябре',
+  );
+
+  // Период через стык месяцев собирает и тех, и других.
+  const both = await q.listRegions('2026-08-25', '2026-09-03');
+  for (const name of [...august.past, ...september.current]) {
+    assert.ok(
+      both.current.includes(name) || both.past.includes(name),
+      `${name} потерялся в периоде через стык месяцев`,
+    );
+  }
+});
+
+test('по ушедшему РМ видны его прежние лавки, а после смены — уже нет', async () => {
+  const august = await q.listRegions('2026-08-19', '2026-08-31');
+  const gone = august.past[0];
+
+  const before = await q.radar({ from: '2026-08-19', to: '2026-08-31', region: gone });
+  assert.ok(before.rows.length > 0, `${gone}: за август лавок не нашлось`);
+
+  const after = await q.radar({ from: '2026-09-01', to: '2026-09-03', region: gone });
+  assert.equal(after.rows.length, 0, `${gone}: после смены справочника лавок быть не должно`);
 });
 
 test('фильтр по лавке: точный код важнее подстроки', async () => {
@@ -111,12 +149,22 @@ test('фильтр по лавке: точный код важнее подст�
 });
 
 test('фильтр по лавке складывается с фильтром по РМ', async () => {
-  const regions = await q.listRegions();
-  const withRegion = await q.radar({ from: ALL.from, to: ALL.to, region: regions[0], shop: 'М' });
-  assert.ok(withRegion.rows.length > 0);
+  // Проверяем через пересечение, а не через r.shop.region: РМ теперь
+  // историчен, и лавка может попасть в выборку по периоду, который уже
+  // закрыт, — тогда её текущий region не совпадёт с именем фильтра.
+  const regions = await q.listRegions(ALL.from, ALL.to);
+  const region = regions.current[0];
+
+  const byRegion = await q.radar({ from: ALL.from, to: ALL.to, region });
+  const byShop = await q.radar({ from: ALL.from, to: ALL.to, shop: 'М' });
+  const both = await q.radar({ from: ALL.from, to: ALL.to, region, shop: 'М' });
+
+  assert.ok(both.rows.length > 0);
+  const byRegionCodes = new Set(byRegion.rows.map((r) => r.shop.code));
+  const byShopCodes = new Set(byShop.rows.map((r) => r.shop.code));
   assert.ok(
-    withRegion.rows.every((r) => r.shop.region === regions[0]),
-    'фильтр по РМ не должен теряться',
+    both.rows.every((r) => byRegionCodes.has(r.shop.code) && byShopCodes.has(r.shop.code)),
+    'фильтр по РМ или по лавке потерялся при их сочетании',
   );
 });
 

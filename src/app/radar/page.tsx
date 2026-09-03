@@ -17,7 +17,7 @@ export default async function RadarPage({
   const sp = await searchParams;
   const p = await resolveParams(sp);
   const config = loadConfig();
-  const [regions, shops] = await Promise.all([listRegions(), listShops()]);
+  const [regions, shops] = await Promise.all([listRegions(p.from, p.to), listShops()]);
 
   const { dates, rows } = await radar({
     from: p.from,

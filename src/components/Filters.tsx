@@ -14,6 +14,12 @@ export interface FilterState {
   shop?: string;
 }
 
+export interface RegionOptions {
+  current: string[];
+  /** Прежние РМ: остаются в списке ради истории — см. roster-history.ts. */
+  past: string[];
+}
+
 export interface ShopOption {
   code: string;
   name: string;
@@ -37,7 +43,7 @@ export function Filters({
 }: {
   base: string;
   state: FilterState;
-  regions: string[];
+  regions: RegionOptions;
   dates: string[];
   config: ThresholdConfig;
   /** Список лавок для подсказок. Не передан — поля «Лавка» не будет. */
@@ -90,11 +96,31 @@ export function Filters({
           onChange={(e) => apply({ region: e.target.value || undefined })}
         >
           <option value="">Все</option>
-          {regions.map((r) => (
+          {regions.current.map((r) => (
             <option key={r} value={r}>
               {r}
             </option>
           ))}
+          {/* Ушедшие остаются в списке за те месяцы, где они отвечали за лавки:
+              иначе сравнить их показатели с показателями преемника нельзя. */}
+          {regions.past.length > 0 && (
+            <optgroup label="Уже не в справочнике">
+              {regions.past.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {/* Выбранный РМ мог выпасть из списка при смене периода. Оставляем
+              его видимым, иначе поле показывало бы чужое имя. */}
+          {state.region &&
+            !regions.current.includes(state.region) &&
+            !regions.past.includes(state.region) && (
+              <optgroup label="Вне выбранного периода">
+                <option value={state.region}>{state.region}</option>
+              </optgroup>
+            )}
         </select>
       </Field>
 
