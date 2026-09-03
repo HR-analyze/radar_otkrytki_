@@ -9,7 +9,7 @@ import type {
   ShowcaseRow,
 } from './types';
 import type { LegacyPersonStatus } from './parsers/legacy-vitriny';
-import { readShowcaseStore, showcaseRowsFromStore, showcaseStoreExists, showcaseStorePath } from './showcase-store';
+import { readShowcase, showcaseRowsFromStore, showcaseVersion } from './showcase-store';
 import bundledSnapshot from '../generated/snapshot.json';
 
 /**
@@ -77,7 +77,7 @@ const GENERATED_PATH =
   process.env.RADAR_SNAPSHOT_PATH ??
   path.join(process.cwd(), 'src', 'generated', 'snapshot.json');
 
-let cached: { snapshot: Snapshot; stamp: string } | null = null;
+let cached: { snapshot: Snapshot; stamp: string; showcase: string } | null = null;
 
 function dbPath(): string {
   return process.env.RADAR_DB_PATH ?? path.join(process.cwd(), 'data', 'radar.db');
@@ -110,18 +110,14 @@ export function storageMode(): StorageMode {
  * диске подхватывают все.
  */
 function sourceStamp(mode: StorageMode): string {
-  // Витрины лежат отдельным файлом и правятся на сайте — за ними следим так же.
-  return [mode === 'sqlite' ? dbPath() : GENERATED_PATH, showcaseStorePath()]
-    .map((file) => {
-      try {
-        const s = fs.statSync(/* turbopackIgnore: true */ file);
-        return `${file}|${s.mtimeMs}|${s.size}`;
-      } catch {
-        // Файла нет: на Vercel снимок вкомпилирован в сборку и меняется только с ней.
-        return `${file}|bundled`;
-      }
-    })
-    .join('||');
+  const file = mode === 'sqlite' ? dbPath() : GENERATED_PATH;
+  try {
+    const s = fs.statSync(/* turbopackIgnore: true */ file);
+    return `${file}|${s.mtimeMs}|${s.size}`;
+  } catch {
+    // Файла нет: на Vercel снимок вкомпилирован в сборку и меняется только с ней.
+    return `${file}|bundled`;
+  }
 }
 
 /** Доступна ли запись: ETL и кнопка «Обновить» работают только поверх SQLite. */
@@ -132,10 +128,15 @@ export function isWritable(): boolean {
 export async function loadSnapshot(): Promise<Snapshot> {
   const mode = storageMode();
   const stamp = sourceStamp(mode);
-  if (cached && cached.stamp === stamp) return cached.snapshot;
+  // Витрины правятся на сайте по одной ячейке: их версия проверяется отдельно
+  // и дёшево, иначе правка была бы видна только после смены файла снимка.
+  const showcase = await showcaseVersion();
 
-  const snapshot = withShowcase(mode === 'sqlite' ? await readFromSqlite() : readFromJson());
-  cached = { snapshot, stamp };
+  if (cached && cached.stamp === stamp && cached.showcase === showcase) return cached.snapshot;
+
+  const base = mode === 'sqlite' ? await readFromSqlite() : readFromJson();
+  const snapshot = await withShowcase(base);
+  cached = { snapshot, stamp, showcase };
   return snapshot;
 }
 
@@ -145,14 +146,14 @@ export function invalidateSnapshot(): void {
 }
 
 /**
- * Наполнение витрин живёт своим файлом, потому что его правят на сайте, а не
- * выгружают. Подмешиваем при чтении: правка видна сразу, снимок пересобирать
- * не нужно. Пока файла нет, остаётся то, что положила сборка.
+ * Наполнение витрин живёт в базе ручных данных, потому что его правят на сайте,
+ * а не выгружают. Подмешиваем при чтении: правка видна сразу, снимок
+ * пересобирать не нужно.
  */
-function withShowcase(snapshot: Snapshot): Snapshot {
-  if (!showcaseStoreExists()) return snapshot;
+async function withShowcase(snapshot: Snapshot): Promise<Snapshot> {
+  const { showcase, criteria } = showcaseRowsFromStore(await readShowcase());
+  if (showcase.length === 0) return snapshot;
 
-  const { showcase, criteria } = showcaseRowsFromStore(readShowcaseStore());
   return {
     ...snapshot,
     showcase,

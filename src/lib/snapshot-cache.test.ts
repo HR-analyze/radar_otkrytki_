@@ -43,7 +43,10 @@ test('свежий снимок на диске виден без перезап
   // новый, а на экране прежние цифры.
   process.env.RADAR_STORAGE = 'snapshot';
   process.env.RADAR_SNAPSHOT_PATH = file;
-  // Витрины подмешиваются в снимок из своего файла — в этом тесте он не нужен.
+  // Витрины подмешиваются в снимок из базы ручных данных — в этом тесте она
+  // не нужна, поэтому и база, и сид уводятся во временную папку: рабочая
+  // data/manual.db не должна попадать в тесты ни на чтение, ни на запись.
+  process.env.RADAR_MANUAL_DB_PATH = path.join(dir, 'manual.db');
   process.env.RADAR_SHOWCASE_PATH = path.join(dir, 'showcase.json');
   writeSnapshot(['2026-08-30']);
 

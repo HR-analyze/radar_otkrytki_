@@ -1,5 +1,5 @@
 import { latestDate } from '@/lib/queries';
-import { canEditShowcase } from '@/lib/showcase-access';
+import { canEditShowcase } from '@/lib/showcase-store';
 import { isoDate } from '@/lib/time';
 import { ShowcaseEditor } from '@/components/ShowcaseEditor';
 

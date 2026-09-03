@@ -5,12 +5,12 @@ import { invalidateSnapshot } from '@/lib/snapshot';
 import { statusForFill } from '@/lib/status';
 import { checkUploadToken } from '@/lib/upload-store';
 import {
-  applyEdits,
-  readShowcaseStore,
-  writeShowcaseStore,
+  canEditShowcase,
+  readShowcase,
+  saveShowcaseEdits,
+  showcaseEditHint,
   type ShowcaseEdit,
 } from '@/lib/showcase-store';
-import { canEditShowcase, showcaseEditHint } from '@/lib/showcase-access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,8 +18,9 @@ export const dynamic = 'force-dynamic';
 /**
  * Наполнение витрин за день: что показать в редакторе и что он присылает назад.
  *
- * Правки сохраняются пачкой и видны на дашборде сразу — снимок читает витрины
- * из того же файла (см. showcase-store.ts), пересобирать ничего не нужно.
+ * Правки сохраняются пачкой в базу ручных данных и видны на дашборде сразу —
+ * снимок читает витрины оттуда же (см. showcase-store.ts), пересобирать
+ * ничего не нужно.
  */
 export async function GET(req: Request) {
   const date = new URL(req.url).searchParams.get('date') ?? '';
@@ -28,7 +29,7 @@ export async function GET(req: Request) {
   }
 
   const config = loadConfig();
-  const store = readShowcaseStore();
+  const store = await readShowcase();
   const values = store.days[date] ?? {};
   const shops = await listShops();
 
@@ -77,11 +78,19 @@ export async function POST(req: Request) {
   const edits = parseEdits(body.edits);
   if (!edits.ok) return NextResponse.json({ ok: false, error: edits.error }, { status: 400 });
 
-  const { store, changed } = applyEdits(readShowcaseStore(), edits.value);
-  writeShowcaseStore(store);
+  let changed: number;
+  try {
+    ({ changed } = await saveShowcaseEdits(edits.value));
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : 'Не удалось сохранить' },
+      { status: 503 },
+    );
+  }
   invalidateSnapshot();
 
   const config = loadConfig();
+  const store = await readShowcase();
   return NextResponse.json({
     ok: true,
     changed,
@@ -99,7 +108,7 @@ export async function POST(req: Request) {
 
 type ParsedEdits = { ok: true; value: ShowcaseEdit[] } | { ok: false; error: string };
 
-/** Ввод недоверенный: правки приходят из браузера, а ложатся в файл данных. */
+/** Ввод недоверенный: правки приходят из браузера, а ложатся в базу. */
 function parseEdits(raw: unknown): ParsedEdits {
   if (!Array.isArray(raw) || raw.length === 0) {
     return { ok: false, error: 'Пустой список правок' };

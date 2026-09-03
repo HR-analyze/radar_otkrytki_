@@ -89,7 +89,7 @@ export async function POST(req: Request) {
 
     // Журнал для вкладки «История»: что и когда загрузили.
     const at = new Date().toISOString();
-    appendUploadLog(
+    await appendUploadLog(
       accepted.map(({ inspection }) => ({
         at,
         originalName: inspection.originalName,

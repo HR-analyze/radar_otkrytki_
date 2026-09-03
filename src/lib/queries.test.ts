@@ -1,9 +1,20 @@
 import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 // Тесты читают снимок из репозитория, а не локальную SQLite: результат
 // не должен зависеть от того, запускали ли на этой машине `npm run seed`.
 process.env.RADAR_STORAGE = 'snapshot';
+
+// То же и с витринами: база ручных данных поднимается пустой во временной
+// папке и наполняется из закоммиченного сида. Рабочую data/manual.db тесты
+// не трогают — там живые правки, и цифры в них меняются каждый день.
+process.env.RADAR_MANUAL_DB_PATH = path.join(
+  fs.mkdtempSync(path.join(os.tmpdir(), 'radar-queries-')),
+  'manual.db',
+);
 
 // Импорт отложен до установки переменной: queries тянет snapshot.ts,
 // который выбирает источник при первом обращении.

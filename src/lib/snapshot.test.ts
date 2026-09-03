@@ -6,7 +6,7 @@ import { fixturesFingerprint } from './fixtures';
 import { configFingerprint, type Snapshot } from './snapshot';
 import { exportCoverage, isLegacyStale } from './rollup';
 import { parseRoster } from './parsers/roster';
-import { readShowcaseStore } from './showcase-store';
+import { readSeed } from './showcase-store';
 import { CRITERION_ORDER } from './types';
 
 const SNAPSHOT_PATH = path.join(process.cwd(), 'src', 'generated', 'snapshot.json');
@@ -43,12 +43,15 @@ test('снимок содержит все данные, которые рису
   assert.ok(s.attendance.length > 300, 'отметки за 25.08');
   assert.ok(s.criteria.length > 1000, 'статусы критериев');
 
-  // Витрины в снимок не пекутся: их правят на сайте, и они лежат отдельным
-  // файлом, который подмешивается при чтении (см. showcase-store.ts).
+  // Витрины в снимок не пекутся: их правят на сайте, они живут в базе ручных
+  // данных и подмешиваются при чтении снимка (см. showcase-store.ts).
   assert.deepEqual(s.showcase, [], 'витрины в снимке не хранятся');
-  const store = readShowcaseStore();
-  const values = Object.values(store.days).reduce((n, d) => n + Object.keys(d).length, 0);
-  assert.ok(values > 100, `наполнение витрин в хранилище: ${values}`);
+  const seed = readSeed();
+  const values = Object.values(seed.days).reduce(
+    (n: number, d: Record<string, number>) => n + Object.keys(d).length,
+    0,
+  );
+  assert.ok(values > 100, `наполнение витрин в сиде: ${values}`);
   // Легаси остаётся только там, где выгрузка день не закрыла: сейчас это
   // водитель за 19–24.08 (в табеле водителей нет).
   assert.ok(s.legacyPeople.length > 0, 'легаси-статусы людей');

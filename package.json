@@ -14,6 +14,7 @@
     "seed": "tsx scripts/seed.ts",
     "etl:attendance": "tsx scripts/etl-attendance.ts",
     "etl:showcase": "tsx scripts/etl-showcase.ts",
+    "showcase:export": "tsx scripts/showcase-export.ts",
     "test": "tsx --test src/lib/*.test.ts src/lib/parsers/*.test.ts"
   },
   "dependencies": {

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readUploadLog, type UploadLogEntry } from '@/lib/upload-log';
 import { fixturesDir } from '@/lib/upload-store';
-import { readShowcaseStore } from '@/lib/showcase-store';
+import { readShowcase } from '@/lib/showcase-store';
 import { shortDate } from '@/lib/time';
 import { plural } from '@/lib/plural';
 
@@ -22,9 +22,9 @@ const KIND_TITLE: Record<string, string> = {
  * текущее состояние папки выгрузок и когда последний раз правили витрины.
  */
 export default async function HistoryPage() {
-  const log = readUploadLog();
+  const log = await readUploadLog();
   const files = readFixtureFiles();
-  const showcase = readShowcaseStore();
+  const showcase = await readShowcase();
 
   const showcaseDays = Object.entries(showcase.touched)
     .sort((a, b) => b[1].localeCompare(a[1]))

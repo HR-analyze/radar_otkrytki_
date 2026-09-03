@@ -169,7 +169,7 @@ export function buildSnapshot(
     fixturesFingerprint: fixturesFingerprint(fixturesDir),
     shops: [...shops.values()],
     attendance,
-    // Витрины подмешиваются при чтении из fixtures/showcase.json.
+    // Витрины подмешиваются при чтении из базы ручных данных.
     showcase: [],
     criteria: [...criteria.values()],
     legacyPeople: legacy.people.filter(
