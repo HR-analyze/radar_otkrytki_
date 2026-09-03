@@ -80,6 +80,35 @@ test('фильтр по РМ сужает выборку и счётчики', a
   assert.ok(one.green + one.yellow + one.red <= one.total);
 });
 
+test('фильтр по лавке: точный код важнее подстроки', async () => {
+  // «М1» — это ровно М1. Иначе, набрав код односимвольной лавки, человек
+  // получал бы М1 вместе с М10–М19 и не мог посмотреть её одну.
+  const exact = await q.radar({ from: ALL.from, to: ALL.to, shop: 'М1' });
+  assert.deepEqual(exact.rows.map((r) => r.shop.code), ['М1']);
+
+  // Часть названия ищет по названию.
+  const byName = await q.radar({ from: ALL.from, to: ALL.to, shop: 'Покровка' });
+  assert.deepEqual(byName.rows.map((r) => r.shop.code), ['М2']);
+
+  // Часть слова, встречающаяся у нескольких лавок, отбирает их все.
+  const group = await q.radar({ from: ALL.from, to: ALL.to, shop: 'ская' });
+  assert.ok(group.rows.length > 1, `по «ская» нашлось ${group.rows.length}`);
+  assert.ok(group.rows.every((r) => /ская/i.test(r.shop.name)));
+
+  const nothing = await q.radar({ from: ALL.from, to: ALL.to, shop: 'такой лавки нет' });
+  assert.deepEqual(nothing.rows, []);
+});
+
+test('фильтр по лавке складывается с фильтром по РМ', async () => {
+  const regions = await q.listRegions();
+  const withRegion = await q.radar({ from: ALL.from, to: ALL.to, region: regions[0], shop: 'М' });
+  assert.ok(withRegion.rows.length > 0);
+  assert.ok(
+    withRegion.rows.every((r) => r.shop.region === regions[0]),
+    'фильтр по РМ не должен теряться',
+  );
+});
+
 test('сумма по критерию не превышает числа лавок под фильтром', async () => {
   for (const range of [['2026-08-25', '2026-08-25'], [ALL.from, ALL.to]] as const) {
     for (const s of await q.summaryByCriterion(range[0], range[1])) {

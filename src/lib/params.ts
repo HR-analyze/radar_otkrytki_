@@ -8,6 +8,8 @@ export interface ResolvedParams {
   region?: string;
   criterion?: CriterionKey | 'all';
   status?: Status | 'all';
+  /** Поиск по лавке: код или часть названия. */
+  shop?: string;
   dates: string[];
 }
 
@@ -43,5 +45,14 @@ export async function resolveParams(
   const statusRaw = one('status');
   const status = STATUSES.includes(statusRaw as Status) ? (statusRaw as Status) : 'all';
 
-  return { from, to, region: one('region') || undefined, criterion, status, dates };
+  return {
+    from,
+    to,
+    region: one('region') || undefined,
+    // Строка из URL: обрезаем, чтобы в фильтр не приехал роман.
+    shop: one('shop')?.trim().slice(0, 40) || undefined,
+    criterion,
+    status,
+    dates,
+  };
 }

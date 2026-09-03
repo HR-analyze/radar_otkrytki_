@@ -151,9 +151,28 @@ export async function snapshotInfo(): Promise<{
 
 /* -------------------------------- фильтры -------------------------------- */
 
-async function shopsIn(region?: string): Promise<ShopRow[]> {
+async function shopsIn(region?: string, shop?: string): Promise<ShopRow[]> {
   const shops = await listShops();
-  return region ? shops.filter((s) => s.region === region) : shops;
+  const byRegion = region ? shops.filter((s) => s.region === region) : shops;
+  return shop ? byRegion.filter((s) => matchesShop(s, shop)) : byRegion;
+}
+
+/**
+ * Поиск лавки по коду или названию: «М17» найдёт М17, «Сухаревский» — её же,
+ * «М1» — М1 и М10–М19. Точное совпадение кода имеет приоритет: иначе, набрав
+ * «М1», человек не смог бы посмотреть только М1.
+ */
+export function matchesShop(shop: { code: string; name: string }, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (shop.code.toLowerCase() === q) return true;
+  return `${shop.code} ${shop.name}`.toLowerCase().includes(q);
+}
+
+/** Есть ли лавка, чей код совпал с запросом точно. */
+export async function hasExactShop(query: string): Promise<boolean> {
+  const q = query.trim().toLowerCase();
+  return (await listShops()).some((s) => s.code.toLowerCase() === q);
 }
 
 /* --------------------------------- радар --------------------------------- */
@@ -164,6 +183,8 @@ export interface RadarFilters {
   region?: string;
   criterion?: CriterionKey | 'all';
   status?: Status | 'all';
+  /** Код или часть названия лавки: «М17», «Сухаревский», «М1» (даст М1 и М10–М19). */
+  shop?: string;
 }
 
 export interface RadarCell {
@@ -194,7 +215,11 @@ export async function radar(
   const people = byComponents ? await peopleIndex() : null;
   const fills = byComponents ? await showcaseIndex() : null;
 
-  const shops = await shopsIn(filters.region);
+  // Точный код важнее подстроки: «М1» — это М1, а не М1 вместе с М10–М19.
+  const exact = filters.shop ? await hasExactShop(filters.shop) : false;
+  const shops = (await shopsIn(filters.region, filters.shop)).filter(
+    (s) => !exact || s.code.toLowerCase() === filters.shop!.trim().toLowerCase(),
+  );
   const allowedShops = new Set(shops.map((s) => s.code));
 
   const relevant = snap.criteria.filter(

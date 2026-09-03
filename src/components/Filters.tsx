@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { CRITERION_ORDER, type CriterionKey, type ThresholdConfig } from '@/lib/types';
 import { DateRangePicker } from './DateRangePicker';
 
@@ -11,6 +11,12 @@ export interface FilterState {
   region?: string;
   criterion?: CriterionKey | 'all';
   status?: string;
+  shop?: string;
+}
+
+export interface ShopOption {
+  code: string;
+  name: string;
 }
 
 /**
@@ -25,6 +31,7 @@ export function Filters({
   regions,
   dates,
   config,
+  shops,
   showCriterion = true,
   showStatus = true,
 }: {
@@ -33,6 +40,8 @@ export function Filters({
   regions: string[];
   dates: string[];
   config: ThresholdConfig;
+  /** Список лавок для подсказок. Не передан — поля «Лавка» не будет. */
+  shops?: ShopOption[];
   showCriterion?: boolean;
   showStatus?: boolean;
 }) {
@@ -63,7 +72,7 @@ export function Filters({
 
   return (
     <div
-      className="surface grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-4"
+      className={`surface grid gap-3 p-3 sm:grid-cols-2 ${shops ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
       style={{ cursor: pending ? 'progress' : undefined }}
     >
       <Field label="Период">
@@ -88,6 +97,16 @@ export function Filters({
           ))}
         </select>
       </Field>
+
+      {shops && (
+        <Field label="Лавка">
+          <ShopFilter
+            value={state.shop ?? ''}
+            shops={shops}
+            onChange={(shop) => apply({ shop })}
+          />
+        </Field>
+      )}
 
       {showCriterion && (
         <Field label="Критерий">
@@ -118,6 +137,80 @@ export function Filters({
           </select>
         </Field>
       )}
+    </div>
+  );
+}
+
+/**
+ * Поиск лавки: поле ввода со списком подсказок, а не выпадающий список на
+ * восемьдесят строк. Код набирается за два символа, название — за три, и
+ * «М1» при этом означает ровно М1, а не М1 вместе с М10–М19 (см. matchesShop).
+ *
+ * URL меняется не на каждую букву: полсекунды тишины — тогда запрос.
+ */
+function ShopFilter({
+  value,
+  shops,
+  onChange,
+}: {
+  value: string;
+  shops: ShopOption[];
+  onChange: (value: string | undefined) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Значение могли поменять снаружи — например, кнопкой «назад» в браузере.
+  useEffect(() => setDraft(value), [value]);
+
+  function edit(next: string) {
+    setDraft(next);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => onChange(next.trim() || undefined), 400);
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={draft}
+        onChange={(e) => edit(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            if (timer.current) clearTimeout(timer.current);
+            onChange(draft.trim() || undefined);
+          }
+          if (e.key === 'Escape') {
+            setDraft('');
+            onChange(undefined);
+          }
+        }}
+        list="radar-shops"
+        placeholder="Все"
+        aria-label="Лавка: код или название"
+        className="w-full rounded-lg border px-3 py-2 pr-8 text-sm"
+        style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+      />
+      {draft && (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft('');
+            onChange(undefined);
+          }}
+          title="Сбросить"
+          aria-label="Сбросить фильтр по лавке"
+          className="absolute top-1/2 right-2 -translate-y-1/2 text-sm muted"
+        >
+          ✕
+        </button>
+      )}
+      <datalist id="radar-shops">
+        {shops.map((s) => (
+          <option key={s.code} value={s.code}>
+            {s.name}
+          </option>
+        ))}
+      </datalist>
     </div>
   );
 }

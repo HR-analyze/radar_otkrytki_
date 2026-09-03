@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { loadConfig } from '@/lib/config';
 import { resolveParams } from '@/lib/params';
-import { listRegions, radar } from '@/lib/queries';
+import { listRegions, listShops, radar } from '@/lib/queries';
 import { shortDate } from '@/lib/time';
 import { Filters } from '@/components/Filters';
+import { plural } from '@/lib/plural';
 import { StatusCell, STATUS_TEXT } from '@/components/Status';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,7 @@ export default async function RadarPage({
   const sp = await searchParams;
   const p = await resolveParams(sp);
   const config = loadConfig();
-  const regions = await listRegions();
+  const [regions, shops] = await Promise.all([listRegions(), listShops()]);
 
   const { dates, rows } = await radar({
     from: p.from,
@@ -24,19 +25,38 @@ export default async function RadarPage({
     region: p.region,
     criterion: p.criterion,
     status: p.status,
+    shop: p.shop,
   });
 
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Радар по всем лавкам</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {p.shop || p.region ? 'Радар по лавкам' : 'Радар по всем лавкам'}
+        </h1>
+        {(p.shop || p.region) && (
+          <p className="mt-1 text-sm muted">
+            {rows.length} {plural(rows.length, 'лавка', 'лавки', 'лавок')} под фильтром
+            {p.shop && ` · поиск «${p.shop}»`}
+            {p.region && ` · РМ ${p.region}`}
+          </p>
+        )}
       </div>
 
-      <Filters base="/radar" state={p} regions={regions} dates={p.dates} config={config} />
+      <Filters
+        base="/radar"
+        state={p}
+        regions={regions}
+        dates={p.dates}
+        config={config}
+        shops={shops.map((s) => ({ code: s.code, name: s.name }))}
+      />
 
       {dates.length === 0 || rows.length === 0 ? (
         <div className="surface p-8 text-center text-sm muted">
-          Под фильтры ничего не попало. Попробуй расширить период или снять фильтр по статусу.
+          {p.shop
+            ? `По запросу «${p.shop}» лавок не нашлось. Попробуйте код (М17) или часть названия.`
+            : 'Под фильтры ничего не попало. Попробуй расширить период или снять фильтр по статусу.'}
         </div>
       ) : (
         <div className="surface radar-scroll">
