@@ -121,15 +121,16 @@ test('экспорт в файл-сид отсортирован и читает
   assert.equal(back.days['2026-09-05']['М1'], 0.96);
 });
 
-test('в закоммиченном сиде репозитория те же 457 значений', () => {
+test('в закоммиченном сиде репозитория лежит вся история витрин', () => {
   // Сид — резервная копия истории: если он потеряется, свежая установка
-  // поднимется с пустыми витринами.
+  // поднимется с пустыми витринами. Порог не равенство, а «не меньше»:
+  // история только растёт, и каждая выгрузка базы не должна ронять тест.
   const seed = JSON.parse(
     fs.readFileSync(path.join(process.cwd(), 'fixtures', 'showcase.json'), 'utf8'),
   ) as { days: Record<string, Record<string, number>> };
   const values = Object.values(seed.days).reduce((n, d) => n + Object.keys(d).length, 0);
 
-  assert.equal(values, 457);
+  assert.ok(values >= 596, `значений в сиде ${values}, а было 596 — история не должна убывать`);
   assert.ok(
     Object.values(seed.days).every((day) => Object.values(day).every((v) => v >= 0 && v <= 1)),
     'наполнение хранится долей 0–1',

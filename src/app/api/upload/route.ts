@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { loadConfig } from '@/lib/config';
+import { invalidateSnapshot } from '@/lib/snapshot';
+import { canEditShowcase, saveShowcaseEdits } from '@/lib/showcase-store';
 import { checkUploadToken, saveUploads, uploadCapability } from '@/lib/upload-store';
 import { appendUploadLog } from '@/lib/upload-log';
+import { plural } from '@/lib/plural';
 import { inspectUpload, MAX_UPLOAD_BYTES, type UploadInspection } from '@/lib/uploads';
 
 export const runtime = 'nodejs';
@@ -87,6 +90,11 @@ export async function POST(req: Request) {
   try {
     const saved = await saveUploads(accepted, capability);
 
+    // Наполнение витрин из книги «Витрины» — в базу ручных данных. Книгу ведут
+    // в Excel и заливают целиком, поэтому её проценты применяются как обычная
+    // пачка правок: значения из пустых ячеек не приходят и ничего не затирают.
+    const showcaseNotes = await importShowcase(accepted.map((a) => a.inspection));
+
     // Журнал для вкладки «История»: что и когда загрузили.
     const at = new Date().toISOString();
     await appendUploadLog(
@@ -106,7 +114,7 @@ export async function POST(req: Request) {
       ok: true,
       mode: saved.mode,
       visible: saved.visible,
-      notes: saved.notes,
+      notes: [...saved.notes, ...showcaseNotes],
       commitUrl: saved.commitUrl,
       files: results,
     });
@@ -122,6 +130,44 @@ export async function POST(req: Request) {
       },
       { status: 502 },
     );
+  }
+}
+
+/**
+ * Проценты наполнения витрин из книги «Витрины» — в базу ручных данных.
+ *
+ * Книгу заполняют в Excel и заливают целиком, поэтому её значения применяются
+ * тем же путём, что и правка ячейки на вкладке «Витрины»: база остаётся
+ * единственным источником правды, а деплой к ней не притрагивается.
+ *
+ * Сбой импорта не роняет загрузку: файлы уже сохранены и разобраны, а человеку
+ * важнее увидеть причину, чем получить 502 на всю пачку.
+ */
+async function importShowcase(files: readonly UploadInspection[]): Promise<string[]> {
+  const edits = files.flatMap((f) => f.showcase);
+  if (edits.length === 0) return [];
+
+  if (!canEditShowcase()) {
+    return [
+      'Наполнение витрин из книги не сохранено: на этом хостинге нет диска под базу ручных данных.',
+    ];
+  }
+
+  try {
+    const { changed } = await saveShowcaseEdits(edits);
+    // Снимок держит витрины в кеше — без сброса правки были бы видны не сразу.
+    invalidateSnapshot();
+
+    return changed === 0
+      ? ['Наполнение витрин из книги совпало с тем, что уже в радаре — менять нечего.']
+      : [
+          `Наполнение витрин: обновлено ${changed} ` +
+            `${plural(changed, 'значение', 'значения', 'значений')} из книги.`,
+        ];
+  } catch (e) {
+    return [
+      `Наполнение витрин из книги сохранить не вышло: ${e instanceof Error ? e.message : String(e)}`,
+    ];
   }
 }
 

@@ -60,12 +60,17 @@ test('снимок содержит все данные, которые рису
 
 test('даты в снимке — корректные и непрерывные', () => {
   const s = readSnapshot();
-  const dates = [...new Set(s.criteria.map((c) => c.date))].sort();
-  assert.ok(dates.length >= 7, `дней в снимке всего ${dates.length}`);
+  const snapshotDates = [...new Set(s.criteria.map((c) => c.date))].sort();
+  assert.ok(snapshotDates.length >= 7, `дней в снимке всего ${snapshotDates.length}`);
 
-  for (const d of dates) {
+  for (const d of snapshotDates) {
     assert.match(d, /^\d{4}-\d{2}-\d{2}$/, `некорректная дата ${d}`);
   }
+
+  // День, у которого есть только наполнение витрин, в снимок не попадает:
+  // витрины живут в базе ручных данных и подмешиваются при чтении. Поэтому
+  // непрерывность проверяем по объединению — так же, как её видит дашборд.
+  const dates = [...new Set([...snapshotDates, ...Object.keys(readSeed().days)])].sort();
 
   // Пропуск дня внутри периода — признак того, что выгрузку забыли положить.
   const first = new Date(`${dates[0]}T00:00:00`);

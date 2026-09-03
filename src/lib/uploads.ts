@@ -42,6 +42,12 @@ export interface UploadInspection {
    * поэтому их видно в панели поимённо, а не общим счётчиком предупреждений.
    */
   unknownRoles: { role: string; rows: number }[];
+  /**
+   * Наполнение витрин из книги «Все данные» — только у kind='legacy'. Роут
+   * загрузки применяет их в базу ручных данных тем же способом, что и
+   * правка на вкладке «Витрины» (см. saveShowcaseEdits).
+   */
+  showcase: { date: string; shopCode: string; fill: number }[];
   /** Что парсер пропустил или посчитал странным — короткими фразами для UI. */
   notes: string[];
   /** Предупреждения парсера целиком — для логов и отладки. */
@@ -206,6 +212,7 @@ function inspectAttendance(name: string, buffer: Buffer, config: ThresholdConfig
       rows: parsed.rows.length,
       shops,
       unknownRoles: unknownRoles(parsed.rows, config),
+      showcase: [],
       notes: describeWarnings(parsed.warnings),
       warnings: parsed.warnings.map((w) => w.message),
     },
@@ -261,6 +268,28 @@ function describeWarnings(warnings: readonly ParseWarning[]): string[] {
   return notes;
 }
 
+/**
+ * Что сказать про наполнение витрин из книги. Человек заливает её именно ради
+ * процентов, поэтому в панели должно быть видно, сколько значений и за какие
+ * дни радар из неё взял, — «файл распознан» без этого выглядит как «ничего не
+ * произошло».
+ */
+function showcaseNote(rows: readonly { date: string; fill: number }[]): string[] {
+  if (rows.length === 0) {
+    return [
+      'Наполнения витрин в книге нет: строки «Наполнение витрины» пустые. ' +
+        'Заполнить можно на вкладке «Витрины».',
+    ];
+  }
+
+  const dates = [...new Set(rows.map((r) => r.date))].sort();
+  return [
+    `Наполнение витрин: ${rows.length} ` +
+      `${plural(rows.length, 'значение', 'значения', 'значений')} за ${describeDates(dates)} — ` +
+      'уходит в базу, как если бы их вписали на вкладке «Витрины».',
+  ];
+}
+
 function inspectLegacy(name: string, buffer: Buffer, config: ThresholdConfig): InspectResult {
   const parsed = parseLegacyVitriny(buffer, config);
 
@@ -281,18 +310,21 @@ function inspectLegacy(name: string, buffer: Buffer, config: ThresholdConfig): I
       summary:
         `Книга «Витрины» · ${describeDates(parsed.dates)} · ` +
         `${parsed.shops.length} ${plural(parsed.shops.length, 'лавка', 'лавки', 'лавок')}, ` +
+        `${parsed.showcase.length} ${plural(parsed.showcase.length, 'значение', 'значения', 'значений')} наполнения витрин, ` +
         `${parsed.people.length} раскрашенных вручную статусов сотрудников`,
       dates: parsed.dates,
       rows: parsed.people.length + parsed.showcase.length,
       shops: parsed.shops.length,
       unknownRoles: [],
-      // Витрины из книги больше не берутся: их правят на вкладке «Витрины».
-      // Сказать об этом надо здесь — иначе человек перезальёт книгу ради
-      // процентов и будет ждать, что они появятся.
-      notes: [
-        'Наполнение витрины из книги не берётся — оно редактируется на вкладке «Витрины». ' +
-          'Из книги нужны только раскрашенные вручную статусы сотрудников за дни без выгрузок.',
-      ],
+      // Проценты из книги — те же правки, что и на вкладке «Витрины»: роут
+      // загрузки кладёт их в базу ручных данных. Так книгу можно вести в
+      // Excel и заливать целиком, не перещёлкивая 80 лавок руками.
+      showcase: parsed.showcase.map((s) => ({
+        date: s.date,
+        shopCode: s.shopCode,
+        fill: s.fill,
+      })),
+      notes: showcaseNote(parsed.showcase),
       warnings: parsed.warnings,
     },
   };
@@ -332,6 +364,7 @@ function inspectRoster(name: string, buffer: Buffer): InspectResult {
       rows: parsed.rows.length,
       shops: parsed.rows.length,
       unknownRoles: [],
+      showcase: [],
       notes: withoutManager
         ? [
             `${withoutManager} ${plural(withoutManager, 'лавка', 'лавки', 'лавок')} без РМ — ` +
@@ -370,6 +403,7 @@ function inspectDelivery(name: string, buffer: Buffer): InspectResult {
       rows: parsed.rows.length,
       shops,
       unknownRoles: [],
+      showcase: [],
       notes: [],
       warnings: parsed.warnings,
     },
