@@ -1,46 +1,37 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { COOKIE, isManaged, isPublic, isUnlocked, type Scope } from './lib/auth';
+import { COOKIE, isManaged, isPublic, isUnlocked } from './lib/auth';
 
 /**
- * Пароль на вход. Проверяется здесь, до страницы: иначе каждую страницу и
+ * Пароль на «Витрины» и «Историю». Проверяется здесь, до страницы: иначе
  * каждый роут пришлось бы закрывать вручную, и однажды кто-нибудь забыл бы.
  *
- * Два уровня: общий пароль на весь радар и отдельный — на «Витрины» и
- * «Историю», где данные правят (см. auth.ts).
+ * Остальной радар открыт — цифры смотрит вся команда (см. auth.ts).
  */
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  if (isPublic(pathname)) return NextResponse.next();
+  if (isPublic(pathname) || !isManaged(pathname)) return NextResponse.next();
+  if (await isUnlocked(req.cookies.get(COOKIE)?.value)) return NextResponse.next();
 
-  const needed: Scope[] = isManaged(pathname) ? ['site', 'manage'] : ['site'];
-
-  for (const scope of needed) {
-    if (await isUnlocked(scope, req.cookies.get(COOKIE[scope])?.value)) continue;
-
-    // Запросам от кода отвечаем кодом, а не редиректом на страницу входа:
-    // иначе fetch получил бы HTML вместо JSON и сломался невнятно.
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
-        { ok: false, error: 'Нужен пароль. Откройте сайт и войдите заново.' },
-        { status: 401 },
-      );
-    }
-
-    const url = req.nextUrl.clone();
-    url.pathname = '/login';
-    url.search = '';
-    url.searchParams.set('scope', scope);
-    url.searchParams.set('next', `${pathname}${search}`);
-    return NextResponse.redirect(url);
+  // Запросам от кода отвечаем кодом, а не редиректом на страницу входа:
+  // иначе fetch получил бы HTML вместо JSON и сломался невнятно.
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.json(
+      { ok: false, error: 'Нужен пароль. Откройте вкладку и введите его заново.' },
+      { status: 401 },
+    );
   }
 
-  return NextResponse.next();
+  const url = req.nextUrl.clone();
+  url.pathname = '/login';
+  url.search = '';
+  url.searchParams.set('next', `${pathname}${search}`);
+  return NextResponse.redirect(url);
 }
 
 export const config = {
-  // Статику и иконки не трогаем: они и так ничего не раскрывают, а лишняя
-  // проверка на каждом файле только замедляет отдачу.
+  // Проверять нужно только защищённые вкладки, но matcher не умеет в логику
+  // из auth.ts — статику отсекаем здесь, остальное решает сам обработчик.
   matcher: [
     '/((?!_next/static|_next/image|favicon|apple-touch-icon|android-chrome|site\\.webmanifest).*)',
   ],

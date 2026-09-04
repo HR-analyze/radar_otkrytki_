@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import { openScopes, SCOPE_TITLE } from '@/lib/auth';
+import { MANAGED_TITLE, passwordSet } from '@/lib/auth';
 import { UploadButton } from '@/components/UploadButton';
 import './globals.css';
 
@@ -20,22 +20,21 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const open = openScopes();
+  const unprotected = !passwordSet();
 
   return (
     <html lang="ru">
       <body className="min-h-screen">
-        {/* Незапароленный уровень — не мелочь: без этой полосы забытая
-            переменная окружения означала бы открытый сайт, и никто бы
-            об этом не узнал. */}
-        {open.length > 0 && (
+        {/* Вкладки без пароля — не мелочь: без этой полосы забытая переменная
+            окружения означала бы открытую правку данных, и никто бы об этом
+            не узнал. */}
+        {unprotected && (
           <div
             className="px-4 py-1.5 text-center text-xs"
             style={{ background: 'var(--yellow-bg, #7c5b13)', color: '#fff' }}
           >
-            Без пароля: {open.map((s) => SCOPE_TITLE[s]).join(', ')}. Задайте{' '}
-            {open.map((s) => (s === 'site' ? 'RADAR_PASSWORD' : 'RADAR_MANAGE_PASSWORD')).join(' и ')}{' '}
-            в <code>.env.local</code> и перезапустите сайт.
+            «{MANAGED_TITLE}» открыты без пароля. Задайте <code>RADAR_MANAGE_PASSWORD</code> в{' '}
+            <code>.env.local</code> и перезапустите сайт.
           </div>
         )}
         <header

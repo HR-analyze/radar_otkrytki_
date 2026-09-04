@@ -1,41 +1,37 @@
 /**
- * Пароли на сайт и на вкладки с ручными данными.
+ * Пароль на вкладки, где правят данные.
  *
- * Два уровня. `site` закрывает радар целиком — его знают все, кто смотрит
- * цифры. `manage` дополнительно закрывает «Витрины» и «Историю»: там правят
- * данные, и доступ туда нужен не всем.
+ * Сам радар открыт: цифры смотрит вся команда, и лишний барьер на входе только
+ * мешает. Закрыты «Витрины» и «История» — там данные меняют, и доступ туда
+ * нужен не всем.
  *
- * Сами пароли лежат в переменных окружения, а не в репозитории: пароль в git —
- * это пароль, который видит каждый, у кого есть доступ к коду, и который
- * нельзя сменить без правки кода. На сервере они задаются в `.env.local`
- * (файл в .gitignore) — см. README, раздел «Пароли».
+ * Пароль лежит в переменной окружения, а не в репозитории: пароль в git — это
+ * пароль, который видит каждый, у кого есть доступ к коду, и который нельзя
+ * сменить без правки кода. На сервере он задаётся в `.env.local` (файл в
+ * .gitignore) — см. README, раздел «Пароль».
  *
- * Если переменная не задана, соответствующий уровень не спрашивается вовсе:
- * иначе `npm run dev` и тесты требовали бы пароль. Чтобы это не оказалось
- * молчаливой дырой, шапка сайта в таком случае прямо пишет, что пароля нет.
+ * Если переменная не задана, пароль не спрашивается вовсе: иначе `npm run dev`
+ * и тесты требовали бы его. Чтобы это не оказалось молчаливой дырой, шапка
+ * сайта в таком случае прямо пишет, что вкладки открыты.
  *
  * В куке лежит не пароль, а его отпечаток: даже вытащив куку из браузера,
  * прочитать сам пароль нельзя.
  */
 
-export type Scope = 'site' | 'manage';
+export const COOKIE = 'radar_manage';
 
-export const COOKIE: Record<Scope, string> = {
-  site: 'radar_site',
-  manage: 'radar_manage',
-};
-
-/** Вкладки, для которых мало общего пароля. */
+/** Вкладки под паролем. Остальной радар открыт. */
 const MANAGED = ['/showcase', '/history', '/api/showcase'];
 
-export const SCOPE_TITLE: Record<Scope, string> = {
-  site: 'Радар витрин',
-  manage: 'Витрины и История',
-};
+export const MANAGED_TITLE = 'Витрины и История';
 
-export function passwordFor(scope: Scope): string | undefined {
-  const value = scope === 'site' ? process.env.RADAR_PASSWORD : process.env.RADAR_MANAGE_PASSWORD;
-  return value ? value : undefined;
+export function password(): string | undefined {
+  return process.env.RADAR_MANAGE_PASSWORD || undefined;
+}
+
+/** Задан ли пароль. Не задан — вкладки открыты, и шапка об этом пишет. */
+export function passwordSet(): boolean {
+  return password() !== undefined;
 }
 
 /**
@@ -50,38 +46,28 @@ export function isPublic(pathname: string): boolean {
   );
 }
 
-/** Нужен ли для пути отдельный пароль на правку данных. */
+/** Нужен ли для пути пароль. */
 export function isManaged(pathname: string): boolean {
   return MANAGED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 /**
- * Значение куки — SHA-256 от пароля с солью-областью. Считается через Web
- * Crypto, потому что middleware выполняется в Edge-окружении, где node:crypto
- * недоступен.
+ * Значение куки — SHA-256 от пароля с солью. Считается через Web Crypto:
+ * middleware выполняется там, где node:crypto может быть недоступен.
  */
-export async function tokenFor(scope: Scope, password: string): Promise<string> {
-  const data = new TextEncoder().encode(`radar:${scope}:${password}`);
+export async function tokenFor(value: string): Promise<string> {
+  const data = new TextEncoder().encode(`radar:manage:${value}`);
   const digest = await crypto.subtle.digest('SHA-256', data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Уровни, оставшиеся без пароля. Шапка показывает это прямым текстом: забытая
- * переменная окружения иначе означала бы открытый сайт, о котором никто
- * не знает.
- */
-export function openScopes(): Scope[] {
-  return (['site', 'manage'] as Scope[]).filter((s) => !passwordFor(s));
-}
-
-/** Совпадает ли кука с действующим паролем. Без пароля уровень открыт. */
-export async function isUnlocked(scope: Scope, cookieValue: string | undefined): Promise<boolean> {
-  const password = passwordFor(scope);
-  if (!password) return true;
+/** Совпадает ли кука с действующим паролем. Пароля нет — открыто. */
+export async function isUnlocked(cookieValue: string | undefined): Promise<boolean> {
+  const expected = password();
+  if (!expected) return true;
   if (!cookieValue) return false;
 
-  return cookieValue === (await tokenFor(scope, password));
+  return cookieValue === (await tokenFor(expected));
 }
 
 /* ------------------------------ крон-роуты ------------------------------ */

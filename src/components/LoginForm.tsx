@@ -2,17 +2,12 @@
 
 import { useState } from 'react';
 
-/**
- * Вход по паролю. Одна форма на оба уровня: общий пароль на радар и отдельный
- * на «Витрины» с «Историей» — отличается только подпись (см. auth.ts).
- */
+/** Вход по паролю на «Витрины» и «Историю» (см. auth.ts). */
 export function LoginForm({
-  scope,
   next,
   title,
   hint,
 }: {
-  scope: 'site' | 'manage';
   next: string;
   title: string;
   hint: string;
@@ -30,7 +25,7 @@ export function LoginForm({
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ password, scope }),
+        body: JSON.stringify({ password }),
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
 
@@ -40,9 +35,8 @@ export function LoginForm({
         return;
       }
 
-      // Полная перезагрузка, а не router.replace: если цель требует ещё и
-      // второй пароль, клиентский переход возвращает ту же страницу входа,
-      // и форма зависает на «Проверяем…». Здесь адрес пересчитывает сервер.
+      // Полная перезагрузка, а не router.replace: страницу за паролем сервер
+      // должен отдать заново, уже с новой кукой.
       window.location.replace(next);
     } catch {
       setError('Сервер не ответил. Попробуйте ещё раз.');

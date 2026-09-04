@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { COOKIE, passwordFor, tokenFor, type Scope } from '@/lib/auth';
+import { COOKIE, password, tokenFor } from '@/lib/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -8,15 +8,14 @@ export const dynamic = 'force-dynamic';
 const MAX_AGE = 60 * 60 * 24 * 30;
 
 export async function POST(req: Request) {
-  let body: { password?: unknown; scope?: unknown };
+  let body: { password?: unknown };
   try {
-    body = (await req.json()) as { password?: unknown; scope?: unknown };
+    body = (await req.json()) as { password?: unknown };
   } catch {
     return NextResponse.json({ ok: false, error: 'Не удалось прочитать запрос' }, { status: 400 });
   }
 
-  const scope: Scope = body.scope === 'manage' ? 'manage' : 'site';
-  const expected = passwordFor(scope);
+  const expected = password();
   if (!expected) {
     return NextResponse.json({ ok: true, note: 'Пароль не задан — вход не требуется' });
   }
@@ -27,7 +26,7 @@ export async function POST(req: Request) {
   }
 
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(COOKIE[scope], await tokenFor(scope, expected), {
+  res.cookies.set(COOKIE, await tokenFor(expected), {
     httpOnly: true,
     sameSite: 'lax',
     path: '/',

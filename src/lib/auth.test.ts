@@ -1,24 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COOKIE, isManaged, isPublic, isUnlocked, openScopes, passwordFor, tokenFor } from './auth';
+import { isManaged, isPublic, isUnlocked, password, passwordSet, tokenFor } from './auth';
 
 /**
- * Пароли на вход. Главное, что здесь проверяется, — что «пароль не задан»
- * никогда не притворяется «пароль сошёлся».
+ * Пароль на «Витрины» и «Историю». Главное, что здесь проверяется, —
+ * что «пароль не задан» никогда не притворяется «пароль сошёлся».
  */
 
-function withEnv(env: Record<string, string | undefined>, run: () => Promise<void> | void) {
-  const was: Record<string, string | undefined> = {};
-  for (const [k, v] of Object.entries(env)) {
-    was[k] = process.env[k];
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
-  }
+function withEnv(value: string | undefined, run: () => Promise<void> | void) {
+  const was = process.env.RADAR_MANAGE_PASSWORD;
+  if (value === undefined) delete process.env.RADAR_MANAGE_PASSWORD;
+  else process.env.RADAR_MANAGE_PASSWORD = value;
+
   const restore = () => {
-    for (const [k, v] of Object.entries(was)) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
+    if (was === undefined) delete process.env.RADAR_MANAGE_PASSWORD;
+    else process.env.RADAR_MANAGE_PASSWORD = was;
   };
 
   const out = run();
@@ -28,47 +24,37 @@ function withEnv(env: Record<string, string | undefined>, run: () => Promise<voi
 }
 
 test('верный пароль открывает, неверный — нет', async () => {
-  await withEnv({ RADAR_PASSWORD: 'секрет-для-теста' }, async () => {
-    const good = await tokenFor('site', 'секрет-для-теста');
-    assert.equal(await isUnlocked('site', good), true);
+  await withEnv('секрет-для-теста', async () => {
+    assert.equal(await isUnlocked(await tokenFor('секрет-для-теста')), true);
 
-    assert.equal(await isUnlocked('site', await tokenFor('site', 'другой-пароль')), false);
-    assert.equal(await isUnlocked('site', 'что-то своё'), false);
-    assert.equal(await isUnlocked('site', undefined), false, 'без куки — закрыто');
+    assert.equal(await isUnlocked(await tokenFor('другой-пароль')), false);
+    assert.equal(await isUnlocked('что-то своё'), false);
+    assert.equal(await isUnlocked(undefined), false, 'без куки — закрыто');
   });
 });
 
 test('в куке лежит отпечаток, а не сам пароль', async () => {
-  const token = await tokenFor('site', 'секрет-для-теста');
+  const token = await tokenFor('секрет-для-теста');
 
   assert.match(token, /^[0-9a-f]{64}$/, 'SHA-256 в hex');
   assert.ok(!token.includes('секрет'), 'пароль не должен читаться из куки');
 });
 
-test('кука одного уровня не открывает другой', async () => {
-  // Иначе общий пароль от сайта пускал бы и в «Витрины».
-  await withEnv({ RADAR_PASSWORD: 'один', RADAR_MANAGE_PASSWORD: 'один' }, async () => {
-    const site = await tokenFor('site', 'один');
-    assert.equal(await isUnlocked('site', site), true);
-    assert.equal(await isUnlocked('manage', site), false, 'область входит в отпечаток');
-  });
-  assert.notEqual(COOKIE.site, COOKIE.manage, 'куки разных уровней не должны совпадать');
-});
-
-test('без пароля уровень открыт, и это видно в openScopes', async () => {
-  await withEnv({ RADAR_PASSWORD: undefined, RADAR_MANAGE_PASSWORD: undefined }, async () => {
-    assert.equal(await isUnlocked('site', undefined), true, 'иначе dev и тесты требовали бы пароль');
-    assert.deepEqual(openScopes(), ['site', 'manage']);
+test('без пароля вкладки открыты, и это видно в passwordSet', async () => {
+  await withEnv(undefined, async () => {
+    assert.equal(await isUnlocked(undefined), true, 'иначе dev и тесты требовали бы пароль');
+    assert.equal(passwordSet(), false, 'шапка должна показать полосу');
   });
 
-  await withEnv({ RADAR_PASSWORD: 'есть', RADAR_MANAGE_PASSWORD: undefined }, () => {
-    assert.deepEqual(openScopes(), ['manage'], 'шапка должна назвать именно открытый уровень');
+  await withEnv('есть', () => {
+    assert.equal(passwordSet(), true);
   });
 });
 
 test('пустая строка в переменной — это «пароля нет», а не пустой пароль', () => {
-  withEnv({ RADAR_PASSWORD: '' }, () => {
-    assert.equal(passwordFor('site'), undefined);
+  withEnv('', () => {
+    assert.equal(password(), undefined);
+    assert.equal(passwordSet(), false);
   });
 });
 
@@ -78,16 +64,14 @@ test('крон-роуты и страница входа паролем не з�
   for (const p of ['/login', '/api/login', '/api/cron/attendance', '/api/cron/showcase']) {
     assert.equal(isPublic(p), true, `${p} должен открываться без пароля`);
   }
-  for (const p of ['/', '/radar', '/showcase', '/api/showcase', '/api/upload']) {
-    assert.equal(isPublic(p), false, `${p} без пароля пускать нельзя`);
-  }
 });
 
-test('отдельный пароль спрашивается ровно на «Витринах» и «Истории»', () => {
+test('пароль спрашивается ровно на «Витринах» и «Истории»', () => {
   for (const p of ['/showcase', '/history', '/api/showcase', '/showcase/что-то']) {
-    assert.equal(isManaged(p), true, `${p} должен быть под вторым паролем`);
+    assert.equal(isManaged(p), true, `${p} должен быть под паролем`);
   }
+  // Сам радар открыт: цифры смотрит вся команда.
   for (const p of ['/', '/radar', '/settings', '/shop/М1', '/api/upload', '/showcases']) {
-    assert.equal(isManaged(p), false, `${p} под вторым паролем быть не должен`);
+    assert.equal(isManaged(p), false, `${p} под паролем быть не должен`);
   }
 });
