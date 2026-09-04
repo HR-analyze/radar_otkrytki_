@@ -1,7 +1,9 @@
-import { latestDate } from '@/lib/queries';
+import { latestDate, listDates, showcaseNotes } from '@/lib/queries';
+import { defaultRange } from '@/lib/params';
 import { canEditShowcase } from '@/lib/showcase-store';
 import { isoDate } from '@/lib/time';
 import { ShowcaseEditor } from '@/components/ShowcaseEditor';
+import { NotesSummary } from '@/components/NotesSummary';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +11,9 @@ export const dynamic = 'force-dynamic';
  * Наполнение витрин — единственные данные, которые заполняет человек, а не 1С.
  * Раньше их правили в Excel-книге и перезаливали целиком; теперь это отдельная
  * вкладка радара.
+ *
+ * Ниже редактора — сводка комментариев за месяц: их пишут по одному в разные
+ * дни, а читать нужно вместе.
  */
 export default async function ShowcasePage({
   searchParams,
@@ -21,6 +26,11 @@ export default async function ShowcasePage({
   // По умолчанию открываем сегодняшний день: его и заполняют.
   const initial = asked ?? isoDate(new Date());
   const last = await latestDate();
+
+  // Месяц сводки — тот же, на котором открывается весь радар (см. defaultRange),
+  // чтобы вкладки не показывали разные периоды.
+  const month = monthParam(sp.month) ?? defaultRange(await listDates()).to.slice(0, 7);
+  const notes = await showcaseNotes(`${month}-01`, `${month}-31`);
 
   return (
     <div className="flex flex-col gap-5">
@@ -35,6 +45,25 @@ export default async function ShowcasePage({
       </div>
 
       <ShowcaseEditor initialDate={initial} />
+
+      <NotesSummary
+        notes={notes}
+        month={month}
+        prev={shiftMonth(month, -1)}
+        next={shiftMonth(month, 1)}
+      />
     </div>
   );
+}
+
+function monthParam(value: string | string[] | undefined): string | null {
+  const v = typeof value === 'string' ? value : null;
+  return v && /^\d{4}-\d{2}$/.test(v) ? v : null;
+}
+
+/** «2026-09» ± месяц. Через Date, чтобы декабрь не превращался в 13-й месяц. */
+function shiftMonth(month: string, by: number): string {
+  const [year, m] = month.split('-').map(Number);
+  const d = new Date(year, m - 1 + by, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }

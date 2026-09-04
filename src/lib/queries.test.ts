@@ -129,6 +129,48 @@ test('по ушедшему РМ видны его прежние лавки, а
   assert.equal(after.rows.length, 0, `${gone}: после смены справочника лавок быть не должно`);
 });
 
+test('сводка комментариев собирает их за период и сортирует свежими вверх', async () => {
+  const { saveShowcaseEdits } = await import('./showcase-store');
+  await saveShowcaseEdits([
+    { date: '2026-08-25', shopCode: 'М1', note: 'не привезли ягоды' },
+    { date: '2026-08-27', shopCode: 'М2', note: 'витрину чинили' },
+    { date: '2026-08-27', shopCode: 'М1', note: 'поставка опоздала' },
+    // За границей периода — в сводку попасть не должен.
+    { date: '2026-07-01', shopCode: 'М3', note: 'прошлый месяц' },
+  ]);
+
+  const notes = await q.showcaseNotes('2026-08-01', '2026-08-31');
+
+  assert.deepEqual(
+    notes.map((n) => `${n.date} ${n.shopCode}`),
+    ['2026-08-27 М1', '2026-08-27 М2', '2026-08-25 М1'],
+    'свежее сверху, внутри дня — по номеру лавки',
+  );
+  assert.ok(!notes.some((n) => n.date < '2026-08-01'), 'чужой месяц не попал');
+  assert.equal(notes[0].shopName, 'М1 Милютинский', 'название лавки подставлено');
+  assert.ok(notes[0].region, 'РМ проставлен');
+});
+
+test('в сводке рядом с комментарием видно наполнение того же дня', async () => {
+  const { saveShowcaseEdits } = await import('./showcase-store');
+  await saveShowcaseEdits([{ date: '2026-08-26', shopCode: 'М4', fill: 0.6, note: 'мало выпечки' }]);
+
+  const notes = await q.showcaseNotes('2026-08-26', '2026-08-26');
+  const m4 = notes.find((n) => n.shopCode === 'М4');
+
+  assert.equal(m4?.percent, 60, 'процент за тот же день подставлен');
+  assert.equal(m4?.note, 'мало выпечки');
+});
+
+test('пустой комментарий в сводку не попадает', async () => {
+  const { saveShowcaseEdits } = await import('./showcase-store');
+  await saveShowcaseEdits([{ date: '2026-08-28', shopCode: 'М6', note: 'ошибся' }]);
+  await saveShowcaseEdits([{ date: '2026-08-28', shopCode: 'М6', note: '' }]);
+
+  const notes = await q.showcaseNotes('2026-08-28', '2026-08-28');
+  assert.ok(!notes.some((n) => n.shopCode === 'М6'), 'стёртая пометка не показывается');
+});
+
 test('фильтр по лавке: точный код важнее подстроки', async () => {
   // «М1» — это ровно М1. Иначе, набрав код односимвольной лавки, человек
   // получал бы М1 вместе с М10–М19 и не мог посмотреть её одну.

@@ -684,6 +684,59 @@ export async function showcaseStats(
   };
 }
 
+/* --------------------------- комментарии витрин --------------------------- */
+
+export interface ShowcaseNote {
+  date: string;
+  shopCode: string;
+  shopName: string;
+  /** РМ, отвечавший за лавку в этот день (см. roster-history.ts). */
+  region: string | null;
+  /** Наполнение за тот же день — null, если его не заполняли. */
+  percent: number | null;
+  note: string;
+}
+
+/**
+ * Комментарии к лавкам за период — свод для вкладки «Витрины».
+ *
+ * Читаются из базы ручных данных напрямую, а не из снимка: в расчётах они не
+ * участвуют, печь их в снимок незачем.
+ */
+export async function showcaseNotes(from: string, to: string): Promise<ShowcaseNote[]> {
+  const snap = await loadSnapshot();
+  const { readShowcase } = await import('./showcase-store');
+  const store = await readShowcase();
+
+  const byCode = new Map(snap.shops.map((s) => [s.code, s]));
+  const regions = regionIndexOf(snap);
+  const fills = new Map(snap.showcase.map((s) => [`${s.date}|${s.shopCode}`, s.fill]));
+
+  const out: ShowcaseNote[] = [];
+  for (const [date, byShop] of Object.entries(store.notes)) {
+    if (date < from || date > to) continue;
+
+    for (const [shopCode, note] of Object.entries(byShop)) {
+      if (!note.trim()) continue;
+      const fill = fills.get(`${date}|${shopCode}`);
+
+      out.push({
+        date,
+        shopCode,
+        shopName: byCode.get(shopCode)?.name ?? shopCode,
+        region: regionAt(regions.get(shopCode), date),
+        percent: fill == null ? null : Math.round(fill * 100),
+        note,
+      });
+    }
+  }
+
+  // Свежее сверху, внутри дня — по номеру лавки: так же, как везде в радаре.
+  return out.sort(
+    (a, b) => b.date.localeCompare(a.date) || shopNumber(a.shopCode) - shopNumber(b.shopCode),
+  );
+}
+
 /* ----------------------------- карточка лавки ---------------------------- */
 
 export interface ShopDayPerson {

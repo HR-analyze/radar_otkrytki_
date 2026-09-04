@@ -1,4 +1,5 @@
-import { latestDate, listDates } from './queries';
+import { listDates } from './queries';
+import { isoDate } from './time';
 import type { CriterionKey, Status } from './types';
 import { CRITERION_ORDER } from './types';
 
@@ -16,15 +17,43 @@ export interface ResolvedParams {
 const STATUSES: Status[] = ['green', 'yellow', 'red', 'other_schedule', 'no_data'];
 
 /**
- * Параметры из URL с безопасными значениями по умолчанию:
- * по умолчанию показываем весь загруженный период.
+ * Период по умолчанию — текущий месяц.
+ *
+ * Справочники и отчётность у заказчика месячные, и открывать радар сразу на
+ * нужном месяце — то, чего ждёшь: 1 октября он сам покажет октябрь, а не
+ * остаток сентября.
+ *
+ * Границы берутся по дням, за которые данные есть, а не по календарю: иначе
+ * период тянулся бы до 30-го числа по пустым дням. Если в текущем месяце
+ * данных ещё нет вовсе (первое число, выгрузку не залили), показываем
+ * последний месяц с данными — пустой экран выглядел бы поломкой.
+ */
+export function defaultRange(dates: readonly string[], today = isoDate(new Date())): {
+  from: string;
+  to: string;
+} {
+  const monthOf = (d: string): string => d.slice(0, 7);
+  const span = (month: string): { from: string; to: string } | null => {
+    const days = dates.filter((d) => monthOf(d) === month);
+    return days.length > 0 ? { from: days[0], to: days[days.length - 1] } : null;
+  };
+
+  const current = span(monthOf(today));
+  if (current) return current;
+
+  const last = dates[dates.length - 1];
+  return last ? (span(monthOf(last)) ?? { from: last, to: last }) : { from: today, to: today };
+}
+
+/**
+ * Параметры из URL с безопасными значениями по умолчанию: период — текущий
+ * месяц (см. defaultRange), остальные фильтры пусты.
  */
 export async function resolveParams(
   sp: Record<string, string | string[] | undefined>,
 ): Promise<ResolvedParams> {
   const dates = await listDates();
-  const fallbackTo = (await latestDate()) ?? new Date().toISOString().slice(0, 10);
-  const fallbackFrom = dates[0] ?? fallbackTo;
+  const { from: fallbackFrom, to: fallbackTo } = defaultRange(dates);
 
   const one = (k: string): string | undefined => {
     const v = sp[k];
