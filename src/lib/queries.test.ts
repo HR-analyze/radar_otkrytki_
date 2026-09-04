@@ -129,6 +129,57 @@ test('по ушедшему РМ видны его прежние лавки, а
   assert.equal(after.rows.length, 0, `${gone}: после смены справочника лавок быть не должно`);
 });
 
+test('топ считает долю зелёных, а не их число', async () => {
+  // По абсолютному счёту наверх лезли лавки покрупнее с посредственными 70%,
+  // обгоняя тех, у кого 92%: у лавок разное число оценённых ячеек.
+  const best = await q.bestShops(ALL.from, ALL.to, 12);
+  assert.ok(best.length > 0);
+
+  const shares = best.map((b) => b.share);
+  assert.deepEqual(shares, [...shares].sort((a, b) => b - a), 'отсортировано по доле');
+
+  for (const b of best) {
+    assert.ok(b.total > 0, `${b.shop.code}: знаменатель должен быть больше нуля`);
+    assert.equal(b.share, b.greenCount / b.total, 'доля должна сходиться со счётчиками');
+    assert.ok(b.greenCount <= b.total);
+  }
+
+  // Лавка с максимальным числом зелёных не обязана быть первой — и это суть.
+  const byCount = [...best].sort((a, b) => b.greenCount - a.greenCount);
+  assert.ok(byCount[0].share <= best[0].share, 'первое место — за долей, не за счётом');
+});
+
+test('лавки без достаточных данных в топ не попадают', async () => {
+  // «1 из 1 = 100%» — не достижение: порог отсекает такие строки.
+  const best = await q.bestShops(ALL.from, ALL.to, 80);
+  const totals = best.map((b) => b.total);
+  const min = Math.min(...totals);
+  const median = [...totals].sort((a, b) => a - b)[Math.floor(totals.length / 2)];
+
+  assert.ok(min >= median / 2, `минимум ${min} должен быть не меньше половины медианы ${median}`);
+});
+
+test('топ и анти-топ смотрят на одни данные с разных сторон', async () => {
+  const best = await q.bestShops(ALL.from, ALL.to, 5);
+  const worst = await q.antiTop(ALL.from, ALL.to, 5);
+
+  const bestCodes = new Set(best.map((b) => b.shop.code));
+  const worstCodes = new Set(worst.map((w) => w.shop.code));
+  const both = [...bestCodes].filter((c) => worstCodes.has(c));
+
+  assert.deepEqual(both, [], `лавка не может быть и в топе, и в анти-топе: ${both.join(', ')}`);
+});
+
+test('топ уважает фильтр по РМ', async () => {
+  const regions = await q.listRegions(ALL.from, ALL.to);
+  const region = regions.current[0];
+
+  const all = await q.bestShops(ALL.from, ALL.to, 80);
+  const one = await q.bestShops(ALL.from, ALL.to, 80, region);
+
+  assert.ok(one.length > 0 && one.length < all.length, `${region}: ${one.length} из ${all.length}`);
+});
+
 test('сводка комментариев собирает их за период и сортирует свежими вверх', async () => {
   const { saveShowcaseEdits } = await import('./showcase-store');
   await saveShowcaseEdits([

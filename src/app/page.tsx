@@ -3,6 +3,7 @@ import { loadConfig } from '@/lib/config';
 import { resolveParams } from '@/lib/params';
 import {
   antiTop,
+  bestShops,
   lastRun,
   listRegions,
   shopTotals,
@@ -30,12 +31,13 @@ export default async function DashboardPage({
   const config = loadConfig();
   const singleDay = p.from === p.to;
 
-  const [regions, summary, totals, top, weak, fill, runAttendance, runShowcase] =
+  const [regions, summary, totals, top, best, weak, fill, runAttendance, runShowcase] =
     await Promise.all([
       listRegions(p.from, p.to),
       summaryByCriterion(p.from, p.to, p.region),
       shopTotals(p.from, p.to, p.region),
       antiTop(p.from, p.to, 12, p.region),
+      bestShops(p.from, p.to, 12, p.region),
       weakestCriteria(p.from, p.to, p.region),
       showcaseStats(p.from, p.to, p.region),
       lastRun('attendance'),
@@ -135,7 +137,51 @@ export default async function DashboardPage({
         </div>
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-[1.15fr_1fr]">
+      {/* Топ и анти-топ рядом: показывать только проблемы — значит показывать
+          половину картины, а лавки, которые держат сеть, вообще не видно. */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* --- Топ --- */}
+        <section className="surface p-4">
+          <h2 className="text-sm font-semibold">Лучшие локации — топ 🟢</h2>
+          <p className="mt-0.5 text-xs muted">
+            Доля зелёных ячеек за {shortDate(p.from)} — {shortDate(p.to)} по всем критериям.
+          </p>
+          {best.length === 0 ? (
+            <p className="mt-4 text-sm muted">За период оценённых статусов нет.</p>
+          ) : (
+            <ul className="mt-3 flex flex-col">
+              {best.map((r) => (
+                <li
+                  key={r.shop.code}
+                  className="flex items-start justify-between gap-3 border-t py-2 first:border-0"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  <div className="min-w-0">
+                    <Link
+                      href={`/shop/${encodeURIComponent(r.shop.code)}?from=${p.from}&to=${p.to}`}
+                      className="text-sm hover:underline"
+                    >
+                      {r.shop.name}
+                    </Link>
+                    {r.shop.region && <span className="ml-1.5 text-xs muted">{r.shop.region}</span>}
+                    {/* Числитель со знаменателем: без них доля не проверяется. */}
+                    <p className="mt-0.5 text-xs muted">
+                      {r.greenCount} из {r.total} ячеек
+                      {r.fill != null && ` · витрина ${Math.round(r.fill * 100)}%`}
+                    </p>
+                  </div>
+                  <span
+                    className="shrink-0 text-sm font-semibold tabular-nums"
+                    title="Доля зелёных ячеек за период"
+                  >
+                    {Math.round(r.share * 100)}% 🟢
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         {/* --- Анти-топ --- */}
         <section className="surface p-4">
           <h2 className="text-sm font-semibold">Проблемные локации — анти-топ 🔴</h2>
@@ -176,41 +222,44 @@ export default async function DashboardPage({
           )}
         </section>
 
-        {/* --- Где западает --- */}
-        <section className="surface p-4">
-          <h2 className="text-sm font-semibold">Где западает сильнее всего</h2>
-          <p className="mt-0.5 text-xs muted">
-            Доля 🔴 среди всех оценённых ячеек критерия за период.
-          </p>
-          <div className="mt-3 flex flex-col gap-2.5">
-            {weak.map((w) => (
-              <div key={w.criterion}>
-                <div className="flex items-baseline justify-between text-sm">
-                  <span>{config.criteria[w.criterion]?.title ?? w.criterion}</span>
-                  <span className="tabular-nums muted">
-                    {Math.round(w.share * 100)}% · {w.red} из {w.total}
-                  </span>
-                </div>
-                <div className="mt-1 h-2 w-full overflow-hidden rounded-full" style={{ background: 'var(--neutral-soft)' }}>
-                  <div className="dot-red h-full" style={{ width: `${Math.round(w.share * 100)}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Блок про синк показываем только там, где синк вообще возможен:
-              на read-only хостинге «не запускалось» — это шум, а не информация. */}
-          {writable && (
-            <>
-              <h3 className="mt-5 text-sm font-semibold">Последние обновления данных</h3>
-              <dl className="mt-2 flex flex-col gap-1.5 text-xs">
-                <RunLine label="Отметки (Диск)" run={runAttendance} />
-                <RunLine label="Витрины (Таблица)" run={runShowcase} />
-              </dl>
-            </>
-          )}
-        </section>
       </div>
+
+      {/* --- Где западает --- */}
+      <section className="surface p-4">
+        <h2 className="text-sm font-semibold">Где западает сильнее всего</h2>
+        <p className="mt-0.5 text-xs muted">
+          Доля 🔴 среди всех оценённых ячеек критерия за период.
+        </p>
+        {/* В две колонки: шесть полос в одну растягивались бы на всю ширину
+            экрана, и сравнивать их длину становилось неудобно. */}
+        <div className="mt-3 grid gap-x-8 gap-y-2.5 sm:grid-cols-2">
+          {weak.map((w) => (
+            <div key={w.criterion}>
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span>{config.criteria[w.criterion]?.title ?? w.criterion}</span>
+                <span className="tabular-nums muted">
+                  {Math.round(w.share * 100)}% · {w.red} из {w.total}
+                </span>
+              </div>
+              <div className="mt-1 h-2 w-full overflow-hidden rounded-full" style={{ background: 'var(--neutral-soft)' }}>
+                <div className="dot-red h-full" style={{ width: `${Math.round(w.share * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Блок про синк показываем только там, где синк вообще возможен:
+            на read-only хостинге «не запускалось» — это шум, а не информация. */}
+        {writable && (
+          <>
+            <h3 className="mt-5 text-sm font-semibold">Последние обновления данных</h3>
+            <dl className="mt-2 flex flex-col gap-1.5 text-xs">
+              <RunLine label="Отметки (Диск)" run={runAttendance} />
+              <RunLine label="Витрины (Таблица)" run={runShowcase} />
+            </dl>
+          </>
+        )}
+      </section>
 
     </div>
   );

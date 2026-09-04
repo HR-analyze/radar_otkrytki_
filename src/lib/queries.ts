@@ -622,6 +622,88 @@ export async function antiTop(
     .slice(0, limit);
 }
 
+export interface BestShopRow {
+  shop: ShopRow;
+  /** Зелёных ячеек за период. */
+  greenCount: number;
+  /** Всего оценённых ячеек — знаменатель доли. */
+  total: number;
+  /** Доля зелёных, 0–1. */
+  share: number;
+  /** Среднее наполнение витрины за период. */
+  fill: number | null;
+}
+
+/**
+ * Топ: лавки с наибольшей долей 🟢 за период.
+ *
+ * Считается доля, а не число зелёных. У лавок разное количество оценённых
+ * ячеек — на реальных данных от 24 до 62 за две недели, потому что различается
+ * штат и число рабочих дней. По абсолютному счёту в топ выходили лавки покрупнее
+ * с посредственными 70% зелёных, обгоняя тех, у кого 92%.
+ *
+ * Лавки, по которым данных за период почти нет, в топ не берём: «1 из 1 = 100%»
+ * — не достижение. Порог — половина медианы по сети: медиана устойчива к
+ * выбросам, а половина оставляет в списке и тех, кто работал не все дни.
+ */
+export async function bestShops(
+  from: string,
+  to: string,
+  limit = 12,
+  region?: string,
+): Promise<BestShopRow[]> {
+  const snap = await loadSnapshot();
+  const shops = await shopsIn(region, undefined, from, to);
+  const byCode = new Map(shops.map((s) => [s.code, s]));
+  const inRegion = await regionDayMatcher(region);
+
+  const agg = new Map<string, { green: number; total: number }>();
+  for (const c of snap.criteria) {
+    if (c.date < from || c.date > to || !byCode.has(c.shopCode)) continue;
+    if (!inRegion(c.shopCode, c.date)) continue;
+    // Считаем только оценённое: «нет данных» и «другой график» — не результат.
+    if (c.status !== 'green' && c.status !== 'yellow' && c.status !== 'red') continue;
+
+    const cur = agg.get(c.shopCode) ?? { green: 0, total: 0 };
+    cur.total++;
+    if (c.status === 'green') cur.green++;
+    agg.set(c.shopCode, cur);
+  }
+  if (agg.size === 0) return [];
+
+  const totals = [...agg.values()].map((v) => v.total).sort((a, b) => a - b);
+  const median = totals[Math.floor(totals.length / 2)];
+  const enough = median / 2;
+
+  const fillSums = new Map<string, { sum: number; n: number }>();
+  for (const s of snap.showcase) {
+    if (s.date < from || s.date > to || !byCode.has(s.shopCode) || !inRegion(s.shopCode, s.date)) continue;
+    const cur = fillSums.get(s.shopCode) ?? { sum: 0, n: 0 };
+    cur.sum += s.fill;
+    cur.n++;
+    fillSums.set(s.shopCode, cur);
+  }
+
+  return [...agg.entries()]
+    .filter(([, v]) => v.total >= enough)
+    .map(([code, v]) => {
+      const f = fillSums.get(code);
+      return {
+        shop: byCode.get(code) ?? { code, name: code, region: null },
+        greenCount: v.green,
+        total: v.total,
+        share: v.green / v.total,
+        fill: f ? f.sum / f.n : null,
+      };
+    })
+    // При равной доле выше тот, у кого данных больше: 46 из 50 убедительнее 6 из 6.
+    .sort(
+      (a, b) =>
+        b.share - a.share || b.total - a.total || a.shop.code.localeCompare(b.shop.code),
+    )
+    .slice(0, limit);
+}
+
 /** «Где больше всего западает» — доля 🔴 по каждому критерию за период. */
 export async function weakestCriteria(
   from: string,
