@@ -125,3 +125,23 @@ select:focus-visible {
     text-overflow: ellipsis;
   }
 }
+
+/* Комментарий в списке витрин: рамка только там, где есть что показать —
+   иначе восемьдесят пустых полей выглядят решёткой. */
+.showcase-note {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+}
+.showcase-note::placeholder {
+  color: color-mix(in srgb, var(--text) 35%, transparent);
+}
+.showcase-note:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--border) 60%, transparent);
+}
+.showcase-note:focus,
+.showcase-note:not(:placeholder-shown) {
+  border-color: var(--border);
+  background: var(--surface);
+  outline: none;
+}

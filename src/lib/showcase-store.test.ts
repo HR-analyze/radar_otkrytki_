@@ -104,6 +104,55 @@ test('статусы считаются по действующим порога
   assert.ok(criteria.every((c) => c.criterion === 'showcase' && c.origin === 'manual'));
 });
 
+test('комментарий сохраняется отдельно от процента и не трогает его', async () => {
+  await store.saveShowcaseEdits([{ date: '2026-09-08', shopCode: 'М1', fill: 0.8 }]);
+  await store.saveShowcaseEdits([{ date: '2026-09-08', shopCode: 'М1', note: 'не привезли ягоды' }]);
+
+  const read = await store.readShowcase();
+  assert.equal(read.days['2026-09-08']['М1'], 0.8, 'процент пережил правку комментария');
+  assert.equal(read.notes['2026-09-08']['М1'], 'не привезли ягоды');
+});
+
+test('комментарий можно оставить и там, где процента нет', async () => {
+  // Лавку не заполнили, но объяснить причину нужно — это разные поля.
+  await store.saveShowcaseEdits([{ date: '2026-09-09', shopCode: 'М5', note: 'лавка закрыта' }]);
+
+  const read = await store.readShowcase();
+  assert.equal(read.days['2026-09-09']?.['М5'], undefined, 'процента нет');
+  assert.equal(read.notes['2026-09-09']['М5'], 'лавка закрыта');
+});
+
+test('пустой комментарий стирает пометку, а процент остаётся', async () => {
+  await store.saveShowcaseEdits([{ date: '2026-09-10', shopCode: 'М2', fill: 0.9, note: 'чинили' }]);
+  const cleared = await store.saveShowcaseEdits([
+    { date: '2026-09-10', shopCode: 'М2', note: '' },
+  ]);
+
+  assert.equal(cleared.changed, 1);
+  const read = await store.readShowcase();
+  assert.equal(read.notes['2026-09-10']?.['М2'], undefined, 'пометка стёрта');
+  assert.equal(read.days['2026-09-10']['М2'], 0.9, 'процент на месте');
+});
+
+test('правка процента не стирает уже написанный комментарий', async () => {
+  await store.saveShowcaseEdits([{ date: '2026-09-11', shopCode: 'М3', note: 'витрину меняли' }]);
+  await store.saveShowcaseEdits([{ date: '2026-09-11', shopCode: 'М3', fill: 0.55 }]);
+
+  const read = await store.readShowcase();
+  assert.equal(read.notes['2026-09-11']['М3'], 'витрину меняли');
+  assert.equal(read.days['2026-09-11']['М3'], 0.55);
+});
+
+test('комментарии попадают в резервную копию — иначе их негде хранить', async () => {
+  const file = store.writeSeed(await store.readShowcase());
+  const back = JSON.parse(fs.readFileSync(file, 'utf8')) as {
+    notes: Record<string, Record<string, string>>;
+  };
+
+  assert.equal(back.notes['2026-09-08']['М1'], 'не привезли ягоды');
+  assert.equal(store.readSeed().notes['2026-09-09']['М5'], 'лавка закрыта');
+});
+
 test('версия витрин меняется от правки — снимок узнаёт о ней сразу', async () => {
   const before = await store.showcaseVersion();
   await store.saveShowcaseEdits([{ date: '2026-09-07', shopCode: 'М9', fill: 0.42 }]);

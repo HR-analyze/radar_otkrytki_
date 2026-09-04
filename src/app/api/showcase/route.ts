@@ -31,6 +31,7 @@ export async function GET(req: Request) {
   const config = loadConfig();
   const store = await readShowcase();
   const values = store.days[date] ?? {};
+  const notes = store.notes[date] ?? {};
   const shops = await listShops();
 
   return NextResponse.json({
@@ -55,6 +56,7 @@ export async function GET(req: Request) {
       region: s.region,
       percent: values[s.code] == null ? null : Math.round(values[s.code] * 100),
       status: statusForFill(values[s.code] ?? null, config),
+      note: notes[s.code] ?? '',
     })),
   });
 }
@@ -96,15 +98,24 @@ export async function POST(req: Request) {
     changed,
     updatedAt: store.updatedAt,
     /** Статусы после сохранения — редактор красит ячейки по ответу сервера. */
-    saved: edits.value.map((e) => ({
-      date: e.date,
-      shopCode: e.shopCode,
-      percent: e.fill == null ? null : Math.round(e.fill * 100),
-      status: statusForFill(e.fill, config),
-    })),
+    saved: edits.value.map((e) => {
+      // fill=undefined значит «правили только комментарий»: процент остаётся
+      // прежним, и брать его надо из базы, а не из правки.
+      const fill = e.fill === undefined ? (store.days[e.date]?.[e.shopCode] ?? null) : e.fill;
+      return {
+        date: e.date,
+        shopCode: e.shopCode,
+        percent: fill == null ? null : Math.round(fill * 100),
+        status: statusForFill(fill, config),
+        note: store.notes[e.date]?.[e.shopCode] ?? '',
+      };
+    }),
     filled: Object.keys(store.days[edits.value[0]?.date ?? ''] ?? {}).length,
   });
 }
+
+/** Комментарий — короткая пометка, а не поле для романа. */
+const MAX_NOTE = 300;
 
 type ParsedEdits = { ok: true; value: ShowcaseEdit[] } | { ok: false; error: string };
 
@@ -119,7 +130,7 @@ function parseEdits(raw: unknown): ParsedEdits {
 
   const value: ShowcaseEdit[] = [];
   for (const item of raw) {
-    const e = item as { date?: unknown; shopCode?: unknown; percent?: unknown };
+    const e = item as { date?: unknown; shopCode?: unknown; percent?: unknown; note?: unknown };
     const date = String(e.date ?? '');
     const shopCode = String(e.shopCode ?? '').trim();
 
@@ -128,16 +139,33 @@ function parseEdits(raw: unknown): ParsedEdits {
       return { ok: false, error: `Некорректный код лавки «${shopCode}»` };
     }
 
-    if (e.percent == null || e.percent === '') {
-      value.push({ date, shopCode, fill: null });
-      continue;
+    const edit: ShowcaseEdit = { date, shopCode };
+
+    // Ключа нет вовсе — поле не правили. Пустая строка или null — стереть.
+    if ('percent' in e) {
+      if (e.percent == null || e.percent === '') {
+        edit.fill = null;
+      } else {
+        const percent = Number(String(e.percent).replace(',', '.'));
+        if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+          return { ok: false, error: `${shopCode}: наполнение должно быть числом от 0 до 100` };
+        }
+        edit.fill = percent / 100;
+      }
     }
 
-    const percent = Number(String(e.percent).replace(',', '.'));
-    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      return { ok: false, error: `${shopCode}: наполнение должно быть числом от 0 до 100` };
+    if ('note' in e) {
+      const note = e.note == null ? '' : String(e.note);
+      if (note.length > MAX_NOTE) {
+        return { ok: false, error: `${shopCode}: комментарий длиннее ${MAX_NOTE} символов` };
+      }
+      edit.note = note;
     }
-    value.push({ date, shopCode, fill: percent / 100 });
+
+    if (edit.fill === undefined && edit.note === undefined) {
+      return { ok: false, error: `${shopCode}: в правке нет ни процента, ни комментария` };
+    }
+    value.push(edit);
   }
 
   return { ok: true, value };

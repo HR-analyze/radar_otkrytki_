@@ -2,7 +2,7 @@
   "name": "radar-otkrytki",
   "version": "0.1.0",
   "private": true,
-  "description": "Радар открытий — дашборд контроля открытия лавок",
+  "description": "Радар витрин — дашборд контроля открытия лавок и наполнения витрин",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

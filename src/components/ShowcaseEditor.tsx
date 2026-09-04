@@ -25,6 +25,8 @@ interface ShopRow {
   region: string | null;
   percent: number | null;
   status: Status;
+  /** Короткая пометка: «не привезли ягоды», «витрину чинили». */
+  note: string;
 }
 
 interface DayData {
@@ -46,12 +48,15 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 const TOKEN_KEY = 'radar.uploadToken';
 /** Пауза после последнего нажатия клавиши, чтобы не слать запрос на каждую цифру. */
 const SAVE_DEBOUNCE_MS = 500;
+/** Столько же, сколько принимает сервер (см. /api/showcase). */
+const MAX_NOTE = 300;
 
 export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
   const router = useRouter();
   const [date, setDate] = useState(initialDate);
   const [data, setData] = useState<DayData | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [save, setSave] = useState<SaveState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -59,7 +64,9 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
   const [onlyEmpty, setOnlyEmpty] = useState(false);
   const [token, setToken] = useState('');
 
-  const pending = useRef<Map<string, string>>(new Map());
+  // Копим правки по полям: процент и комментарий у одной лавки правят
+  // независимо, и отправить нужно ровно то, что человек трогал.
+  const pending = useRef<Map<string, { percent?: string; note?: string }>>(new Map());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -76,6 +83,7 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
     const body = (await res.json()) as DayData;
     setData(body);
     setDrafts({});
+    setNoteDrafts({});
     setSave('idle');
     setError(body.ok ? null : (body.error ?? 'Не удалось загрузить день'));
   }, []);
@@ -99,13 +107,20 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
           ...(token ? { 'x-radar-upload-token': token } : {}),
         },
         body: JSON.stringify({
-          edits: batch.map(([shopCode, percent]) => ({ date, shopCode, percent: percent || null })),
+          edits: batch.map(([shopCode, fields]) => ({
+            date,
+            shopCode,
+            // Ключ кладём только для тронутого поля: иначе правка комментария
+            // стёрла бы процент, и наоборот.
+            ...(fields.percent !== undefined ? { percent: fields.percent || null } : {}),
+            ...(fields.note !== undefined ? { note: fields.note } : {}),
+          })),
         }),
       });
       const body = (await res.json()) as {
         ok: boolean;
         error?: string;
-        saved?: { shopCode: string; percent: number | null; status: Status }[];
+        saved?: { shopCode: string; percent: number | null; status: Status; note: string }[];
       };
       if (!res.ok || !body.ok) throw new Error(body.error ?? `Сервер ответил ${res.status}`);
 
@@ -116,7 +131,9 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
               ...prev,
               shops: prev.shops.map((s) => {
                 const saved = body.saved?.find((x) => x.shopCode === s.code);
-                return saved ? { ...s, percent: saved.percent, status: saved.status } : s;
+                return saved
+                  ? { ...s, percent: saved.percent, status: saved.status, note: saved.note }
+                  : s;
               }),
             }
           : prev,
@@ -142,13 +159,22 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
     };
   }, [flush]);
 
+  function queue(code: string, patch: { percent?: string; note?: string }) {
+    pending.current.set(code, { ...pending.current.get(code), ...patch });
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS);
+  }
+
   function change(code: string, raw: string) {
     const value = raw.replace(',', '.').replace(/[^\d.]/g, '').slice(0, 5);
     setDrafts((d) => ({ ...d, [code]: value }));
+    queue(code, { percent: value });
+  }
 
-    pending.current.set(code, value);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS);
+  function changeNote(code: string, raw: string) {
+    const value = raw.slice(0, MAX_NOTE);
+    setNoteDrafts((d) => ({ ...d, [code]: value }));
+    queue(code, { note: value });
   }
 
   const shops = data?.shops ?? [];
@@ -277,7 +303,7 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
               return (
                 <li
                   key={shop.code}
-                  className="flex items-center gap-3 border-t px-3 py-2 first:border-0"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-2 first:border-0"
                   style={{ borderColor: 'var(--border)' }}
                 >
                   <span className="w-12 shrink-0 text-sm font-medium tabular-nums">{shop.code}</span>
@@ -285,6 +311,19 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
                     {shop.name.replace(/^[А-ЯA-Z]+\d+\s*/i, '')}
                     {shop.region && <span className="ml-2 text-xs muted">{shop.region}</span>}
                   </span>
+
+                  {/* Комментарий: поле без рамки, пока пустое, — восемьдесят
+                      строк с рамками превратили бы список в решётку. Рамка
+                      появляется, когда в поле что-то есть или на нём фокус. */}
+                  <input
+                    value={noteOf(shop, noteDrafts)}
+                    onChange={(e) => changeNote(shop.code, e.target.value)}
+                    disabled={readOnly}
+                    placeholder="комментарий"
+                    title={noteOf(shop, noteDrafts) || 'Комментарий к лавке за этот день'}
+                    aria-label={`Комментарий, ${shop.code}`}
+                    className="showcase-note min-w-0 flex-1 basis-40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-xs"
+                  />
 
                   <div className="flex items-center gap-1.5">
                     <input
@@ -333,11 +372,17 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
 
       <p className="text-xs muted">
         Значение вводится в процентах. Enter или ↓ — следующая лавка, ↑ — предыдущая. Пустое поле
-        означает «в этот день не заполняли»: такая лавка в средние значения не входит. Сохраняется
+        означает «в этот день не заполняли»: такая лавка в средние значения не входит. Комментарий
+        рядом — свободный текст на случай «не привезли ягоды»; на цифры он не влияет. Сохраняется
         само.
       </p>
     </div>
   );
+}
+
+function noteOf(shop: ShopRow, drafts: Record<string, string>): string {
+  const draft = drafts[shop.code];
+  return draft !== undefined ? draft : shop.note;
 }
 
 function percentOf(shop: ShopRow, drafts: Record<string, string>): string {

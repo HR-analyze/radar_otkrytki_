@@ -81,6 +81,16 @@ function migrate(db: BetterSqlite3.Database): void {
       PRIMARY KEY (date, shop_code)
     );
 
+    -- Комментарий к лавке за день: «не привезли ягоды», «витрину чинили».
+    -- Живёт отдельно от наполнения: заметку можно оставить и без процента.
+    CREATE TABLE IF NOT EXISTS showcase_note (
+      date       TEXT NOT NULL,
+      shop_code  TEXT NOT NULL,
+      note       TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (date, shop_code)
+    );
+
     -- Когда день трогали последний раз — для вкладки «История».
     CREATE TABLE IF NOT EXISTS showcase_day (
       date       TEXT PRIMARY KEY,

@@ -26,6 +26,8 @@ import type { CriterionStatusRow, ShowcaseRow } from './types';
 export interface ShowcaseStore {
   /** Дата (YYYY-MM-DD) → код лавки → доля 0–1. */
   days: Record<string, Record<string, number>>;
+  /** Дата → код лавки → комментарий. Хранится отдельно от процента. */
+  notes: Record<string, Record<string, string>>;
   /** Дата → когда её последний раз правили. */
   touched: Record<string, string>;
   updatedAt: string | null;
@@ -36,11 +38,16 @@ export interface ShowcaseStore {
 export interface ShowcaseEdit {
   date: string;
   shopCode: string;
-  /** Доля 0–1 или null, чтобы стереть значение. */
-  fill: number | null;
+  /**
+   * Доля 0–1, null — стереть значение, undefined — не трогать (правят только
+   * комментарий).
+   */
+  fill?: number | null;
+  /** Комментарий; пустая строка стирает, undefined — не трогать. */
+  note?: string | null;
 }
 
-const EMPTY: ShowcaseStore = { days: {}, touched: {}, updatedAt: null, source: 'seed' };
+const EMPTY: ShowcaseStore = { days: {}, notes: {}, touched: {}, updatedAt: null, source: 'seed' };
 
 /** Закоммиченный сид: начальное наполнение базы и запасной вариант без диска. */
 export function showcaseSeedPath(): string {
@@ -90,6 +97,14 @@ export async function readShowcase(): Promise<ShowcaseStore> {
     (days[r.date] ??= {})[r.shop_code] = r.fill;
   }
 
+  const notes: ShowcaseStore['notes'] = {};
+  const noteRows = db
+    .prepare(`SELECT date, shop_code, note FROM showcase_note ORDER BY date, shop_code`)
+    .all() as { date: string; shop_code: string; note: string }[];
+  for (const r of noteRows) {
+    (notes[r.date] ??= {})[r.shop_code] = r.note;
+  }
+
   const touched: ShowcaseStore['touched'] = {};
   const marks = db.prepare(`SELECT date, updated_at FROM showcase_day`).all() as {
     date: string;
@@ -100,6 +115,7 @@ export async function readShowcase(): Promise<ShowcaseStore> {
   const latest = marks.map((m) => m.updated_at).sort();
   return {
     days,
+    notes,
     touched,
     updatedAt: latest[latest.length - 1] ?? null,
     source: 'db',
@@ -129,6 +145,12 @@ export async function saveShowcaseEdits(
   );
   const drop = db.prepare(`DELETE FROM showcase_fill WHERE date = ? AND shop_code = ?`);
   const current = db.prepare(`SELECT fill FROM showcase_fill WHERE date = ? AND shop_code = ?`);
+  const putNote = db.prepare(
+    `INSERT INTO showcase_note (date, shop_code, note, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(date, shop_code) DO UPDATE SET note = excluded.note, updated_at = excluded.updated_at`,
+  );
+  const dropNote = db.prepare(`DELETE FROM showcase_note WHERE date = ? AND shop_code = ?`);
+  const currentNote = db.prepare(`SELECT note FROM showcase_note WHERE date = ? AND shop_code = ?`);
   const touch = db.prepare(
     `INSERT INTO showcase_day (date, updated_at) VALUES (?, ?)
      ON CONFLICT(date) DO UPDATE SET updated_at = excluded.updated_at`,
@@ -137,17 +159,43 @@ export async function saveShowcaseEdits(
   const apply = db.transaction((list: readonly ShowcaseEdit[]) => {
     let changed = 0;
     for (const e of list) {
-      const before = (current.get(e.date, e.shopCode) as { fill: number } | undefined)?.fill;
+      let touched = false;
 
-      if (e.fill == null) {
-        if (before === undefined) continue;
-        drop.run(e.date, e.shopCode);
-      } else {
-        const next = round(normalizeFill(e.fill));
-        if (before === next) continue;
-        put.run(e.date, e.shopCode, next, now);
+      // undefined — поле в правке не участвует. Это не то же самое, что null:
+      // им стирают значение. Иначе правка комментария сбрасывала бы процент.
+      if (e.fill !== undefined) {
+        const before = (current.get(e.date, e.shopCode) as { fill: number } | undefined)?.fill;
+
+        if (e.fill === null) {
+          if (before !== undefined) {
+            drop.run(e.date, e.shopCode);
+            touched = true;
+          }
+        } else {
+          const next = round(normalizeFill(e.fill));
+          if (before !== next) {
+            put.run(e.date, e.shopCode, next, now);
+            touched = true;
+          }
+        }
       }
 
+      if (e.note !== undefined) {
+        const was = (currentNote.get(e.date, e.shopCode) as { note: string } | undefined)?.note;
+        const next = e.note === null ? '' : e.note.trim();
+
+        if (next === '') {
+          if (was !== undefined) {
+            dropNote.run(e.date, e.shopCode);
+            touched = true;
+          }
+        } else if (was !== next) {
+          putNote.run(e.date, e.shopCode, next, now);
+          touched = true;
+        }
+      }
+
+      if (!touched) continue;
       touch.run(e.date, now);
       changed++;
     }
@@ -169,15 +217,26 @@ function seedOnce(db: Awaited<ReturnType<typeof openManualDb>>): void {
   const put = db.prepare(
     `INSERT OR IGNORE INTO showcase_fill (date, shop_code, fill, updated_at) VALUES (?, ?, ?, ?)`,
   );
+  const putNote = db.prepare(
+    `INSERT OR IGNORE INTO showcase_note (date, shop_code, note, updated_at) VALUES (?, ?, ?, ?)`,
+  );
   const touch = db.prepare(
     `INSERT OR IGNORE INTO showcase_day (date, updated_at) VALUES (?, ?)`,
   );
 
+  const at = (date: string): string =>
+    seed.touched[date] ?? seed.updatedAt ?? new Date().toISOString();
+
   db.transaction(() => {
     for (const [date, values] of Object.entries(seed.days)) {
-      const at = seed.touched[date] ?? seed.updatedAt ?? new Date().toISOString();
-      for (const [shopCode, fill] of Object.entries(values)) put.run(date, shopCode, fill, at);
-      touch.run(date, at);
+      for (const [shopCode, fill] of Object.entries(values)) put.run(date, shopCode, fill, at(date));
+      touch.run(date, at(date));
+    }
+    for (const [date, values] of Object.entries(seed.notes ?? {})) {
+      for (const [shopCode, note] of Object.entries(values)) {
+        putNote.run(date, shopCode, note, at(date));
+      }
+      touch.run(date, at(date));
     }
     setMeta(db, 'showcase_seeded', new Date().toISOString());
   })();
@@ -190,11 +249,12 @@ export function readSeed(): Omit<ShowcaseStore, 'source'> {
     ) as Partial<ShowcaseStore>;
     return {
       days: raw.days ?? {},
+      notes: raw.notes ?? {},
       touched: raw.touched ?? {},
       updatedAt: raw.updatedAt ?? null,
     };
   } catch {
-    return { days: {}, touched: {}, updatedAt: null };
+    return { days: {}, notes: {}, touched: {}, updatedAt: null };
   }
 }
 
@@ -213,9 +273,18 @@ export function writeSeed(store: Omit<ShowcaseStore, 'source'>): string {
     days[date] = Object.fromEntries(codes.map((c) => [c, store.days[date][c]]));
   }
 
+  // Комментарии тоже в копию: иначе единственное место, где они есть, — база,
+  // а у неё по определению нет резервной копии в репозитории.
+  const notes: ShowcaseStore['notes'] = {};
+  for (const date of Object.keys(store.notes ?? {}).sort()) {
+    const codes = Object.keys(store.notes[date]).sort();
+    if (codes.length === 0) continue;
+    notes[date] = Object.fromEntries(codes.map((c) => [c, store.notes[date][c]]));
+  }
+
   const touched: ShowcaseStore['touched'] = {};
   for (const date of Object.keys(store.touched).sort()) {
-    if (days[date]) touched[date] = store.touched[date];
+    if (days[date] || notes[date]) touched[date] = store.touched[date];
   }
 
   fs.writeFileSync(
@@ -229,6 +298,7 @@ export function writeSeed(store: Omit<ShowcaseStore, 'source'>): string {
         updatedAt: store.updatedAt,
         touched,
         days,
+        notes,
       },
       null,
       2,
