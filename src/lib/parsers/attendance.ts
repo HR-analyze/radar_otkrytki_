@@ -148,7 +148,9 @@ export function parseAttendanceBuffer(
     }
     dates.add(stampDate);
 
-    const status = mapped ? statusForTime(arrival.minutes, mapped.criterion, config) : 'no_data';
+    const status = mapped
+      ? statusForTime(arrival.minutes, mapped.criterion, config, shop.code)
+      : 'no_data';
 
     rows.push({
       date: stampDate,

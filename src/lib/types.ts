@@ -90,6 +90,13 @@ export interface ScoreZonesConfig {
   note: string;
 }
 
+/** Особый график лавки — см. ThresholdConfig.shopSchedules. */
+export interface ShopSchedule {
+  /** Во сколько открывается эта лавка, «10:00». */
+  opensAt: string;
+  note: string;
+}
+
 export interface ThresholdConfig {
   version: number;
   updatedAt: string;
@@ -101,7 +108,19 @@ export interface ThresholdConfig {
    * «должность забыли завести в roleMap»: второе — повод поправить конфиг.
    */
   ignoredRoles?: string[];
+/**
+   * Лавки, которые открываются не в общее время (`rules.opensAt`). Ключ — код
+   * лавки (М71).
+   *
+   * Пороги в `criteria` заданы абсолютным временем и рассчитаны на обычное
+   * открытие. Для такой лавки они сдвигаются на разницу во времени открытия:
+   * лавка, открывающаяся на два часа позже, и оценивается на два часа позже —
+   * иначе она была бы вечно красной за то, что работает по своему расписанию.
+   */
+  shopSchedules?: Record<string, ShopSchedule>;
   rules: {
+    /** Обычное время открытия лавки — база, от которой считается сдвиг порогов. */
+    opensAt?: { network: string; note: string };
     otherSchedule: {
       enabled: boolean;
       after: string;

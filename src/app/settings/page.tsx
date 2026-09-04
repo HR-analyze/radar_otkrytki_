@@ -1,5 +1,6 @@
 import { loadConfig, configPath } from '@/lib/config';
 import { isSnapshotStale, isWritable } from '@/lib/snapshot';
+import { listSchedules, scheduleShift } from '@/lib/status';
 import { CRITERION_ORDER, type ThresholdConfig } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -10,6 +11,16 @@ export const dynamic = 'force-dynamic';
  */
 export default async function SettingsPage() {
   const config = loadConfig();
+
+  // Лавки с другим временем открытия: показываем правило рядом с порогами —
+  // без него цифры по этим лавкам выглядят необъяснимо.
+  const schedules = listSchedules(config).map((x) => ({
+    ...x,
+    shift: scheduleShift(config, x.code),
+  }));
+  const network = config.rules.opensAt?.network ?? '—';
+  const cook = config.criteria.cook;
+  const cookGreen = cook.kind === 'time' ? cook.greenUntil : null;
   const [stale, writable] = [await isSnapshotStale(), isWritable()];
 
   return (
@@ -83,6 +94,42 @@ export default async function SettingsPage() {
           </tbody>
         </table>
       </section>
+
+      {schedules.length > 0 && (
+        <section className="surface p-4">
+          <h2 className="text-sm font-semibold">Лавки с другим временем открытия</h2>
+          <p className="mt-0.5 text-xs muted">
+            Пороги выше рассчитаны на открытие в {network}. Эти лавки открываются позже, поэтому
+            для них те же пороги сдвинуты — иначе они были бы вечно красными за своё расписание.
+          </p>
+          <table className="mt-3 w-full text-sm">
+            <thead>
+              <tr className="text-xs muted">
+                <th className="pb-1.5 pr-3 text-left font-medium">Лавка</th>
+                <th className="pb-1.5 pr-3 text-left font-medium">Открывается</th>
+                <th className="pb-1.5 pr-3 text-left font-medium">Сдвиг порогов</th>
+                <th className="pb-1.5 text-left font-medium">Повар, например</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedules.map(({ code, schedule, shift }) => (
+                <tr key={code} className="border-t" style={{ borderColor: 'var(--border)' }}>
+                  <td className="py-1.5 pr-3 font-medium">{code}</td>
+                  <td className="py-1.5 pr-3 tabular-nums">{schedule.opensAt}</td>
+                  <td className="py-1.5 pr-3 tabular-nums muted">
+                    {shift >= 0 ? '+' : '−'}
+                    {Math.floor(Math.abs(shift) / 60)} ч {Math.abs(shift) % 60 || ''}
+                  </td>
+                  <td className="py-1.5 tabular-nums muted">
+                    {cookGreen ? `🟢 до ${shiftClock(cookGreen, shift)}` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-2 text-xs muted">{schedules[0].schedule.note}</p>
+        </section>
+      )}
 
       <section className="surface p-4">
         <h2 className="text-sm font-semibold">Правила расчёта</h2>
@@ -224,5 +271,12 @@ function strategyLabel(strategy: string, of: string): string {
 function plusMinute(hhmm: string): string {
   const [h, m] = hhmm.split(':').map(Number);
   const total = (h * 60 + m + 1) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** «06:29» + 120 мин → «08:29». Только для подписи на этой странице. */
+function shiftClock(clock: string, shift: number): string {
+  const [h, m] = clock.split(':').map(Number);
+  const total = h * 60 + m + shift;
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }

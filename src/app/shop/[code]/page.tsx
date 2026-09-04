@@ -5,6 +5,7 @@ import { resolveParams } from '@/lib/params';
 import { getShop, shopHistory, type ShopDayPerson } from '@/lib/queries';
 import { formatClock, shortDate } from '@/lib/time';
 import { StatusBadge, STATUS_TEXT } from '@/components/Status';
+import { scheduleFor, scheduleShift } from '@/lib/status';
 import { CRITERION_ORDER, type CriterionKey } from '@/lib/types';
 import { RATING_COMPONENT_TITLE } from '@/lib/rating';
 
@@ -43,6 +44,8 @@ export default async function ShopPage({
   if (!shop) notFound();
 
   const history = await shopHistory(shop.code, p.from, p.to);
+  const schedule = scheduleFor(config, shop.code);
+  const shift = scheduleShift(config, shop.code);
 
   return (
     <div className="flex flex-col gap-5">
@@ -55,6 +58,14 @@ export default async function ShopPage({
           РМ сейчас: {shop.region ?? '—'} · код {shop.code} · период {shortDate(p.from)} —{' '}
           {shortDate(p.to)}
         </p>
+        {/* Без этой строки цифры по такой лавке выглядят необъяснимо: приход
+            в 08:20 зелёный, хотя у соседней лавки такой же — красный. */}
+        {schedule && (
+          <p className="mt-1 text-sm" style={{ color: 'var(--yellow)' }}>
+            Лавка открывается с {schedule.opensAt}: пороги для неё сдвинуты на{' '}
+            {Math.round(shift / 60)} ч относительно общих.
+          </p>
+        )}
       </div>
 
       {history.length === 0 ? (

@@ -4,6 +4,7 @@ import type {
   CriterionConfig,
   CriterionKey,
   RoleMapEntry,
+  ShopSchedule,
   Status,
   ThresholdConfig,
 } from './types';
@@ -232,23 +233,76 @@ export function resolveArrival(
   };
 }
 
-/** Статус по времени прихода для конкретного критерия. */
+/**
+ * Особый график лавки — см. ThresholdConfig.shopSchedules.
+ *
+ * Ключи на `$` — комментарии внутри конфига (так заведено во всём файле), а не
+ * коды лавок: без этой проверки `$comment` принимался за лавку без времени
+ * открытия и ронял расчёт.
+ */
+export function scheduleFor(
+  config: ThresholdConfig,
+  shopCode?: string,
+): ShopSchedule | undefined {
+  if (!shopCode || shopCode.startsWith('$')) return undefined;
+
+  const schedule = config.shopSchedules?.[shopCode];
+  return schedule && typeof schedule.opensAt === 'string' ? schedule : undefined;
+}
+
+/** Все лавки с особым графиком: код и график, без служебных ключей конфига. */
+export function listSchedules(config: ThresholdConfig): { code: string; schedule: ShopSchedule }[] {
+  return Object.keys(config.shopSchedules ?? {})
+    .map((code) => ({ code, schedule: scheduleFor(config, code) }))
+    .filter((x): x is { code: string; schedule: ShopSchedule } => x.schedule !== undefined)
+    .sort((a, b) => a.code.localeCompare(b.code, 'ru'));
+}
+
+/**
+ * На сколько минут сдвинуть пороги для этой лавки.
+ *
+ * Пороги заданы абсолютным временем и рассчитаны на обычное открытие в 08:00.
+ * Лавка, открывающаяся в 10:00, работает на два часа позже — и оценивать её
+ * надо на два часа позже, иначе она вечно красная за своё расписание.
+ */
+export function scheduleShift(config: ThresholdConfig, shopCode?: string): number {
+  const schedule = scheduleFor(config, shopCode);
+  if (!schedule) return 0;
+
+  const network = config.rules.opensAt?.network;
+  if (!network) return 0;
+
+  return parseClock(schedule.opensAt) - parseClock(network);
+}
+
+/**
+ * Статус по времени прихода для конкретного критерия.
+ *
+ * `shopCode` нужен из-за лавок с особым графиком: М71 и М72 открываются с
+ * 10:00, и общие пороги делали их вечно красными за то, что они работают по
+ * своему расписанию.
+ */
 export function statusForTime(
   minutes: number | null,
   criterion: CriterionKey,
   config: ThresholdConfig,
+  shopCode?: string,
 ): Status {
   if (minutes == null) return 'red'; // п.5.1 ТЗ: нет отметки → красный, без исключений
 
-  // п.5.0: правило «другой график» выполняется раньше всех остальных.
+  const shift = scheduleShift(config, shopCode);
+
+  // п.5.0: правило «другой график» выполняется раньше остальных. Для лавки с
+  // особым графиком порог едет вместе с открытием: приход в 09:00 в лавке,
+  // открывающейся в 10:00, — это рано, а не «другой график».
   const other = config.rules.otherSchedule;
-  if (other.enabled && minutes > parseClock(other.after)) return 'other_schedule';
+  if (other.enabled && minutes > parseClock(other.after) + shift) return 'other_schedule';
 
   const cfg = config.criteria[criterion];
   if (!cfg || cfg.kind !== 'time') return 'no_data';
 
-  if (minutes <= parseClock(cfg.greenUntil)) return 'green';
-  if (minutes <= parseClock(cfg.yellowUntil)) return 'yellow';
+  if (minutes <= parseClock(cfg.greenUntil) + shift) return 'green';
+  if (minutes <= parseClock(cfg.yellowUntil) + shift) return 'yellow';
   return 'red';
 }
 

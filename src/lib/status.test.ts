@@ -6,6 +6,9 @@ import {
   averageScore,
   mapRole,
   resolveArrival,
+  listSchedules,
+  scheduleFor,
+  scheduleShift,
   statusForFill,
   statusForTime,
   statusFromScore,
@@ -322,4 +325,69 @@ test('повторные отметки одного человека свора
   ]);
   assert.equal(d.rows.length, 4);
   assert.equal(d.removed, 0);
+});
+
+/* --------------------- лавки с особым графиком ---------------------- */
+
+test('лавка, открывающаяся позже, оценивается по сдвинутым порогам', () => {
+  // М71 и М72 открываются с 10:00 при обычных 08:00. По общим порогам их
+  // сотрудники были красными за то, что лавка работает по своему расписанию.
+  const config = loadConfig();
+  const cook = config.criteria.cook;
+  assert.equal(cook.kind, 'time');
+  if (cook.kind !== 'time') return;
+
+  const shift = 2 * 60;
+  const green = parseClock(cook.greenUntil);
+
+  for (const { code } of listSchedules(config)) {
+    // Ровно на сдвинутой границе — ещё зелёный.
+    assert.equal(statusForTime(green + shift, 'cook', config, code), 'green');
+    // 07:30: для обычной лавки опоздание, для этой — задолго до открытия.
+    assert.equal(statusForTime(parseClock('07:30'), 'cook', config, 'М1'), 'red');
+    assert.equal(statusForTime(parseClock('07:30'), 'cook', config, code), 'green');
+
+    assert.equal(statusForTime(green, 'cook', config, code), 'green', 'прийти раньше не грех');
+    assert.equal(statusForTime(green + shift + 1, 'cook', config, code), 'yellow');
+  }
+});
+
+test('порог «другой график» едет вместе с открытием', () => {
+  // Приход в 09:00 в лавке, открывающейся в 10:00, — это рано, а не «другой
+  // график». Иначе такие лавки просто исчезали бы из аналитики.
+  const config = loadConfig();
+
+  assert.equal(statusForTime(parseClock('09:00'), 'cook', config, 'М1'), 'other_schedule');
+  assert.notEqual(statusForTime(parseClock('09:00'), 'cook', config, 'М71'), 'other_schedule');
+  assert.equal(statusForTime(parseClock('10:30'), 'cook', config, 'М71'), 'other_schedule');
+});
+
+test('сдвиг считается из времени открытия, а не зашит числом', () => {
+  const config = loadConfig();
+
+  assert.equal(scheduleShift(config, 'М71'), 120, '10:00 при общих 08:00 — это +2 часа');
+  assert.equal(scheduleShift(config, 'М1'), 0, 'обычная лавка не сдвигается');
+  assert.equal(scheduleShift(config, undefined), 0);
+});
+
+test('остальные лавки особый график не задевает', () => {
+  const config = loadConfig();
+
+  assert.equal(statusForTime(parseClock('06:20'), 'cook', config, 'М1'), 'green');
+  assert.equal(statusForTime(parseClock('07:08'), 'cook', config, 'М1'), 'red');
+  // Без кода лавки поведение прежнее.
+  assert.equal(statusForTime(parseClock('06:20'), 'cook', config), 'green');
+});
+
+test('служебные ключи конфига не принимаются за лавки', () => {
+  // В shopSchedules есть $comment — так заведено во всём файле. Без проверки
+  // он считался лавкой без времени открытия и ронял расчёт.
+  const config = loadConfig();
+
+  assert.equal(scheduleFor(config, '$comment'), undefined);
+  assert.ok(
+    listSchedules(config).every((x) => !x.code.startsWith('$')),
+    'в списке графиков не должно быть служебных ключей',
+  );
+  assert.deepEqual(listSchedules(config).map((x) => x.code), ['М71', 'М72']);
 });

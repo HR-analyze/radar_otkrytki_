@@ -89,7 +89,7 @@ export function mergeDeliveryTimes(
       arrivalSource: 'delivery',
       rawArrival: d.raw,
       rawDeparture: null,
-      status: statusForTime(d.minutes, 'driver', config),
+      status: statusForTime(d.minutes, 'driver', config, d.shopCode),
       note: 'Отметки face id за этот день нет — время взято из таблицы «Время поставки».',
     });
     applied++;
