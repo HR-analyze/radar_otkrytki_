@@ -23,6 +23,8 @@ interface ShopRow {
   code: string;
   name: string;
   region: string | null;
+  /** Особый час открытия («10:00») — у обычной лавки null. См. shopSchedules. */
+  opensAt: string | null;
   percent: number | null;
   status: Status;
   /** Короткая пометка: «не привезли ягоды», «витрину чинили». */
@@ -307,6 +309,17 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
                   style={{ borderColor: 'var(--border)' }}
                 >
                   <span className="w-12 shrink-0 text-sm font-medium tabular-nums">{shop.code}</span>
+                  {/* Лавка с поздним открытием: в 08:00 она ещё закрыта, и ноль
+                      у неё означает не пустую витрину, а закрытую дверь. Метка
+                      стоит перед названием, чтобы её нельзя было пролистать. */}
+                  {shop.opensAt && (
+                    <span
+                      className="st-yellow shrink-0 rounded px-1.5 py-0.5 text-xs font-medium tabular-nums"
+                      title={`Лавка открывается с ${shop.opensAt}, а не с общих 08:00`}
+                    >
+                      🕙 с {shop.opensAt}
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1 truncate text-sm" title={shop.name}>
                     {shop.name.replace(/^[А-ЯA-Z]+\d+\s*/i, '')}
                     {shop.region && <span className="ml-2 text-xs muted">{shop.region}</span>}
@@ -374,7 +387,8 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
         Значение вводится в процентах. Enter или ↓ — следующая лавка, ↑ — предыдущая. Пустое поле
         означает «в этот день не заполняли»: такая лавка в средние значения не входит. Комментарий
         рядом — свободный текст на случай «не привезли ягоды»; на цифры он не влияет. Сохраняется
-        само.
+        само. Метка «🕙 с 10:00» — лавка открывается позже общих 08:00 (М71 Кузьминки, М72
+        Ватутинки): раннее наполнение у неё считать не с чего.
       </p>
     </div>
   );
