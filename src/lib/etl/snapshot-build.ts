@@ -4,6 +4,7 @@ import { loadConfig } from '../config';
 import { fixturesFingerprint, readFixtures } from '../fixtures';
 import { parseAttendanceBuffer } from '../parsers/attendance';
 import { parseDeliveryTimes } from '../parsers/delivery';
+import { parseDepartures, type DepartureRow } from '../parsers/departure';
 import { parseLegacyVitriny } from '../parsers/legacy-vitriny';
 import { parseRoster } from '../parsers/roster';
 import { mergeDeliveryTimes } from '../delivery-merge';
@@ -44,6 +45,7 @@ export interface SnapshotBuildResult {
     legacy: string | null;
     delivery: string | null;
     roster: string | null;
+    departure: string | null;
     attendance: string[];
   };
   dates: string[];
@@ -52,6 +54,8 @@ export interface SnapshotBuildResult {
   deliveryStats: string;
   /** Строка статистики по справочнику лавок — пустая, если справочника нет. */
   rosterStats: string;
+  /** Строка статистики по выездам с РЦ — пустая, если выгрузки нет. */
+  departureStats: string;
   dedupedRemoved: number;
   droppedLegacy: number;
 }
@@ -137,7 +141,23 @@ export function buildSnapshot(
 
   const regionHistory = deriveRegionHistory(legacyAssignments, rosterAssignments);
 
-  // 3.2. Журнал отгрузок: время приезда водителя там, где нет отметки face id.
+  // 3.2. Выезды с РЦ: сетевой показатель, в статусы лавок не входит — привязки
+  //      к лавкам в выгрузке нет (см. parsers/departure.ts).
+  let departures: DepartureRow[] = [];
+  let departureStats = '';
+  if (files.departure) {
+    const parsed = parseDepartures(files.departure.buffer);
+    warnings.push(...parsed.warnings.map((w) => `[${files.departure!.name}] ${w}`));
+    departures = parsed.rows;
+
+    const withTime = parsed.rows.filter((r) => r.departureMinutes != null).length;
+    const people = new Set(parsed.rows.map((r) => r.employeeName)).size;
+    departureStats =
+      `  выезды с ${parsed.units.join(', ')}: ${withTime} выездов, ` +
+      `${people} водителей, дни ${parsed.dates[0]} — ${parsed.dates[parsed.dates.length - 1]}`;
+  }
+
+  // 3.3. Журнал отгрузок: время приезда водителя там, где нет отметки face id.
   let deliveryStats = '';
   if (files.delivery) {
     const parsed = parseDeliveryTimes(files.delivery.buffer);
@@ -191,6 +211,7 @@ export function buildSnapshot(
     // Живая история РМ (там, где есть база ручных данных) подмешивается при
     // чтении поверх этой базовой — см. withRegionHistory в snapshot.ts.
     regionHistory,
+    departures,
     legacyPeople: legacy.people.filter(
       (p) => !isLegacyStale(coverage, p.date, p.shopCode, p.criterion),
     ),
@@ -224,12 +245,14 @@ export function buildSnapshot(
       legacy: files.legacy?.name ?? null,
       delivery: files.delivery?.name ?? null,
       roster: files.roster?.name ?? null,
+      departure: files.departure?.name ?? null,
       attendance: files.attendance.map((f) => f.name),
     },
     dates: [...new Set(snapshot.criteria.map((c) => c.date))].sort(),
     warnings,
     deliveryStats,
     rosterStats,
+    departureStats,
     dedupedRemoved: deduped.removed,
     droppedLegacy,
   };

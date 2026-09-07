@@ -9,6 +9,7 @@ import type {
   Shop,
   ShowcaseRow,
 } from './types';
+import type { DepartureRow } from './parsers/departure';
 import type { LegacyPersonStatus } from './parsers/legacy-vitriny';
 import { reconcileRegionHistory } from './roster-history';
 import { readShowcase, showcaseRowsFromStore, showcaseVersion } from './showcase-store';
@@ -44,6 +45,11 @@ export interface Snapshot {
   runs: ImportRunSummary[];
   /** Кто из РМ отвечал за какую лавку когда — см. roster-history.ts. */
   regionHistory: RegionPeriod[];
+  /**
+   * Выезды с РЦ. Сетевой показатель: лавок в выгрузке нет, поэтому в статусы
+   * лавок они не входят — см. parsers/departure.ts.
+   */
+  departures: DepartureRow[];
 }
 
 export interface ImportRunSummary {
@@ -194,10 +200,20 @@ function readFromJson(): Snapshot {
     const raw = JSON.parse(
       fs.readFileSync(/* turbopackIgnore: true */ GENERATED_PATH, 'utf8'),
     ) as Snapshot;
-    return { ...raw, source: 'json', regionHistory: raw.regionHistory ?? [] };
+    return {
+      ...raw,
+      source: 'json',
+      regionHistory: raw.regionHistory ?? [],
+      departures: raw.departures ?? [],
+    };
   } catch {
     const raw = bundledSnapshot as unknown as Snapshot;
-    return { ...raw, source: 'json', regionHistory: raw.regionHistory ?? [] };
+    return {
+      ...raw,
+      source: 'json',
+      regionHistory: raw.regionHistory ?? [],
+      departures: raw.departures ?? [],
+    };
   }
 }
 
@@ -319,5 +335,6 @@ async function readFromSqlite(): Promise<Snapshot> {
     // сборке снимка (snapshot-build.ts). withRegionHistory достроит историю
     // из базы ручных данных там, где она есть.
     regionHistory: [],
+    departures: [],
   };
 }

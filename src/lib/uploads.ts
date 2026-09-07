@@ -1,7 +1,8 @@
 import * as XLSX from 'xlsx';
-import { detectFixtureKind, SUPPORTED, type FixtureKind } from './fixtures';
+import { detectFixtureKind, peekGrid, SUPPORTED, type FixtureKind } from './fixtures';
 import { parseAttendanceBuffer, type ParseWarning } from './parsers/attendance';
 import { parseDeliveryTimes } from './parsers/delivery';
+import { parseDepartures } from './parsers/departure';
 import { parseLegacyVitriny } from './parsers/legacy-vitriny';
 import { parseRoster } from './parsers/roster';
 import { plural } from './plural';
@@ -99,6 +100,14 @@ export function canonicalFixtureName(
   if (kind === 'legacy') return `vitriny.${ext}`;
   if (kind === 'delivery') return `vremya-postavki.${ext}`;
   if (kind === 'roster') return `spravochnik-lavok.${ext}`;
+  if (kind === 'departure') {
+    const sorted = [...dates].sort();
+    const span =
+      sorted.length > 1 && sorted[0] !== sorted[sorted.length - 1]
+        ? `${sorted[0]}_${sorted[sorted.length - 1]}`
+        : (sorted[0] ?? 'bez-daty');
+    return `${span}_vyezd-rc.${ext}`;
+  }
 
   const sorted = [...dates].sort();
   const span =
@@ -146,14 +155,77 @@ export function inspectUpload(
   }
 
   try {
-    const kind = detectFixtureKind(sheetNames);
+    // Выгрузка по РЦ по именам листов неотличима от отметок — смотрим содержимое.
+    const byName = detectFixtureKind(sheetNames);
+    const kind = byName === 'attendance' ? detectFixtureKind(sheetNames, peekGrid(buffer)) : byName;
+
     if (kind === 'legacy') return inspectLegacy(displayName, buffer, config);
     if (kind === 'delivery') return inspectDelivery(displayName, buffer);
     if (kind === 'roster') return inspectRoster(displayName, buffer);
+    if (kind === 'departure') return inspectDeparture(displayName, buffer, config);
     return inspectAttendance(displayName, buffer, config);
   } catch (e) {
     return reject(`Разбор не удался: ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+
+/**
+ * Выгрузка по распределительному центру: во сколько водители выехали со склада.
+ *
+ * Лавок в ней нет, поэтому в панели честно пишем, что это сетевой показатель,
+ * а не оценка конкретных лавок, — иначе человек ждал бы, что после загрузки
+ * поменяются цифры по водителю у лавок, а они не поменяются.
+ */
+function inspectDeparture(name: string, buffer: Buffer, config: ThresholdConfig): InspectResult {
+  const parsed = parseDepartures(buffer);
+
+  if (parsed.rows.length === 0) {
+    return {
+      ok: false,
+      originalName: name,
+      error:
+        'Похоже на выгрузку по РЦ, но ни одной строки с сотрудником и отметками в ней нет.',
+    };
+  }
+
+  const withDeparture = parsed.rows.filter((r) => r.departureMinutes != null).length;
+  const people = new Set(parsed.rows.map((r) => r.employeeName)).size;
+  const missing = parsed.rows.length - withDeparture;
+
+  const notes: string[] = [
+    'Выезд с РЦ — сетевой показатель: лавок в этой выгрузке нет, поэтому статусы ' +
+      'по водителю у лавок она не меняет.',
+  ];
+  if (missing > 0) {
+    notes.push(
+      `${missing} ${plural(missing, 'строка', 'строки', 'строк')} без ухода — выезд по ним неизвестен.`,
+    );
+  }
+
+  const rule = config.rules.driverDeparture;
+  if (rule) {
+    notes.push(`Пороги выезда: 🟢 до ${rule.greenUntil} · 🟡 до ${rule.yellowUntil} · дальше 🔴.`);
+  }
+
+  return {
+    ok: true,
+    file: {
+      originalName: name,
+      kind: 'departure',
+      fileName: canonicalFixtureName('departure', parsed.dates, name),
+      summary:
+        `Выезд с ${parsed.units.join(', ') || 'РЦ'} · ${describeDates(parsed.dates)} · ` +
+        `${people} ${plural(people, 'водитель', 'водителя', 'водителей')}, ` +
+        `${withDeparture} ${plural(withDeparture, 'выезд', 'выезда', 'выездов')}`,
+      dates: parsed.dates,
+      rows: parsed.rows.length,
+      shops: 0,
+      unknownRoles: [],
+      showcase: [],
+      notes,
+      warnings: parsed.warnings,
+    },
+  };
 }
 
 function inspectAttendance(name: string, buffer: Buffer, config: ThresholdConfig): InspectResult {

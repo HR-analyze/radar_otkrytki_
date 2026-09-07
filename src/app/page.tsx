@@ -4,6 +4,7 @@ import { resolveParams } from '@/lib/params';
 import {
   antiTop,
   bestShops,
+  departureSummary,
   lastRun,
   listRegions,
   shopTotals,
@@ -14,6 +15,7 @@ import {
 import { isWritable } from '@/lib/snapshot';
 import { shortDate } from '@/lib/time';
 import { Filters } from '@/components/Filters';
+import { DepartureBlock } from '@/components/DepartureBlock';
 import { StatusBadge, StatusBar } from '@/components/Status';
 import { RefreshButton } from '@/components/RefreshButton';
 import { CRITERION_ORDER } from '@/lib/types';
@@ -31,6 +33,7 @@ export default async function DashboardPage({
   const config = loadConfig();
   const singleDay = p.from === p.to;
 
+  const departures = await departureSummary(p.from, p.to);
   const [regions, summary, totals, top, best, weak, fill, runAttendance, runShowcase] =
     await Promise.all([
       listRegions(p.from, p.to),
@@ -223,6 +226,16 @@ export default async function DashboardPage({
         </section>
 
       </div>
+
+      {/* Выезд с РЦ — сетевой показатель, поэтому отдельным блоком, а не среди
+          критериев лавок: к лавкам эта выгрузка не привязана. */}
+      {departures && config.rules.driverDeparture && (
+        <DepartureBlock
+          data={departures}
+          greenUntil={config.rules.driverDeparture.greenUntil}
+          yellowUntil={config.rules.driverDeparture.yellowUntil}
+        />
+      )}
 
       {/* --- Где западает --- */}
       <section className="surface p-4">

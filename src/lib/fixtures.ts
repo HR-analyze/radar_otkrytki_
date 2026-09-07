@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as XLSX from 'xlsx';
+import { looksLikeDeparture } from './parsers/departure';
 
 /**
  * Чтение папки с выгрузками.
@@ -22,20 +23,44 @@ const ROSTER_SHEET = 'Лавки БК';
 export const SUPPORTED = /\.(xls|xlsx)$/i;
 
 /** Что за файл нам дали. Кнопка загрузки опознаёт файл этими же правилами. */
-export type FixtureKind = 'legacy' | 'delivery' | 'roster' | 'attendance';
+export type FixtureKind = 'legacy' | 'delivery' | 'roster' | 'departure' | 'attendance';
+
+/** Сколько строк читать для опознания: заголовок плюс запас на «шапку». */
+const PEEK_ROWS = 30;
 
 /**
- * Тип файла определяется по именам листов — единственное место, где это
- * решается. Кнопка «Загрузить» на дашборде обязана опознавать файл так же,
- * как сборка снимка, иначе принятый файл потом не попадёт в нужную ветку.
+ * Тип файла — единственное место, где это решается. Кнопка «Загрузить» на
+ * дашборде обязана опознавать файл так же, как сборка снимка, иначе принятый
+ * файл потом не попадёт в нужную ветку.
+ *
+ * Легаси-книга, журнал отгрузок и справочник различаются по именам листов.
+ * Выгрузка по РЦ — нет: лист называется «Лист_1», как у обычных отметок, и
+ * отличается она только содержимым «Подразделения» (склад вместо лавки).
+ * Поэтому для неё нужен `grid` — первые строки файла.
  */
-export function detectFixtureKind(sheetNames: readonly string[]): FixtureKind {
+export function detectFixtureKind(
+  sheetNames: readonly string[],
+  grid?: readonly unknown[][],
+): FixtureKind {
   // Имена листов в реальных файлах бывают с хвостовым пробелом («Лавки БК »).
   const names = sheetNames.map((n) => n.trim());
   if (names.includes(LEGACY_SHEET)) return 'legacy';
   if (names.includes(DELIVERY_SHEET)) return 'delivery';
   if (names.includes(ROSTER_SHEET)) return 'roster';
+  if (grid && looksLikeDeparture(grid)) return 'departure';
   return 'attendance';
+}
+
+/** Первые строки первого листа — для опознания по содержимому. */
+export function peekGrid(buffer: Buffer): unknown[][] {
+  try {
+    const wb = XLSX.read(buffer, { type: 'buffer', sheetRows: PEEK_ROWS, raw: false });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    if (!sheet) return [];
+    return XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null, raw: false });
+  } catch {
+    return [];
+  }
 }
 
 export interface FixtureFile {
@@ -50,6 +75,8 @@ export interface FixtureSet {
   delivery: FixtureFile | null;
   /** Справочник лавок «Лавки БК» — кто из РМ за какую лавку отвечает. */
   roster: FixtureFile | null;
+  /** Выгрузка по РЦ: во сколько водители выехали со склада. */
+  departure: FixtureFile | null;
   /** Выгрузки отметок, отсортированные по имени. */
   attendance: FixtureFile[];
   warnings: string[];
@@ -78,6 +105,7 @@ export function readFixtures(dir: string): FixtureSet {
       legacy: null,
       delivery: null,
       roster: null,
+      departure: null,
       attendance: [],
       warnings: [`Папки ${dir} нет`],
     };
@@ -91,6 +119,7 @@ export function readFixtures(dir: string): FixtureSet {
   let legacy: FixtureFile | null = null;
   let delivery: FixtureFile | null = null;
   let roster: FixtureFile | null = null;
+  let departure: FixtureFile | null = null;
   const attendance: FixtureFile[] = [];
   const warnings: string[] = [];
 
@@ -106,7 +135,10 @@ export function readFixtures(dir: string): FixtureSet {
       continue;
     }
 
-    const kind = detectFixtureKind(sheets);
+    // Содержимое читаем только когда по листам файл неотличим от отметок:
+    // выгрузка по РЦ выглядит так же и различается лишь «Подразделением».
+    const byName = detectFixtureKind(sheets);
+    const kind = byName === 'attendance' ? detectFixtureKind(sheets, peekGrid(buffer)) : byName;
     if (kind === 'legacy') {
       if (legacy) {
         warnings.push(`${name}: вторая легаси-книга, используется ${legacy.name}`);
@@ -125,14 +157,20 @@ export function readFixtures(dir: string): FixtureSet {
         continue;
       }
       roster = { name, buffer };
+    } else if (kind === 'departure') {
+      if (departure) {
+        warnings.push(`${name}: вторая выгрузка по РЦ, используется ${departure.name}`);
+        continue;
+      }
+      departure = { name, buffer };
     } else {
       attendance.push({ name, buffer });
     }
   }
 
-  if (!legacy && !delivery && !roster && attendance.length === 0) {
+  if (!legacy && !delivery && !roster && !departure && attendance.length === 0) {
     warnings.push(`В ${dir} нет ни одного файла .xls/.xlsx`);
   }
 
-  return { legacy, delivery, roster, attendance, warnings };
+  return { legacy, delivery, roster, departure, attendance, warnings };
 }

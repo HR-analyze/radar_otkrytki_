@@ -34,6 +34,7 @@ function main(): void {
     `  даты: ${r.dates.length ? `${r.dates[0]} — ${r.dates[r.dates.length - 1]} (${r.dates.length})` : 'нет'}`,
   );
   if (r.rosterStats) console.log(r.rosterStats);
+  if (r.departureStats) console.log(r.departureStats);
   if (r.deliveryStats) console.log(r.deliveryStats);
   if (r.dedupedRemoved > 0) {
     console.log(`  повторных отметок свёрнуто: ${r.dedupedRemoved}`);

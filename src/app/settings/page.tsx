@@ -151,11 +151,11 @@ export default async function SettingsPage() {
           />
           {config.rules.driverDeparture && (
             <Rule
-              title="Выезд с ФК Свобода вместо приезда в лавку"
+              title="Выезд с РЦ вместо приезда в лавку"
               value={
                 config.rules.driverDeparture.enabled
                   ? `🟢 до ${config.rules.driverDeparture.greenUntil} · 🟡 до ${config.rules.driverDeparture.yellowUntil}`
-                  : 'согласовано, ждёт выгрузку с ФК'
+                  : `выезды показаны сетевым блоком (🟢 до ${config.rules.driverDeparture.greenUntil} · 🟡 до ${config.rules.driverDeparture.yellowUntil}); замена критерия у лавок ждёт маршрутный лист`
               }
               note={config.rules.driverDeparture.note}
             />

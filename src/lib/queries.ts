@@ -10,6 +10,7 @@ import {
   type ThresholdConfig,
 } from './types';
 import { aggregateStatuses } from './status';
+import { parseClock } from './time';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
 
 /**
@@ -763,6 +764,92 @@ export async function showcaseStats(
     min: min.fill,
     minShop: byCode.get(min.shopCode)?.name ?? min.shopCode,
     filled: Math.round(rows.length / days),
+  };
+}
+
+/* ----------------------------- выезд с РЦ -------------------------------- */
+
+export interface DepartureDay {
+  date: string;
+  green: number;
+  yellow: number;
+  red: number;
+  /** Строк без отметки ухода: выезд по ним неизвестен. */
+  unknown: number;
+  /** Медиана выезда, минуты от полуночи. null — выездов за день нет. */
+  median: number | null;
+}
+
+export interface DepartureSummary {
+  /** Склады из выгрузки: «РЦ Свобода». */
+  units: string[];
+  days: DepartureDay[];
+  /** Кто выехал позже жёлтой границы — поимённо, свежее сверху. */
+  late: { date: string; employeeName: string; minutes: number }[];
+  green: number;
+  yellow: number;
+  red: number;
+  unknown: number;
+}
+
+/**
+ * Выезд с РЦ за период — сетевой показатель.
+ *
+ * К лавкам он не привязан: в выгрузке их нет, а водители РЦ и водители,
+ * отмечающиеся в лавках, — почти разные люди (см. parsers/departure.ts).
+ * Поэтому это отдельный блок, а не критерий лавки.
+ */
+export async function departureSummary(from: string, to: string): Promise<DepartureSummary | null> {
+  const snap = await loadSnapshot();
+  const rows = snap.departures.filter((d) => d.date >= from && d.date <= to);
+  if (rows.length === 0) return null;
+
+  const config = loadConfig();
+  const rule = config.rules.driverDeparture;
+  if (!rule) return null;
+
+  const green = parseClock(rule.greenUntil);
+  const yellow = parseClock(rule.yellowUntil);
+
+  const byDate = new Map<string, DepartureDay & { times: number[] }>();
+  const late: DepartureSummary['late'] = [];
+
+  for (const r of rows) {
+    let day = byDate.get(r.date);
+    if (!day) {
+      day = { date: r.date, green: 0, yellow: 0, red: 0, unknown: 0, median: null, times: [] };
+      byDate.set(r.date, day);
+    }
+
+    if (r.departureMinutes == null) {
+      day.unknown++;
+      continue;
+    }
+
+    day.times.push(r.departureMinutes);
+    if (r.departureMinutes <= green) day.green++;
+    else if (r.departureMinutes <= yellow) day.yellow++;
+    else {
+      day.red++;
+      late.push({ date: r.date, employeeName: r.employeeName, minutes: r.departureMinutes });
+    }
+  }
+
+  const days = [...byDate.values()]
+    .map(({ times, ...day }) => ({
+      ...day,
+      median: times.length ? [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)] : null,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    units: [...new Set(rows.map((r) => r.unit))].sort(),
+    days,
+    late: late.sort((a, b) => b.date.localeCompare(a.date) || b.minutes - a.minutes),
+    green: days.reduce((n, d) => n + d.green, 0),
+    yellow: days.reduce((n, d) => n + d.yellow, 0),
+    red: days.reduce((n, d) => n + d.red, 0),
+    unknown: days.reduce((n, d) => n + d.unknown, 0),
   };
 }
 
