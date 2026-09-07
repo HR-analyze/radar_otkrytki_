@@ -786,6 +786,37 @@ export interface DepartureDay {
   status: Status;
 }
 
+/** Один выезд: то, что стоит в клетке детализации. */
+export interface DepartureTrip {
+  /** Минуты от полуночи. null — приход на РЦ есть, а ухода нет. */
+  minutes: number | null;
+  /** Время на фабрике, минуты. null — не из чего считать. */
+  stay: number | null;
+  /** Зона выезда; no_data — когда ухода нет. */
+  status: Status;
+  /** Балл за этот выезд: 3 / 2 / 1. null — выезда нет. */
+  score: number | null;
+}
+
+/** Строка детализации: кто какой балл получил. */
+export interface DepartureDriver {
+  employeeName: string;
+  /** Оценённых выездов — тех, где отметка ухода есть. */
+  trips: number;
+  green: number;
+  yellow: number;
+  red: number;
+  /** Строк без ухода: выезд по ним неизвестен. */
+  unknown: number;
+  /** Средний балл водителя за период. */
+  score: number | null;
+  status: Status;
+  /** Медиана времени на фабрике по его выездам. */
+  medianStay: number | null;
+  /** Выезды по дням. Нет ключа — в этот день не отмечался. */
+  days: Record<string, DepartureTrip[]>;
+}
+
 export interface DepartureSummary {
   /** Склады из выгрузки: «РЦ Свобода». */
   units: string[];
@@ -802,6 +833,12 @@ export interface DepartureSummary {
   score: number | null;
   /** Зона по этому баллу. */
   status: Status;
+  /**
+   * Детализация: кто какой балл получил, худшие сверху. Считается в том же
+   * проходе, что и сводка, — отдельный запрос ради раскрытого блока был бы
+   * вторым чтением тех же строк.
+   */
+  drivers: DepartureDriver[];
 }
 
 /**
@@ -830,6 +867,17 @@ export async function departureSummary(from: string, to: string): Promise<Depart
       ? r.departureMinutes - r.arrivalMinutes
       : null;
 
+  /**
+   * Зона и балл одного выезда. Границы включительные: выехавший ровно в
+   * 05:30 — уже красный, поэтому yellowUntil в конфиге 05:29, а не 05:30.
+   */
+  const zoneOf = (minutes: number): { status: 'green' | 'yellow' | 'red'; score: number } =>
+    minutes <= green
+      ? { status: 'green', score: zones.green }
+      : minutes <= yellow
+        ? { status: 'yellow', score: zones.yellow }
+        : { status: 'red', score: zones.red };
+
   // Статус считается уже по собранному баллу, поэтому в накопителе его нет.
   type Bucket = Omit<DepartureDay, 'status'> & {
     times: number[];
@@ -838,6 +886,14 @@ export async function departureSummary(from: string, to: string): Promise<Depart
   };
   const byDate = new Map<string, Bucket>();
   const late: DepartureSummary['late'] = [];
+
+  // Детализация по людям. Один водитель может выехать дважды за день (в
+  // выгрузке такое есть), поэтому в клетке лежит список выездов, а не один.
+  type DriverBucket = Omit<DepartureDriver, 'score' | 'status' | 'medianStay'> & {
+    stays: number[];
+    scores: number[];
+  };
+  const byDriver = new Map<string, DriverBucket>();
 
   for (const r of rows) {
     let day = byDate.get(r.date);
@@ -858,26 +914,47 @@ export async function departureSummary(from: string, to: string): Promise<Depart
       byDate.set(r.date, day);
     }
 
+    let driver = byDriver.get(r.employeeName);
+    if (!driver) {
+      driver = {
+        employeeName: r.employeeName,
+        trips: 0,
+        green: 0,
+        yellow: 0,
+        red: 0,
+        unknown: 0,
+        days: {},
+        stays: [],
+        scores: [],
+      };
+      byDriver.set(r.employeeName, driver);
+    }
+    const cell = (driver.days[r.date] ??= []);
+
     const stay = stayOf(r);
-    if (stay != null) day.stays.push(stay);
+    if (stay != null) {
+      day.stays.push(stay);
+      driver.stays.push(stay);
+    }
 
     if (r.departureMinutes == null) {
       day.unknown++;
+      driver.unknown++;
+      cell.push({ minutes: null, stay, status: 'no_data', score: null });
       continue;
     }
 
     day.times.push(r.departureMinutes);
 
-    // Границы включительные: выехавший ровно в 05:30 — уже красный.
-    if (r.departureMinutes <= green) {
-      day.green++;
-      day.scores.push(zones.green);
-    } else if (r.departureMinutes <= yellow) {
-      day.yellow++;
-      day.scores.push(zones.yellow);
-    } else {
-      day.red++;
-      day.scores.push(zones.red);
+    const zone = zoneOf(r.departureMinutes);
+    day[zone.status]++;
+    day.scores.push(zone.score);
+    driver.trips++;
+    driver[zone.status]++;
+    driver.scores.push(zone.score);
+    cell.push({ minutes: r.departureMinutes, stay, status: zone.status, score: zone.score });
+
+    if (zone.status === 'red') {
       late.push({ date: r.date, employeeName: r.employeeName, minutes: r.departureMinutes, stay });
     }
   }
@@ -900,6 +977,25 @@ export async function departureSummary(from: string, to: string): Promise<Depart
     })
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  // Худшие сверху: детализацию открывают, чтобы найти, с кем разговаривать.
+  // Кто ни разу не выехал (только приход), уходит в конец — балла у него нет.
+  const drivers = [...byDriver.values()]
+    .map(({ stays, scores, ...d }) => {
+      const driverScore = mean(scores);
+      return {
+        ...d,
+        score: driverScore,
+        status: statusFromScore(driverScore, config),
+        medianStay: median(stays),
+      };
+    })
+    .sort(
+      (a, b) =>
+        (a.score ?? Infinity) - (b.score ?? Infinity) ||
+        b.red - a.red ||
+        a.employeeName.localeCompare(b.employeeName, 'ru'),
+    );
+
   const allStays = rows.map(stayOf).filter((x): x is number => x != null);
   const allScores = [...byDate.values()].flatMap((d) => d.scores);
   const score = mean(allScores);
@@ -915,6 +1011,7 @@ export async function departureSummary(from: string, to: string): Promise<Depart
     medianStay: median(allStays),
     score,
     status: statusFromScore(score, config),
+    drivers,
   };
 }
 

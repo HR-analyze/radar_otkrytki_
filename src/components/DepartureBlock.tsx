@@ -1,7 +1,7 @@
-import type { DepartureSummary } from '@/lib/queries';
+import type { DepartureDriver, DepartureSummary, DepartureTrip } from '@/lib/queries';
 import { formatClock, formatDuration, shortDate } from '@/lib/time';
 import { plural } from '@/lib/plural';
-import { StatusBadge } from '@/components/Status';
+import { StatusBadge, STATUS_TEXT } from '@/components/Status';
 
 /**
  * Выезд с РЦ — сетевой показатель.
@@ -101,6 +101,8 @@ export function DepartureBlock({
         «Выезд» и «на фабрике» — медианы за день. Время на фабрике справочное, в балл не входит.
       </p>
 
+      <DriverDetails data={data} />
+
       {data.late.length > 0 && (
         <>
           <h3 className="mt-4 text-xs font-semibold">
@@ -129,6 +131,130 @@ export function DepartureBlock({
       )}
     </section>
   );
+}
+
+/**
+ * Детализация по водителям — кто какой балл получил.
+ *
+ * Свёрнута в <details>: на сводке нужен итог, а разбор «с кем разговаривать»
+ * открывают отдельно. Без JS — раскрытие делает сам браузер, страница
+ * серверная.
+ */
+function DriverDetails({ data }: { data: DepartureSummary }) {
+  const dates = data.days.map((d) => d.date);
+
+  return (
+    <details className="mt-3 group">
+      <summary className="cursor-pointer list-none text-xs font-medium select-none">
+        <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 hover:underline"
+              style={{ background: 'var(--neutral-soft)' }}>
+          <span className="inline-block transition-transform group-open:rotate-90">▸</span>
+          Кто какой балл получил — {data.drivers.length}{' '}
+          {plural(data.drivers.length, 'водитель', 'водителя', 'водителей')}
+        </span>
+      </summary>
+
+      <div className="radar-scroll mt-2">
+        <table className="radar-table w-full text-sm">
+          <thead>
+            <tr>
+              <th className="radar-sticky px-3 py-2 text-left text-xs font-medium muted">
+                Водитель
+              </th>
+              <th className="px-2 py-2 text-right text-xs font-medium muted">Балл</th>
+              <th className="px-2 py-2 text-right text-xs font-medium muted">Выездов</th>
+              <th className="hidden px-2 py-2 text-right text-xs font-medium muted sm:table-cell">
+                На фабрике
+              </th>
+              {dates.map((d) => (
+                <th key={d} className="px-1 py-2 text-center text-xs font-medium muted">
+                  {shortDate(d)}
+                </th>
+              ))}
+              <th className="w-full" aria-hidden />
+            </tr>
+          </thead>
+          <tbody>
+            {data.drivers.map((dr) => (
+              <tr key={dr.employeeName}>
+                <td className="radar-sticky px-3 py-1 whitespace-nowrap" title={dr.employeeName}>
+                  {dr.employeeName}
+                </td>
+                <td className="px-2 py-1 text-right whitespace-nowrap">
+                  {dr.score == null ? (
+                    <span className="muted">—</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 tabular-nums">
+                      <span className={`dot-${dr.status} inline-block size-2 rounded-full`} />
+                      {dr.score.toFixed(2).replace('.', ',')}
+                    </span>
+                  )}
+                </td>
+                <td className="px-2 py-1 text-right text-xs whitespace-nowrap tabular-nums muted">
+                  {dr.trips}
+                  {dr.unknown > 0 && (
+                    <span title={`${dr.unknown} без отметки об уходе`}> +{dr.unknown}?</span>
+                  )}
+                </td>
+                <td className="hidden px-2 py-1 text-right text-xs whitespace-nowrap tabular-nums muted sm:table-cell">
+                  {formatDuration(dr.medianStay)}
+                </td>
+                {dates.map((d) => (
+                  <TripCell key={d} name={dr.employeeName} date={d} trips={dr.days[d]} />
+                ))}
+                <td aria-hidden />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1.5 text-xs muted">
+        Сверху — худший балл. «Выездов» — сколько раз выехал; «+N?» — строки, где есть приход на
+        РЦ, но нет ухода: балл по ним не ставится. В клетке — время выезда за этот день.
+      </p>
+    </details>
+  );
+}
+
+/** Клетка дня: обычно один выезд, но иногда водитель выезжает дважды. */
+function TripCell({
+  name,
+  date,
+  trips,
+}: {
+  name: string;
+  date: string;
+  trips: DepartureTrip[] | undefined;
+}) {
+  if (!trips || trips.length === 0) return <td className="px-1 py-0.5" />;
+
+  return (
+    <td className="px-1 py-0.5">
+      <span className="flex flex-col items-center gap-0.5">
+        {trips.map((t, i) => (
+          <span
+            key={i}
+            className={`st-${t.status} block w-full rounded px-1 py-0.5 text-center text-[11px] font-semibold tabular-nums whitespace-nowrap`}
+            title={tripTitle(name, date, t)}
+          >
+            {t.minutes == null ? '·' : formatClock(t.minutes)}
+          </span>
+        ))}
+      </span>
+    </td>
+  );
+}
+
+function tripTitle(name: string, date: string, t: DepartureTrip): string {
+  const parts = [`${name} · ${shortDate(date)}`];
+  parts.push(
+    t.minutes == null
+      ? 'приход на РЦ есть, отметки об уходе нет'
+      : `выезд ${formatClock(t.minutes)} · ${STATUS_TEXT[t.status]} · ${t.score} ` +
+        `${plural(t.score ?? 0, 'балл', 'балла', 'баллов')}`,
+  );
+  if (t.stay != null) parts.push(`на фабрике ${formatDuration(t.stay)}`);
+  return parts.join(' · ');
 }
 
 function Count({

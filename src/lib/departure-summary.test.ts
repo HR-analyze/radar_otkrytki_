@@ -115,6 +115,65 @@ test('время на фабрике не считается, когда ухо�
   assert.equal(s.late.length, 0);
 });
 
+test('детализация: у каждого водителя свой балл, худшие сверху', async () => {
+  writeSnapshot([
+    row('2026-09-10', 'Поздний П.П.', '05:00', '06:00'), // 1 балл
+    row('2026-09-10', 'Ранний Р.Р.', '04:00', '04:30'), // 3 балла
+    row('2026-09-11', 'Ранний Р.Р.', '04:00', '04:40'), // 3 балла
+    row('2026-09-11', 'Средний С.С.', '04:00', '05:10'), // 2 балла
+    row('2026-09-10', 'Средний С.С.', '04:00', '04:20'), // 3 балла → в среднем 2,5
+  ]);
+
+  const { departureSummary } = await import('./queries');
+  const s = (await departureSummary('2026-09-10', '2026-09-11'))!;
+
+  assert.deepEqual(
+    s.drivers.map((d) => [d.employeeName, d.score, d.trips]),
+    [
+      ['Поздний П.П.', 1, 1],
+      ['Средний С.С.', 2.5, 2],
+      ['Ранний Р.Р.', 3, 2],
+    ],
+    'сверху тот, с кем нужно разговаривать',
+  );
+
+  const late = s.drivers[0];
+  assert.equal(late.red, 1);
+  assert.equal(late.status, 'red');
+  assert.deepEqual(late.days['2026-09-10'], [
+    { minutes: 360, stay: 60, status: 'red', score: 1 },
+  ]);
+  assert.equal(late.days['2026-09-11'], undefined, 'в этот день он не выезжал');
+});
+
+test('детализация: два выезда за день не затирают друг друга', async () => {
+  // Реальный случай из выгрузки: водитель уехал, вернулся и уехал снова.
+  writeSnapshot([
+    row('2026-09-12', 'Дважды Д.Д.', null, '04:02'),
+    row('2026-09-12', 'Дважды Д.Д.', '04:03', '04:48'),
+    // Только приход: балл по такой строке не ставится.
+    row('2026-09-12', 'Без Ухода Б.У.', '04:05', null),
+  ]);
+
+  const { departureSummary } = await import('./queries');
+  const s = (await departureSummary('2026-09-12', '2026-09-12'))!;
+
+  const twice = s.drivers.find((d) => d.employeeName === 'Дважды Д.Д.')!;
+  assert.equal(twice.trips, 2, 'оба выезда считаются');
+  assert.equal(twice.days['2026-09-12'].length, 2, 'и оба видны в клетке дня');
+  assert.deepEqual(
+    twice.days['2026-09-12'].map((t) => t.minutes),
+    [242, 288],
+  );
+
+  const noExit = s.drivers.find((d) => d.employeeName === 'Без Ухода Б.У.')!;
+  assert.equal(noExit.trips, 0);
+  assert.equal(noExit.unknown, 1);
+  assert.equal(noExit.score, null, 'балла нет — уезжал ли он, выгрузка не говорит');
+  assert.equal(noExit.status, 'no_data');
+  assert.equal(s.drivers[s.drivers.length - 1], noExit, 'и он уходит в конец списка');
+});
+
 test('период без выгрузки по РЦ — блока нет', async () => {
   writeSnapshot([row('2026-09-05', 'Ранний Р.Р.', '04:00', '04:30')]);
 
