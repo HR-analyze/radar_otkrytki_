@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { loadConfig } from '@/lib/config';
 import { listDates, listShops } from '@/lib/queries';
 import { invalidateSnapshot } from '@/lib/snapshot';
-import { statusForFill } from '@/lib/status';
+import { scheduleFor, statusForFill } from '@/lib/status';
 import { checkUploadToken } from '@/lib/upload-store';
 import {
   canEditShowcase,
@@ -54,6 +54,10 @@ export async function GET(req: Request) {
       code: s.code,
       name: s.name,
       region: s.region,
+      // Особый график лавки (М71, М72 — с 10:00). Наполнение витрины от часа
+      // открытия не зависит, но человек, который проходит день по списку,
+      // должен видеть, что лавка в 08:00 ещё закрыта, и не искать у неё нули.
+      opensAt: scheduleFor(config, s.code)?.opensAt ?? null,
       percent: values[s.code] == null ? null : Math.round(values[s.code] * 100),
       status: statusForFill(values[s.code] ?? null, config),
       note: notes[s.code] ?? '',
