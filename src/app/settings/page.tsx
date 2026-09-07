@@ -2,6 +2,7 @@ import { loadConfig, configPath } from '@/lib/config';
 import { isSnapshotStale, isWritable } from '@/lib/snapshot';
 import { listSchedules, scheduleShift } from '@/lib/status';
 import { CRITERION_ORDER, type ThresholdConfig } from '@/lib/types';
+import { plural } from '@/lib/plural';
 
 export const dynamic = 'force-dynamic';
 
@@ -154,8 +155,11 @@ export default async function SettingsPage() {
               title="Выезд с РЦ вместо приезда в лавку"
               value={
                 config.rules.driverDeparture.enabled
-                  ? `🟢 до ${config.rules.driverDeparture.greenUntil} · 🟡 до ${config.rules.driverDeparture.yellowUntil}`
-                  : `выезды показаны сетевым блоком (🟢 до ${config.rules.driverDeparture.greenUntil} · 🟡 до ${config.rules.driverDeparture.yellowUntil}); замена критерия у лавок ждёт маршрутный лист`
+                  ? departureLine(config.rules.driverDeparture, config.rules.scoreZones)
+                  : `выезды и время на фабрике показаны сетевым блоком (${departureLine(
+                      config.rules.driverDeparture,
+                      config.rules.scoreZones,
+                    )}); замена критерия у лавок ждёт маршрутный лист`
               }
               note={config.rules.driverDeparture.note}
             />
@@ -242,6 +246,22 @@ function num(v: number): string {
 }
 
 /** «🟢 3 / 🟡 2 / 🔴 1 → 🔴 0–1,9 · 🟡 1,91–2,6 · 🟢 2,61–3» */
+/**
+ * Пороги выезда с РЦ вместе с баллами: заказчик задал их одним правилом
+ * («до 05:00 — 3 балла»), поэтому и в «Порогах» они стоят рядом, а не
+ * отсылают к общей шкале баллов.
+ */
+function departureLine(
+  rule: NonNullable<ThresholdConfig['rules']['driverDeparture']>,
+  zones: ThresholdConfig['rules']['scoreZones'],
+): string {
+  return (
+    `🟢 до ${rule.greenUntil} — ${zones.green} ` +
+    `${plural(zones.green, 'балл', 'балла', 'баллов')} · ` +
+    `🟡 до ${rule.yellowUntil} — ${zones.yellow} · 🔴 позже — ${zones.red}`
+  );
+}
+
 function zonesLine(z: ThresholdConfig['rules']['scoreZones']): string {
   const yellowFrom = nextStep(z.redUntil, z.precision);
   const greenFrom = nextStep(z.yellowUntil, z.precision);

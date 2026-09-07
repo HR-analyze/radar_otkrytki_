@@ -234,6 +234,7 @@ export default async function DashboardPage({
           data={departures}
           greenUntil={config.rules.driverDeparture.greenUntil}
           yellowUntil={config.rules.driverDeparture.yellowUntil}
+          zones={config.rules.scoreZones}
         />
       )}
 

@@ -19,3 +19,7 @@ tsconfig.tsbuildinfo
 .vercel
 .DS_Store
 *.log
+
+# Инструкции для ИИ-агентов: next dev дописывает эти файлы сам при запуске.
+AGENTS.md
+CLAUDE.md

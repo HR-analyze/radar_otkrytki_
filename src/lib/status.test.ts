@@ -19,7 +19,7 @@ import { dedupeAttendance, rollUpAttendance } from './rollup';
 import type { AttendanceRow, Status } from './types';
 import { parseShop, normalizeCode } from './shops';
 import { CRITERION_ORDER } from './types';
-import { parseClock, parseStamp, formatClock, dateRange } from './time';
+import { parseClock, parseStamp, formatClock, formatDuration, dateRange } from './time';
 
 const config = loadConfig();
 const at = (h: number, m: number) => h * 60 + m;
@@ -274,6 +274,15 @@ test('форматирование времени и диапазон дат', (
   assert.deepEqual(dateRange('2026-08-23', '2026-08-25'), [
     '2026-08-23', '2026-08-24', '2026-08-25',
   ]);
+});
+
+test('длительность пишется интервалом, а не временем суток', () => {
+  // «01:51» рядом с временем выезда читалось бы как час ночи.
+  assert.equal(formatDuration(45), '45 мин');
+  assert.equal(formatDuration(111), '1 ч 51 мин');
+  assert.equal(formatDuration(120), '2 ч');
+  assert.equal(formatDuration(0), '0 мин');
+  assert.equal(formatDuration(null), '—');
 });
 
 test('повторные отметки одного человека сворачиваются в самую раннюю', () => {

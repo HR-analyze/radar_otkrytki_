@@ -9,7 +9,7 @@ import {
   type Status,
   type ThresholdConfig,
 } from './types';
-import { aggregateStatuses } from './status';
+import { aggregateStatuses, roundScore, statusFromScore } from './status';
 import { parseClock } from './time';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
 
@@ -778,6 +778,12 @@ export interface DepartureDay {
   unknown: number;
   /** Медиана выезда, минуты от полуночи. null — выездов за день нет. */
   median: number | null;
+  /** Медиана времени на фабрике, минуты. null — не из чего считать. */
+  medianStay: number | null;
+  /** Средний балл за убытие: 🟢 3 · 🟡 2 · 🔴 1. */
+  score: number | null;
+  /** Зона по среднему баллу — по тем же границам, что и у лавок. */
+  status: Status;
 }
 
 export interface DepartureSummary {
@@ -785,11 +791,17 @@ export interface DepartureSummary {
   units: string[];
   days: DepartureDay[];
   /** Кто выехал позже жёлтой границы — поимённо, свежее сверху. */
-  late: { date: string; employeeName: string; minutes: number }[];
+  late: { date: string; employeeName: string; minutes: number; stay: number | null }[];
   green: number;
   yellow: number;
   red: number;
   unknown: number;
+  /** Медиана времени на фабрике за весь период, минуты. */
+  medianStay: number | null;
+  /** Средний балл за убытие по всем выездам периода. */
+  score: number | null;
+  /** Зона по этому баллу. */
+  status: Status;
 }
 
 /**
@@ -810,16 +822,44 @@ export async function departureSummary(from: string, to: string): Promise<Depart
 
   const green = parseClock(rule.greenUntil);
   const yellow = parseClock(rule.yellowUntil);
+  const zones = config.rules.scoreZones;
 
-  const byDate = new Map<string, DepartureDay & { times: number[] }>();
+  /** Время на фабрике: уход минус приход. Обе отметки — одного дня. */
+  const stayOf = (r: { arrivalMinutes: number | null; departureMinutes: number | null }) =>
+    r.arrivalMinutes != null && r.departureMinutes != null && r.departureMinutes >= r.arrivalMinutes
+      ? r.departureMinutes - r.arrivalMinutes
+      : null;
+
+  // Статус считается уже по собранному баллу, поэтому в накопителе его нет.
+  type Bucket = Omit<DepartureDay, 'status'> & {
+    times: number[];
+    stays: number[];
+    scores: number[];
+  };
+  const byDate = new Map<string, Bucket>();
   const late: DepartureSummary['late'] = [];
 
   for (const r of rows) {
     let day = byDate.get(r.date);
     if (!day) {
-      day = { date: r.date, green: 0, yellow: 0, red: 0, unknown: 0, median: null, times: [] };
+      day = {
+        date: r.date,
+        green: 0,
+        yellow: 0,
+        red: 0,
+        unknown: 0,
+        median: null,
+        medianStay: null,
+        score: null,
+        times: [],
+        stays: [],
+        scores: [],
+      };
       byDate.set(r.date, day);
     }
+
+    const stay = stayOf(r);
+    if (stay != null) day.stays.push(stay);
 
     if (r.departureMinutes == null) {
       day.unknown++;
@@ -827,20 +867,42 @@ export async function departureSummary(from: string, to: string): Promise<Depart
     }
 
     day.times.push(r.departureMinutes);
-    if (r.departureMinutes <= green) day.green++;
-    else if (r.departureMinutes <= yellow) day.yellow++;
-    else {
+
+    // Границы включительные: выехавший ровно в 05:30 — уже красный.
+    if (r.departureMinutes <= green) {
+      day.green++;
+      day.scores.push(zones.green);
+    } else if (r.departureMinutes <= yellow) {
+      day.yellow++;
+      day.scores.push(zones.yellow);
+    } else {
       day.red++;
-      late.push({ date: r.date, employeeName: r.employeeName, minutes: r.departureMinutes });
+      day.scores.push(zones.red);
+      late.push({ date: r.date, employeeName: r.employeeName, minutes: r.departureMinutes, stay });
     }
   }
 
+  const median = (xs: readonly number[]): number | null =>
+    xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : null;
+  const mean = (xs: readonly number[]): number | null =>
+    xs.length ? roundScore(xs.reduce((a, b) => a + b, 0) / xs.length, zones.precision) : null;
+
   const days = [...byDate.values()]
-    .map(({ times, ...day }) => ({
-      ...day,
-      median: times.length ? [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)] : null,
-    }))
+    .map(({ times, stays, scores, ...day }) => {
+      const score = mean(scores);
+      return {
+        ...day,
+        median: median(times),
+        medianStay: median(stays),
+        score,
+        status: statusFromScore(score, config),
+      };
+    })
     .sort((a, b) => a.date.localeCompare(b.date));
+
+  const allStays = rows.map(stayOf).filter((x): x is number => x != null);
+  const allScores = [...byDate.values()].flatMap((d) => d.scores);
+  const score = mean(allScores);
 
   return {
     units: [...new Set(rows.map((r) => r.unit))].sort(),
@@ -850,6 +912,9 @@ export async function departureSummary(from: string, to: string): Promise<Depart
     yellow: days.reduce((n, d) => n + d.yellow, 0),
     red: days.reduce((n, d) => n + d.red, 0),
     unknown: days.reduce((n, d) => n + d.unknown, 0),
+    medianStay: median(allStays),
+    score,
+    status: statusFromScore(score, config),
   };
 }
 

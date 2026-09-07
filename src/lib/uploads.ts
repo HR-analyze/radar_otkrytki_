@@ -7,7 +7,7 @@ import { parseLegacyVitriny } from './parsers/legacy-vitriny';
 import { parseRoster } from './parsers/roster';
 import { plural } from './plural';
 import { isIgnoredRole } from './status';
-import { shortDate } from './time';
+import { formatDuration, shortDate } from './time';
 import type { ThresholdConfig } from './types';
 
 /**
@@ -204,7 +204,28 @@ function inspectDeparture(name: string, buffer: Buffer, config: ThresholdConfig)
 
   const rule = config.rules.driverDeparture;
   if (rule) {
-    notes.push(`Пороги выезда: 🟢 до ${rule.greenUntil} · 🟡 до ${rule.yellowUntil} · дальше 🔴.`);
+    const z = config.rules.scoreZones;
+    notes.push(
+      `Баллы за выезд: 🟢 до ${rule.greenUntil} — ${z.green}, ` +
+        `🟡 до ${rule.yellowUntil} — ${z.yellow}, 🔴 позже — ${z.red}.`,
+    );
+  }
+
+  // Время на фабрике — справочное: в балл не входит, но это второе, что
+  // спрашивают по этой выгрузке, поэтому видно уже в предпросмотре.
+  const stays = parsed.rows
+    .map((r) =>
+      r.arrivalMinutes != null && r.departureMinutes != null && r.departureMinutes >= r.arrivalMinutes
+        ? r.departureMinutes - r.arrivalMinutes
+        : null,
+    )
+    .filter((x): x is number => x != null)
+    .sort((a, b) => a - b);
+  if (stays.length > 0) {
+    notes.push(
+      `Время на фабрике (приезд → выезд), медиана ${formatDuration(stays[Math.floor(stays.length / 2)])} ` +
+        `по ${stays.length} ${plural(stays.length, 'выезду', 'выездам', 'выездам')} — справочно.`,
+    );
   }
 
   return {

@@ -15,6 +15,21 @@ export function formatClock(minutes: number | null | undefined): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+/**
+ * Длительность в минутах → "45 мин" | "1 ч 51 мин". Пустое значение → "—".
+ *
+ * Отдельно от formatClock: "01:51" рядом с временем выезда читалось бы как
+ * время суток, а это интервал.
+ */
+export function formatDuration(minutes: number | null | undefined): string {
+  if (minutes == null) return '—';
+  const total = Math.round(minutes);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h === 0) return `${m} мин`;
+  return m === 0 ? `${h} ч` : `${h} ч ${m} мин`;
+}
+
 export interface ParsedStamp {
   /** ISO-дата отметки, YYYY-MM-DD. */
   date: string;
