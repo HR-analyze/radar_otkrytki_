@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { MANAGED_TITLE, passwordSet } from '@/lib/auth';
 import { UploadButton } from '@/components/UploadButton';
+import { SiteNav, SiteNavFallback } from '@/components/SiteNav';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -47,14 +49,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Image src="/favicon-32x32.png" alt="" width={22} height={22} priority />
               Радар витрин
             </Link>
-            <nav className="flex gap-4 text-sm">
-              <Link href="/" className="hover:underline">Сводка</Link>
-              <Link href="/radar" className="hover:underline">Радар по лавкам</Link>
-              <Link href="/showcase" className="hover:underline">Витрины</Link>
-              <Link href="/contest" className="hover:underline">Конкурс</Link>
-              <Link href="/history" className="hover:underline">История</Link>
-              <Link href="/settings" className="hover:underline">Пороги</Link>
-            </nav>
+            {/* Вкладки тащат за собой фильтры — см. SiteNav. Suspense нужен
+                из-за чтения адреса: без него страница-404 не собирается. */}
+            <Suspense fallback={<SiteNavFallback />}>
+              <SiteNav />
+            </Suspense>
             {/* Загрузка — в шапке: данными занимается вся команда, а не только
                 тот, у кого открыт репозиторий. */}
             <div className="ml-auto">
