@@ -62,6 +62,24 @@ export function Filters({
   const [pending, startTransition] = useTransition();
 
   /**
+   * Переход по фильтру заменяет запись в истории, а не добавляет новую.
+   *
+   * Иначе «назад» отматывал фильтры по одному — а из поиска по лавке, где
+   * значение уходит по таймеру, в историю попадали ещё и промежуточные
+   * «М», «М1». Кнопка «назад» должна уводить со страницы, а не разбирать
+   * обратно то, что человек только что набрал.
+   */
+  const go = useCallback(
+    (q: URLSearchParams) => {
+      const query = q.toString();
+      startTransition(() =>
+        router.replace(query ? `${base}?${query}` : base, { scroll: false }),
+      );
+    },
+    [base, router],
+  );
+
+  /**
    * Патч кладём поверх текущего URL, а не поверх пропа state: state приходит
    * с сервера и обновляется через рендер, поэтому два быстрых переключения
    * подряд затирали друг друга.
@@ -83,29 +101,47 @@ export function Filters({
         setOrDelete(q, key, value === fallback ? undefined : value);
       }
 
-      const query = q.toString();
-      startTransition(() =>
-        router.push(query ? `${base}?${query}` : base, { scroll: false }),
-      );
+      go(q);
     },
-    [base, criterionDefault, router, searchParams],
+    [criterionDefault, go, searchParams],
   );
 
+  /**
+   * Что сейчас отличается от значений по умолчанию. Отсюда берутся и крестики
+   * у полей, и счётчик в кнопке «Сбросить всё»: два независимых условия
+   * однажды разъехались бы.
+   */
+  const active = {
+    period: searchParams.has('from') || searchParams.has('to'),
+    region: !!state.region,
+    shop: !!state.shop,
+    criterion: showCriterion && (state.criterion ?? criterionDefault) !== criterionDefault,
+    status: showStatus && !!state.status && state.status !== 'all',
+  };
+  const activeCount = Object.values(active).filter(Boolean).length;
+
+  /**
+   * Сброс всего разом: пять крестиков — это пять кликов и пять переходов.
+   * Убираем только ключи фильтров, всё остальное в ссылке (например,
+   * сортировка радара) — не фильтр, и переживать сброс должно.
+   */
+  const resetAll = useCallback(() => {
+    const q = new URLSearchParams(searchParams.toString());
+    for (const key of ['from', 'to', 'region', 'shop', 'criterion', 'status']) q.delete(key);
+    go(q);
+  }, [go, searchParams]);
+
   return (
-    <div
-      className={`surface grid gap-3 p-3 sm:grid-cols-2 ${shops ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
-      style={{ cursor: pending ? 'progress' : undefined }}
-    >
+    <div className="surface p-3" style={{ cursor: pending ? 'progress' : undefined }}>
+      <div
+        className={`grid gap-3 sm:grid-cols-2 ${shops ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
+      >
       {/* Период сбрасывается не в пустоту, а в значение по умолчанию (текущий
           месяц, см. defaultRange): период без границ бессмысленен. Крестик
           поэтому появляется только когда даты стоят в ссылке явно. */}
       <Field
         label="Период"
-        onClear={
-          searchParams.has('from') || searchParams.has('to')
-            ? () => apply({ from: undefined, to: undefined })
-            : undefined
-        }
+        onClear={active.period ? () => apply({ from: undefined, to: undefined }) : undefined}
       >
         <DateRangePicker
           from={state.from}
@@ -117,7 +153,7 @@ export function Filters({
 
       <Field
         label="РМ"
-        onClear={state.region ? () => apply({ region: undefined }) : undefined}
+        onClear={active.region ? () => apply({ region: undefined }) : undefined}
       >
         <select
           value={state.region ?? ''}
@@ -168,11 +204,7 @@ export function Filters({
           label="Критерий"
           /* Сброс возвращает предвыбор страницы, а не «Общий результат»:
              радар открывается на витрине, туда же и откатываемся. */
-          onClear={
-            (state.criterion ?? criterionDefault) !== criterionDefault
-              ? () => apply({ criterion: criterionDefault })
-              : undefined
-          }
+          onClear={active.criterion ? () => apply({ criterion: criterionDefault }) : undefined}
         >
           <select
             value={state.criterion ?? criterionDefault}
@@ -191,11 +223,7 @@ export function Filters({
       {showStatus && (
         <Field
           label="Статус"
-          onClear={
-            state.status && state.status !== 'all'
-              ? () => apply({ status: 'all' })
-              : undefined
-          }
+          onClear={active.status ? () => apply({ status: 'all' }) : undefined}
         >
           <select
             value={state.status ?? 'all'}
@@ -207,6 +235,25 @@ export function Filters({
             <option value="green">{STATUS_FILTER_TITLE.green}</option>
           </select>
         </Field>
+      )}
+      </div>
+
+      {/* Кнопка появляется только когда есть что сбрасывать: на чистой
+          странице она бы предлагала сбросить ничто. */}
+      {activeCount > 0 && (
+        <div
+          className="mt-3 flex justify-end border-t pt-2.5"
+          style={{ borderColor: 'var(--border)' }}
+        >
+          <button
+            type="button"
+            onClick={resetAll}
+            className="rounded-md border px-2.5 py-1 text-xs muted hover:opacity-70"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            ✕ Сбросить все фильтры ({activeCount})
+          </button>
+        </div>
       )}
     </div>
   );

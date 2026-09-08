@@ -7,6 +7,7 @@ import { Filters } from '@/components/Filters';
 import { plural } from '@/lib/plural';
 import { StatusCell, STATUS_TEXT } from '@/components/Status';
 import type { CriterionKey } from '@/lib/types';
+import type { RadarRow } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +39,13 @@ export default async function RadarPage({
       ? (config.criteria[p.criterion]?.title ?? p.criterion)
       : null;
 
+  /**
+   * Порядок строк. По умолчанию — как в справочнике (М1, М2, М3…): так лавку
+   * ищут глазами. `sort=red` поднимает наверх проблемные — ради этого радар
+   * чаще всего и открывают, а глазами по восьмидесяти строкам это не считается.
+   */
+  const sort = one(sp, 'sort') === 'red' ? 'red' : 'shop';
+
   const { dates, rows } = await radar({
     from: p.from,
     to: p.to,
@@ -47,8 +55,12 @@ export default async function RadarPage({
     shop: p.shop,
   });
 
+  const ordered = sort === 'red' ? byRedFirst(rows) : rows;
+
   return (
-    <div className="flex flex-col gap-5">
+    /* radar-shell: на широком экране таблица получает собственный скролл,
+       иначе шапка с датами не липнет — см. globals.css. */
+    <div className="radar-shell flex flex-col gap-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {p.shop || p.region ? 'Радар по лавкам' : 'Радар по всем лавкам'}
@@ -86,24 +98,35 @@ export default async function RadarPage({
           <table className="radar-table w-full text-sm">
             <thead>
               <tr>
-                <th className="radar-sticky px-3 py-2 text-left text-xs font-medium muted">Лавка</th>
+                <th className="radar-sticky px-3 py-2 text-left text-xs font-medium muted">
+                  <Link
+                    href={sortHref(sp, 'shop')}
+                    className="hover:underline"
+                    title="Порядок по справочнику: М1, М2, М3…"
+                  >
+                    Лавка{sort === 'shop' && ' ↓'}
+                  </Link>
+                </th>
                 <th className="hidden px-2 py-2 text-left text-xs font-medium muted sm:table-cell">РМ</th>
                 {dates.map((d) => (
                   <th key={d} className="px-0.5 py-2 text-center text-xs font-medium muted">
                     {shortDate(d)}
                   </th>
                 ))}
-                <th
-                  className="px-2 py-2 text-right text-xs font-medium whitespace-nowrap muted"
-                  title="Итог: красных дней из оценённых"
-                >
-                  🔴
+                <th className="px-2 py-2 text-right text-xs font-medium whitespace-nowrap muted">
+                  <Link
+                    href={sortHref(sp, 'red')}
+                    className="hover:underline"
+                    title="Итог: красных дней из оценённых. Клик — проблемные наверх"
+                  >
+                    🔴{sort === 'red' && ' ↓'}
+                  </Link>
                 </th>
                 <th className="w-full" aria-hidden />
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {ordered.map((r) => (
                 <tr key={r.shop.code}>
                   <td className="radar-sticky px-3 py-1 whitespace-nowrap">
                     <Link
@@ -157,4 +180,42 @@ export default async function RadarPage({
       )}
     </div>
   );
+}
+
+/** Первое значение параметра: в адресе он может оказаться повторённым. */
+function one(
+  sp: Record<string, string | string[] | undefined>,
+  key: string,
+): string | undefined {
+  const v = sp[key];
+  return Array.isArray(v) ? v[0] : v;
+}
+
+/**
+ * Ссылка на ту же страницу с другим порядком строк: все фильтры остаются,
+ * меняется только `sort`. Порядок по справочнику — значение по умолчанию,
+ * поэтому в адрес он не пишется.
+ */
+function sortHref(
+  sp: Record<string, string | string[] | undefined>,
+  next: 'shop' | 'red',
+): string {
+  const q = new URLSearchParams();
+  for (const key of ['from', 'to', 'region', 'shop', 'criterion', 'status']) {
+    const value = one(sp, key);
+    if (value) q.set(key, value);
+  }
+  if (next === 'red') q.set('sort', 'red');
+  const query = q.toString();
+  return query ? `/radar?${query}` : '/radar';
+}
+
+/**
+ * Проблемные наверх: сначала больше красных дней, при равном числе — та лавка,
+ * у которой красных больше в долях (2 из 3 хуже, чем 2 из 30), а при равной
+ * доле держим порядок справочника.
+ */
+function byRedFirst(rows: readonly RadarRow[]): RadarRow[] {
+  const share = (r: RadarRow) => (r.ratedCount > 0 ? r.redCount / r.ratedCount : 0);
+  return [...rows].sort((a, b) => b.redCount - a.redCount || share(b) - share(a));
 }
