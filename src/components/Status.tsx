@@ -9,6 +9,18 @@ export const STATUS_TEXT: Record<Status, string> = {
   no_data: 'Нет данных',
 };
 
+/**
+ * Подписи фильтра «Статус». Живут здесь, а не в Filters: те же слова сводка
+ * показывает под заголовком, и разъехаться эти два места не должны.
+ */
+export const STATUS_FILTER_TITLE: Record<Status, string> = {
+  red: '🔴 Только красные',
+  yellow: '🟡 Есть жёлтые',
+  green: '🟢 Есть зелёные',
+  other_schedule: '🕘 Другой график',
+  no_data: '· Без данных',
+};
+
 export function StatusBadge({ status, children }: { status: Status; children?: React.ReactNode }) {
   return (
     <span

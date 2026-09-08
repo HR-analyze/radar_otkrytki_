@@ -7,18 +7,20 @@ import {
   departureSummary,
   lastRun,
   listRegions,
+  listShops,
   shopTotals,
   showcaseStats,
   summaryByCriterion,
   weakestCriteria,
+  type SummaryFilters,
 } from '@/lib/queries';
 import { isWritable } from '@/lib/snapshot';
 import { shortDate } from '@/lib/time';
 import { Filters } from '@/components/Filters';
 import { DepartureBlock } from '@/components/DepartureBlock';
-import { StatusBadge, StatusBar } from '@/components/Status';
+import { StatusBadge, StatusBar, STATUS_FILTER_TITLE } from '@/components/Status';
 import { RefreshButton } from '@/components/RefreshButton';
-import { CRITERION_ORDER } from '@/lib/types';
+import { CRITERION_ORDER, type CriterionKey } from '@/lib/types';
 import { plural } from '@/lib/plural';
 
 export const dynamic = 'force-dynamic';
@@ -33,25 +35,51 @@ export default async function DashboardPage({
   const config = loadConfig();
   const singleDay = p.from === p.to;
 
+  /**
+   * Один объект фильтров на все виджеты сводки: пять полей шапки — те же, что
+   * на радаре. Раньше сюда доезжали только период и РМ, и «сводка по лавке»
+   * требовала уходить в радар.
+   */
+  const filters: SummaryFilters = {
+    from: p.from,
+    to: p.to,
+    region: p.region,
+    shop: p.shop,
+    criterion: p.criterion,
+    status: p.status,
+  };
+
   const departures = await departureSummary(p.from, p.to);
-  const [regions, summary, totals, top, best, weak, fill, runAttendance, runShowcase] =
+  const [regions, shops, summary, totals, top, best, weak, fill, runAttendance, runShowcase] =
     await Promise.all([
       listRegions(p.from, p.to),
-      summaryByCriterion(p.from, p.to, p.region),
-      shopTotals(p.from, p.to, p.region),
-      antiTop(p.from, p.to, 12, p.region),
-      bestShops(p.from, p.to, 12, p.region),
-      weakestCriteria(p.from, p.to, p.region),
-      showcaseStats(p.from, p.to, p.region),
+      listShops(),
+      summaryByCriterion(filters),
+      shopTotals(filters),
+      antiTop(filters),
+      bestShops(filters),
+      weakestCriteria(filters),
+      showcaseStats(filters),
       lastRun('attendance'),
       lastRun('showcase'),
     ]);
   const writable = isWritable();
 
+  // Что именно сейчас выбрано — словами, а не только видом выпадающих списков.
+  const criterionTitle =
+    p.criterion && p.criterion !== 'all'
+      ? (config.criteria[p.criterion]?.title ?? p.criterion)
+      : null;
+  const statusTitle = p.status && p.status !== 'all' ? STATUS_FILTER_TITLE[p.status] : null;
+
   // За период счётчики усреднены по дням — подпись должна это говорить.
   const scope = singleDay
     ? `на ${shortDate(p.to)}`
     : `в среднем за день · ${shortDate(p.from)} — ${shortDate(p.to)}`;
+
+  // Плитки, топ и анти-топ считаются по выбранному критерию, а не по агрегату
+  // лавки — без подписи цифры выглядели бы необъяснимо просевшими.
+  const byCriterion = criterionTitle ? ` · критерий «${criterionTitle}»` : '';
 
   const unconfirmed = CRITERION_ORDER.filter((c) => config.criteria[c]?.confirmed === false);
 
@@ -65,6 +93,10 @@ export default async function DashboardPage({
               ? `Статусы на ${shortDate(p.to)}`
               : `Период ${shortDate(p.from)} — ${shortDate(p.to)} · ${totals.days} ${plural(totals.days, 'день', 'дня', 'дней')} с данными`}
             {p.region ? ` · РМ ${p.region}` : ''}
+            {p.shop ? ` · поиск «${p.shop}»` : ''}
+            {criterionTitle ? ` · критерий «${criterionTitle}»` : ''}
+            {statusTitle ? ` · ${statusTitle}` : ''}
+            {` · ${totals.total} ${plural(totals.total, 'лавка', 'лавки', 'лавок')}`}
           </p>
         </div>
         {writable && <RefreshButton />}
@@ -87,19 +119,45 @@ export default async function DashboardPage({
         </div>
       )}
 
-      <Filters base="/" state={p} regions={regions} dates={p.dates} config={config} showCriterion={false} showStatus={false} />
+      <Filters
+        base="/"
+        state={p}
+        regions={regions}
+        dates={p.dates}
+        config={config}
+        shops={shops.map((s) => ({ code: s.code, name: s.name }))}
+      />
+
+      {/* Фильтр может не найти ни одной лавки — «0 из 0» на шести плитках
+          выглядит поломкой, а не пустым результатом. */}
+      {totals.total === 0 && (
+        <div className="surface p-8 text-center text-sm muted">
+          {p.shop
+            ? `По запросу «${p.shop}» лавок не нашлось. Попробуй код (М17) или часть названия.`
+            : 'Под фильтры не попало ни одной лавки. Сними фильтр по статусу или расширь период.'}
+        </div>
+      )}
 
       {/* --- Плитки: лавки по агрегату и наполнение витрин --- */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Tile title="Лавок в 🔴" value={totals.red} total={totals.total} tone="red" hint={scope} />
-        <Tile title="Лавок в 🟡" value={totals.yellow} total={totals.total} tone="yellow" hint={scope} />
-        <Tile title="Лавок в 🟢" value={totals.green} total={totals.total} tone="green" hint={scope} />
+        <Tile title="Лавок в 🔴" value={totals.red} total={totals.total} tone="red" hint={scope + byCriterion} />
+        <Tile title="Лавок в 🟡" value={totals.yellow} total={totals.total} tone="yellow" hint={scope + byCriterion} />
+        <Tile title="Лавок в 🟢" value={totals.green} total={totals.total} tone="green" hint={scope + byCriterion} />
         <ShowcaseTile fill={fill} totalShops={totals.total} scope={scope} />
       </div>
 
       {/* --- По критериям --- */}
       <section className="surface p-4">
         <h2 className="text-sm font-semibold">Лавки по критериям · {scope}</h2>
+        {/* Разрез по всем шести критериям сразу — фильтр «Критерий» его не
+            сужает, иначе от блока осталась бы одна плитка. Остальные фильтры
+            (РМ, лавка, статус) работают. */}
+        {criterionTitle && (
+          <p className="mt-0.5 text-xs muted">
+            Здесь всегда все критерии: фильтр «{criterionTitle}» влияет на плитки выше,
+            топ и анти-топ.
+          </p>
+        )}
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {summary.map((s) => {
             const cfg = config.criteria[s.criterion];
@@ -107,7 +165,7 @@ export default async function DashboardPage({
             return (
               <Link
                 key={s.criterion}
-                href={`/radar?from=${p.from}&to=${p.to}&criterion=${s.criterion}${p.region ? `&region=${encodeURIComponent(p.region)}` : ''}`}
+                href={`/radar?${radarQuery(p, s.criterion)}`}
                 className="rounded-lg border p-3 transition-colors hover:opacity-90"
                 style={{ borderColor: 'var(--border)' }}
               >
@@ -147,7 +205,8 @@ export default async function DashboardPage({
         <section className="surface p-4">
           <h2 className="text-sm font-semibold">Лучшие локации — топ 🟢</h2>
           <p className="mt-0.5 text-xs muted">
-            Доля зелёных ячеек за {shortDate(p.from)} — {shortDate(p.to)} по всем критериям.
+            Доля зелёных ячеек за {shortDate(p.from)} — {shortDate(p.to)}{' '}
+            {criterionTitle ? `по критерию «${criterionTitle}»` : 'по всем критериям'}.
           </p>
           {best.length === 0 ? (
             <p className="mt-4 text-sm muted">За период оценённых статусов нет.</p>
@@ -189,7 +248,8 @@ export default async function DashboardPage({
         <section className="surface p-4">
           <h2 className="text-sm font-semibold">Проблемные локации — анти-топ 🔴</h2>
           <p className="mt-0.5 text-xs muted">
-            Число красных ячеек за {shortDate(p.from)} — {shortDate(p.to)} по всем критериям.
+            Число красных ячеек за {shortDate(p.from)} — {shortDate(p.to)}{' '}
+            {criterionTitle ? `по критерию «${criterionTitle}»` : 'по всем критериям'}.
           </p>
           {top.length === 0 ? (
             <p className="mt-4 text-sm muted">За период красных статусов нет.</p>
@@ -243,6 +303,7 @@ export default async function DashboardPage({
         <h2 className="text-sm font-semibold">Где западает сильнее всего</h2>
         <p className="mt-0.5 text-xs muted">
           Доля 🔴 среди всех оценённых ячеек критерия за период.
+          {criterionTitle && ' Здесь тоже все критерии — блок про то, какой из них западает.'}
         </p>
         {/* В две колонки: шесть полос в одну растягивались бы на всю ширину
             экрана, и сравнивать их длину становилось неудобно. */}
@@ -277,6 +338,22 @@ export default async function DashboardPage({
 
     </div>
   );
+}
+
+/**
+ * Ссылка со сводки в радар: тот же период и те же фильтры, но со своим
+ * критерием. Без переноса фильтров человек, отобравший лавки одного РМ,
+ * проваливался в радар по всей сети.
+ */
+function radarQuery(
+  p: { from: string; to: string; region?: string; shop?: string; status?: string },
+  criterion: CriterionKey,
+): string {
+  const q = new URLSearchParams({ from: p.from, to: p.to, criterion });
+  if (p.region) q.set('region', p.region);
+  if (p.shop) q.set('shop', p.shop);
+  if (p.status && p.status !== 'all') q.set('status', p.status);
+  return q.toString();
 }
 
 /**
