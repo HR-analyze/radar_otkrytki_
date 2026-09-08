@@ -5,6 +5,7 @@ import { useCallback, useTransition } from 'react';
 import { CRITERION_ORDER, type CriterionKey, type ThresholdConfig } from '@/lib/types';
 import { DateRangePicker } from './DateRangePicker';
 import { ShopSearch, type ShopOption } from './ShopFilter';
+import { STATUS_FILTER_TITLE } from './Status';
 
 export interface FilterState {
   from: string;
@@ -171,9 +172,9 @@ export function Filters({
             onChange={(e) => apply({ status: e.target.value })}
           >
             <option value="all">Любой</option>
-            <option value="red">🔴 Только красные</option>
-            <option value="yellow">🟡 Есть жёлтые</option>
-            <option value="green">🟢 Есть зелёные</option>
+            <option value="red">{STATUS_FILTER_TITLE.red}</option>
+            <option value="yellow">{STATUS_FILTER_TITLE.yellow}</option>
+            <option value="green">{STATUS_FILTER_TITLE.green}</option>
           </select>
         </Field>
       )}
