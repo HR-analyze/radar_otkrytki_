@@ -63,7 +63,7 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [save, setSave] = useState<SaveState>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
+  const [shopCode, setShopCode] = useState('');
   const [region, setRegion] = useState('');
   const [onlyEmpty, setOnlyEmpty] = useState(false);
   // Список лавок под галочкой «только незаполненные» замораживается: без этого
@@ -193,16 +193,24 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
     [shops],
   );
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return shops.filter((s) => {
-      if (region && s.region !== region) return false;
-      // Замок держит строку в списке, пока в неё дописывают число.
-      if (onlyEmpty && !emptyLock.has(s.code) && percentOf(s, drafts) !== '') return false;
-      if (!q) return true;
-      return `${s.code} ${s.name}`.toLowerCase().includes(q);
-    });
-  }, [shops, region, onlyEmpty, emptyLock, query, drafts]);
+  // Список лавок в выпадашке сужается выбранным РМ: иначе можно выбрать пару
+  // «РМ + чужая лавка» и получить пустой экран без объяснений.
+  const shopOptions = useMemo(
+    () => shops.filter((s) => !region || s.region === region),
+    [shops, region],
+  );
+
+  const visible = useMemo(
+    () =>
+      shops.filter((s) => {
+        if (region && s.region !== region) return false;
+        if (shopCode && s.code !== shopCode) return false;
+        // Замок держит строку в списке, пока в неё дописывают число.
+        if (onlyEmpty && !emptyLock.has(s.code) && percentOf(s, drafts) !== '') return false;
+        return true;
+      }),
+    [shops, region, shopCode, onlyEmpty, emptyLock, drafts],
+  );
 
   const filled = shops.filter((s) => percentOf(s, drafts) !== '').length;
   /** Сколько строк остались в списке только благодаря замку — их можно спрятать. */
@@ -280,20 +288,35 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
 
       {/* --- Фильтры: список из 80 лавок нужно уметь сузить --- */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-56">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск: М12 или Покровка"
-            className="w-full rounded-lg border px-3 py-2 pr-8 text-sm"
-            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
-          />
-          {query && <ClearButton onClick={() => setQuery('')} label="Очистить поиск" />}
+        <div className={`relative w-40 ${shopCode ? 'has-clear' : ''}`}>
+          <select
+            value={shopCode}
+            onChange={(e) => setShopCode(e.target.value)}
+            aria-label="Лавка"
+          >
+            <option value="">Все лавки</option>
+            {shopOptions.map((s) => (
+              // В списке только код: с названием строка «М12 Покровка» вдвое
+              // длиннее, а ищут здесь по номеру.
+              <option key={s.code} value={s.code} title={s.name}>
+                {s.code}
+              </option>
+            ))}
+          </select>
+          {shopCode && <ClearButton onClick={() => setShopCode('')} label="Сбросить фильтр по лавке" />}
         </div>
         <div className={`relative w-56 ${region ? 'has-clear' : ''}`}>
           <select
             value={region}
-            onChange={(e) => setRegion(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setRegion(next);
+              // Выбранная лавка могла выпасть из списка нового РМ — снимаем,
+              // иначе фильтры противоречат друг другу и список пуст.
+              if (next && shopCode && !shops.some((s) => s.code === shopCode && s.region === next)) {
+                setShopCode('');
+              }
+            }}
             aria-label="Региональный менеджер"
           >
             <option value="">Все РМ</option>
