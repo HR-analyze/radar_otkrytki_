@@ -51,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/" className="hover:underline">Сводка</Link>
               <Link href="/radar" className="hover:underline">Радар по лавкам</Link>
               <Link href="/showcase" className="hover:underline">Витрины</Link>
+              <Link href="/contest" className="hover:underline">Конкурс</Link>
               <Link href="/history" className="hover:underline">История</Link>
               <Link href="/settings" className="hover:underline">Пороги</Link>
             </nav>

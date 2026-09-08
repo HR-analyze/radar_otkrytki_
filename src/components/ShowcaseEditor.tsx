@@ -64,6 +64,11 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
   const [query, setQuery] = useState('');
   const [region, setRegion] = useState('');
   const [onlyEmpty, setOnlyEmpty] = useState(false);
+  // Список лавок под галочкой «только незаполненные» замораживается: без этого
+  // строка вылетала бы из фильтра после первой же цифры («9» — уже не пусто),
+  // и дописать «95» было бы некуда. Набор пересобирается при включении галочки,
+  // при смене дня и по кнопке «спрятать заполненные».
+  const [emptyLock, setEmptyLock] = useState<Set<string>>(new Set());
   const [token, setToken] = useState('');
 
   // Копим правки по полям: процент и комментарий у одной лавки правят
@@ -86,6 +91,7 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
     setData(body);
     setDrafts({});
     setNoteDrafts({});
+    setEmptyLock(new Set((body.shops ?? []).filter((s) => s.percent == null).map((s) => s.code)));
     setSave('idle');
     setError(body.ok ? null : (body.error ?? 'Не удалось загрузить день'));
   }, []);
@@ -189,13 +195,20 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
     const q = query.trim().toLowerCase();
     return shops.filter((s) => {
       if (region && s.region !== region) return false;
-      if (onlyEmpty && percentOf(s, drafts) !== '') return false;
+      // Замок держит строку в списке, пока в неё дописывают число.
+      if (onlyEmpty && !emptyLock.has(s.code) && percentOf(s, drafts) !== '') return false;
       if (!q) return true;
       return `${s.code} ${s.name}`.toLowerCase().includes(q);
     });
-  }, [shops, region, onlyEmpty, query, drafts]);
+  }, [shops, region, onlyEmpty, emptyLock, query, drafts]);
 
   const filled = shops.filter((s) => percentOf(s, drafts) !== '').length;
+  /** Сколько строк остались в списке только благодаря замку — их можно спрятать. */
+  const doneInView = onlyEmpty
+    ? visible.filter((s) => percentOf(s, drafts) !== '').length
+    : 0;
+  const relock = () =>
+    setEmptyLock(new Set(shops.filter((s) => percentOf(s, drafts) === '').map((s) => s.code)));
   const readOnly = data ? !data.editable : false;
 
   function focusNext(index: number) {
@@ -286,10 +299,30 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
             ))}
           </select>
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={onlyEmpty} onChange={(e) => setOnlyEmpty(e.target.checked)} />
+        <label
+          className="flex items-center gap-2 text-sm"
+          title="Список фиксируется на момент включения: заполненная лавка остаётся на месте, пока её не спрятать вручную"
+        >
+          <input
+            type="checkbox"
+            checked={onlyEmpty}
+            onChange={(e) => {
+              setOnlyEmpty(e.target.checked);
+              if (e.target.checked) relock();
+            }}
+          />
           только незаполненные
         </label>
+        {onlyEmpty && doneInView > 0 && (
+          <button
+            type="button"
+            onClick={relock}
+            className="rounded-lg border px-3 py-2 text-sm"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+          >
+            Спрятать заполненные ({doneInView})
+          </button>
+        )}
       </div>
 
       {/* --- Собственно список --- */}
@@ -387,7 +420,9 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
         Значение вводится в процентах. Enter или ↓ — следующая лавка, ↑ — предыдущая. Пустое поле
         означает «в этот день не заполняли»: такая лавка в средние значения не входит. Комментарий
         рядом — свободный текст на случай «не привезли ягоды»; на цифры он не влияет. Сохраняется
-        само. Метка «🕙 с 10:00» — лавка открывается позже общих 08:00 (М71 Кузьминки, М72
+        само. Галочка «только незаполненные» фиксирует список: заполненная лавка не
+        выпрыгивает из-под курсора на первой же цифре, а прячется по кнопке рядом с галочкой или
+        при смене дня. Метка «🕙 с 10:00» — лавка открывается позже общих 08:00 (М71 Кузьминки, М72
         Ватутинки): раннее наполнение у неё считать не с чего.
       </p>
     </div>

@@ -17,7 +17,7 @@ import {
 } from './status';
 import { dedupeAttendance, rollUpAttendance } from './rollup';
 import type { AttendanceRow, Status } from './types';
-import { parseShop, normalizeCode } from './shops';
+import { parseShop, normalizeCode, findShops } from './shops';
 import { CRITERION_ORDER } from './types';
 import { parseClock, parseStamp, formatClock, formatDuration, dateRange } from './time';
 
@@ -258,6 +258,29 @@ test('лавка определяется по коду, а не по назва
   assert.equal(parseShop('Итого'), null);
   assert.equal(parseShop(null), null);
   assert.equal(normalizeCode('M12'), 'М12', 'латинская M приводится к кириллице');
+});
+
+test('поиск лавки: точный код важнее подстроки', () => {
+  // Правило одно на радар, на конкурс и на переключатель в карточке лавки —
+  // поэтому оно и живёт чистой функцией, а не внутри запроса к снимку.
+  const shops = [
+    { code: 'М1', name: 'М1 Тверская' },
+    { code: 'М10', name: 'М10 Даниловская' },
+    { code: 'М17', name: 'М17 Б. Сухаревский' },
+    { code: 'М19', name: 'М19 Профсоюзная' },
+  ];
+
+  // «М1» — это ровно М1, а не М1 вместе с М10 и М19.
+  assert.deepEqual(findShops(shops, 'М1').map((s) => s.code), ['М1']);
+  assert.deepEqual(findShops(shops, ' м1 ').map((s) => s.code), ['М1'], 'регистр и пробелы');
+
+  // Кода такого нет — работает подстрока, и по коду тоже.
+  assert.deepEqual(findShops(shops, 'М1?').map((s) => s.code), []);
+  assert.deepEqual(findShops(shops, 'ская').map((s) => s.code), ['М1', 'М10'], 'Тверская и Даниловская');
+  assert.deepEqual(findShops(shops, 'Сухаревский').map((s) => s.code), ['М17']);
+
+  // Пустой запрос — все лавки: это «фильтр снят», а не «ничего не нашлось».
+  assert.equal(findShops(shops, '  ').length, shops.length);
 });
 
 test('разбор отметки из выгрузки 1С', () => {

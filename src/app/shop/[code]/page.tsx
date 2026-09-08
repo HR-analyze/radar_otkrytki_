@@ -2,13 +2,20 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { loadConfig } from '@/lib/config';
 import { resolveParams } from '@/lib/params';
-import { getShop, shopHistory, type DepartureTrip, type ShopDayPerson } from '@/lib/queries';
+import {
+  getShop,
+  listShops,
+  shopHistory,
+  type DepartureTrip,
+  type ShopDayPerson,
+} from '@/lib/queries';
 import { formatClock, formatDuration, shortDate } from '@/lib/time';
 import { StatusBadge, STATUS_TEXT } from '@/components/Status';
 import { scheduleFor, scheduleShift } from '@/lib/status';
 import { CRITERION_ORDER, type CriterionKey } from '@/lib/types';
 import { RATING_COMPONENT_TITLE } from '@/lib/rating';
 import { plural } from '@/lib/plural';
+import { ShopSwitcher } from '@/components/ShopFilter';
 
 /**
  * Колонки списка сотрудников. Одна константа на заголовок и на строки —
@@ -44,7 +51,10 @@ export default async function ShopPage({
   const shop = await getShop(decodeURIComponent(code));
   if (!shop) notFound();
 
-  const history = await shopHistory(shop.code, p.from, p.to);
+  const [history, shops] = await Promise.all([
+    shopHistory(shop.code, p.from, p.to),
+    listShops(),
+  ]);
   const schedule = scheduleFor(config, shop.code);
   const shift = scheduleShift(config, shop.code);
 
@@ -68,6 +78,16 @@ export default async function ShopPage({
           </p>
         )}
       </div>
+
+      {/* Тот же поиск по лавке, что на радаре. Здесь он переключатель: из
+          карточки одной лавки чаще всего идут в карточку соседней, и гонять
+          человека через радар ради этого незачем. */}
+      <ShopSwitcher
+        code={shop.code}
+        shops={shops.map((s) => ({ code: s.code, name: s.name }))}
+        from={p.from}
+        to={p.to}
+      />
 
       {history.length === 0 ? (
         <div className="surface p-8 text-center text-sm muted">За выбранный период данных нет.</div>

@@ -1,9 +1,11 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useTransition } from 'react';
 import { CRITERION_ORDER, type CriterionKey, type ThresholdConfig } from '@/lib/types';
 import { DateRangePicker } from './DateRangePicker';
+import { ShopSearch, type ShopOption } from './ShopFilter';
+import { STATUS_FILTER_TITLE } from './Status';
 
 export interface FilterState {
   from: string;
@@ -20,10 +22,7 @@ export interface RegionOptions {
   past: string[];
 }
 
-export interface ShopOption {
-  code: string;
-  name: string;
-}
+export type { ShopOption };
 
 /**
  * Фильтры выпадающими списками, а не чипами: РМ-ов десять, критериев шесть —
@@ -40,6 +39,7 @@ export function Filters({
   shops,
   showCriterion = true,
   showStatus = true,
+  criterionDefault = 'all',
 }: {
   base: string;
   state: FilterState;
@@ -50,6 +50,11 @@ export function Filters({
   shops?: ShopOption[];
   showCriterion?: boolean;
   showStatus?: boolean;
+  /**
+   * Критерий, предвыбранный на странице (радар открывается на витрине).
+   * Нужен здесь, чтобы знать, какое значение в URL не писать, — см. apply.
+   */
+  criterionDefault?: CriterionKey | 'all';
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -65,7 +70,16 @@ export function Filters({
       const q = new URLSearchParams(searchParams.toString());
 
       for (const [key, value] of Object.entries(patch)) {
-        setOrDelete(q, key, value === 'all' ? undefined : value);
+        /**
+         * В URL держим только то, что отличается от значения по умолчанию —
+         * иначе ссылка обрастает `criterion=all&status=all`.
+         *
+         * Исключение — критерий на странице с предвыбором: «Общий результат»
+         * там приходится писать явно (`criterion=all`), иначе, сняв фильтр,
+         * человек снова получал бы предвыбранную витрину.
+         */
+        const fallback = key === 'criterion' ? criterionDefault : 'all';
+        setOrDelete(q, key, value === fallback ? undefined : value);
       }
 
       const query = q.toString();
@@ -73,7 +87,7 @@ export function Filters({
         router.push(query ? `${base}?${query}` : base, { scroll: false }),
       );
     },
-    [base, router, searchParams],
+    [base, criterionDefault, router, searchParams],
   );
 
   return (
@@ -126,10 +140,11 @@ export function Filters({
 
       {shops && (
         <Field label="Лавка">
-          <ShopFilter
+          <ShopSearch
             value={state.shop ?? ''}
             shops={shops}
             onChange={(shop) => apply({ shop })}
+            listId="radar-shops"
           />
         </Field>
       )}
@@ -137,7 +152,7 @@ export function Filters({
       {showCriterion && (
         <Field label="Критерий">
           <select
-            value={state.criterion ?? 'all'}
+            value={state.criterion ?? criterionDefault}
             onChange={(e) => apply({ criterion: e.target.value as CriterionKey | 'all' })}
           >
             <option value="all">Общий результат</option>
@@ -157,86 +172,12 @@ export function Filters({
             onChange={(e) => apply({ status: e.target.value })}
           >
             <option value="all">Любой</option>
-            <option value="red">🔴 Только красные</option>
-            <option value="yellow">🟡 Есть жёлтые</option>
-            <option value="green">🟢 Есть зелёные</option>
+            <option value="red">{STATUS_FILTER_TITLE.red}</option>
+            <option value="yellow">{STATUS_FILTER_TITLE.yellow}</option>
+            <option value="green">{STATUS_FILTER_TITLE.green}</option>
           </select>
         </Field>
       )}
-    </div>
-  );
-}
-
-/**
- * Поиск лавки: поле ввода со списком подсказок, а не выпадающий список на
- * восемьдесят строк. Код набирается за два символа, название — за три, и
- * «М1» при этом означает ровно М1, а не М1 вместе с М10–М19 (см. matchesShop).
- *
- * URL меняется не на каждую букву: полсекунды тишины — тогда запрос.
- */
-function ShopFilter({
-  value,
-  shops,
-  onChange,
-}: {
-  value: string;
-  shops: ShopOption[];
-  onChange: (value: string | undefined) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Значение могли поменять снаружи — например, кнопкой «назад» в браузере.
-  useEffect(() => setDraft(value), [value]);
-
-  function edit(next: string) {
-    setDraft(next);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => onChange(next.trim() || undefined), 400);
-  }
-
-  return (
-    <div className="relative">
-      <input
-        value={draft}
-        onChange={(e) => edit(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            if (timer.current) clearTimeout(timer.current);
-            onChange(draft.trim() || undefined);
-          }
-          if (e.key === 'Escape') {
-            setDraft('');
-            onChange(undefined);
-          }
-        }}
-        list="radar-shops"
-        placeholder="Все"
-        aria-label="Лавка: код или название"
-        className="w-full rounded-lg border px-3 py-2 pr-8 text-sm"
-        style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
-      />
-      {draft && (
-        <button
-          type="button"
-          onClick={() => {
-            setDraft('');
-            onChange(undefined);
-          }}
-          title="Сбросить"
-          aria-label="Сбросить фильтр по лавке"
-          className="absolute top-1/2 right-2 -translate-y-1/2 text-sm muted"
-        >
-          ✕
-        </button>
-      )}
-      <datalist id="radar-shops">
-        {shops.map((s) => (
-          <option key={s.code} value={s.code}>
-            {s.name}
-          </option>
-        ))}
-      </datalist>
     </div>
   );
 }

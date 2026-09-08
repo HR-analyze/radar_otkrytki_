@@ -11,8 +11,17 @@ import {
 } from './types';
 import { aggregateStatuses, roundScore, statusFromScore } from './status';
 import { parseClock } from './time';
+import { isExactCode, matchesShop } from './shops';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
 import type { DepartureRow } from './parsers/departure';
+import {
+  addStatus,
+  averagePoints,
+  emptyScore,
+  pointsOf,
+  sumScores,
+  type ContestScore,
+} from './contest';
 
 /**
  * Чтение для дашборда поверх снимка в памяти (см. snapshot.ts).
@@ -307,21 +316,74 @@ async function shopsIn(
 }
 
 /**
- * Поиск лавки по коду или названию: «М17» найдёт М17, «Сухаревский» — её же,
- * «М1» — М1 и М10–М19. Точное совпадение кода имеет приоритет: иначе, набрав
- * «М1», человек не смог бы посмотреть только М1.
+ * Поиск лавки по коду или названию живёт в shops.ts: то же правило нужно
+ * клиентскому переключателю лавки, а queries тянет за собой снимок и БД.
+ * Реэкспорт — чтобы страницы и тесты не расходились в том, откуда его брать.
  */
-export function matchesShop(shop: { code: string; name: string }, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  if (shop.code.toLowerCase() === q) return true;
-  return `${shop.code} ${shop.name}`.toLowerCase().includes(q);
-}
+export { matchesShop };
 
 /** Есть ли лавка, чей код совпал с запросом точно. */
 export async function hasExactShop(query: string): Promise<boolean> {
-  const q = query.trim().toLowerCase();
-  return (await listShops()).some((s) => s.code.toLowerCase() === q);
+  return (await listShops()).some((s) => isExactCode(s, query));
+}
+
+/**
+ * Фильтры сводки — те же пять полей, что в шапке радара.
+ *
+ * Объектом, а не хвостом позиционных аргументов (как у радара и конкурса):
+ * иначе `antiTop(from, to, 12, region, shop, criterion)` читался бы только
+ * со счётом на пальцах.
+ */
+export interface SummaryFilters {
+  from: string;
+  to: string;
+  region?: string;
+  /** Код или часть названия лавки: «М17», «Сухаревский». */
+  shop?: string;
+  /** Считать по одному критерию вместо агрегата лавки. 'all' — агрегат. */
+  criterion?: CriterionKey | 'all';
+  /** Оставить лавки, у которых за период есть день в этом статусе. */
+  status?: Status | 'all';
+}
+
+/** Выбранный критерий или null, если смотрим лавку целиком. */
+function singleCriterion(f: { criterion?: CriterionKey | 'all' }): CriterionKey | null {
+  return f.criterion && f.criterion !== 'all' ? f.criterion : null;
+}
+
+/**
+ * Лавки под фильтрами «РМ» и «Лавка», с приоритетом точного кода: «М1» — это
+ * М1, а не М1 вместе с М10–М19. Одна функция на радар, конкурс и сводку —
+ * раньше эти четыре строки были скопированы в каждый запрос.
+ */
+async function shopsMatching(
+  region: string | undefined,
+  shop: string | undefined,
+  from: string,
+  to: string,
+): Promise<ShopRow[]> {
+  const list = await shopsIn(region, shop, from, to);
+  if (!shop) return list;
+
+  const exact = await hasExactShop(shop);
+  return exact ? list.filter((s) => isExactCode(s, shop)) : list;
+}
+
+/**
+ * Лавки под всеми фильтрами сводки, включая «Статус».
+ *
+ * Статуса лавки за день в снимке нет — он получается свёрткой критериев (или
+ * равен одному критерию, если тот выбран). Поэтому набор лавок под фильтром
+ * по статусу берём у самого радара: «есть красные дни» на сводке тогда значит
+ * ровно то же, что в его таблице, и разъехаться эти два ответа не могут.
+ */
+async function shopsUnderFilters(f: SummaryFilters): Promise<ShopRow[]> {
+  const list = await shopsMatching(f.region, f.shop, f.from, f.to);
+  if (!f.status || f.status === 'all') return list;
+
+  const { rows } = await radar(f);
+  const allowed = new Set(rows.map((r) => r.shop.code));
+  return list.filter((s) => allowed.has(s.code));
 }
 
 /* --------------------------------- радар --------------------------------- */
@@ -346,6 +408,12 @@ export interface RadarRow {
   /** дата → статус (агрегат лавки либо один критерий, если он выбран в фильтре). */
   cells: Record<string, RadarCell>;
   redCount: number;
+  /**
+   * Дней с оценкой у этой лавки — знаменатель для redCount.
+   * Дни без данных сюда не попадают: «3 из 4» честнее, чем «3 из 8»,
+   * если четыре дня лавку просто не оценивали.
+   */
+  ratedCount: number;
 }
 
 /**
@@ -364,11 +432,7 @@ export async function radar(
   const people = byComponents ? await peopleIndex() : null;
   const fills = byComponents ? await showcaseIndex() : null;
 
-  // Точный код важнее подстроки: «М1» — это М1, а не М1 вместе с М10–М19.
-  const exact = filters.shop ? await hasExactShop(filters.shop) : false;
-  const shops = (await shopsIn(filters.region, filters.shop, filters.from, filters.to)).filter(
-    (s) => !exact || s.code.toLowerCase() === filters.shop!.trim().toLowerCase(),
-  );
+  const shops = await shopsMatching(filters.region, filters.shop, filters.from, filters.to);
   const allowedShops = new Set(shops.map((s) => s.code));
   const inRegion = await regionDayMatcher(filters.region);
 
@@ -425,10 +489,158 @@ export async function radar(
     if (filters.status && filters.status !== 'all') {
       if (!Object.values(cells).some((c) => c.status === filters.status)) continue;
     }
-    rows.push({ shop, cells, redCount });
+    rows.push({ shop, cells, redCount, ratedCount: Object.keys(cells).length });
   }
 
   return { dates, rows };
+}
+
+/* ------------------------------- конкурс --------------------------------- */
+
+export interface ContestFilters {
+  from: string;
+  to: string;
+  region?: string;
+  /** Код или часть названия лавки — тот же поиск, что в радаре. */
+  shop?: string;
+}
+
+export interface ContestCell {
+  status: Status;
+  /** Наполнение витрины 0–1 в этот день. */
+  fill: number;
+  /** Балл дня: +1 / 0 / −1. */
+  points: number;
+}
+
+export interface ContestRow {
+  shop: ShopRow;
+  /** дата → ячейка. Дни без заполненной витрины сюда не попадают. */
+  cells: Record<string, ContestCell>;
+  score: ContestScore;
+  /** Средняя наполненность за оценённые дни; null — дней нет. */
+  avgFill: number | null;
+}
+
+export interface ContestRegionRow {
+  region: string;
+  /** Лавок с оценёнными днями у этого РМ. */
+  shops: number;
+  score: ContestScore;
+  avgFill: number | null;
+}
+
+/**
+ * Конкурс по наполнению витрин: та же таблица «лавки × дни», что и радар, но
+ * единственный критерий — витрина, а в итоге баллы (🟢 +1, 🟡 0, 🔴 −1), а не
+ * число красных. Правило считает contest.ts.
+ *
+ * Источник — `snap.showcase`: там и процент, и статус по действующим порогам.
+ * Через `snap.criteria` идти незачем — статусы витрины приходят туда из того же
+ * стора (см. showcase-store.ts), но без процента.
+ *
+ * День лавки относится к тому РМ, который вёл её в этот день (regionAt), а не
+ * к нынешнему: иначе после передачи лавки чужие дни утекали бы в статистику
+ * преемника.
+ */
+export async function contest(
+  filters: ContestFilters,
+): Promise<{
+  dates: string[];
+  rows: ContestRow[];
+  regions: ContestRegionRow[];
+  total: ContestScore;
+}> {
+  const snap = await loadSnapshot();
+
+  const shops = await shopsMatching(filters.region, filters.shop, filters.from, filters.to);
+  const allowedShops = new Set(shops.map((s) => s.code));
+  const inRegion = await regionDayMatcher(filters.region);
+
+  const relevant = snap.showcase.filter(
+    (s) =>
+      s.date >= filters.from &&
+      s.date <= filters.to &&
+      allowedShops.has(s.shopCode) &&
+      inRegion(s.shopCode, s.date) &&
+      pointsOf(s.status) != null,
+  );
+
+  const dates = [...new Set(relevant.map((s) => s.date))].sort();
+  if (dates.length === 0) return { dates, rows: [], regions: [], total: emptyScore() };
+
+  const byShop = new Map<string, Map<string, ContestCell>>();
+  for (const s of relevant) {
+    let days = byShop.get(s.shopCode);
+    if (!days) byShop.set(s.shopCode, (days = new Map()));
+    days.set(s.date, { status: s.status, fill: s.fill, points: pointsOf(s.status)! });
+  }
+
+  const history = regionIndexOf(snap);
+  const regions = new Map<string, { score: ContestScore; fill: number; shops: Set<string> }>();
+
+  const rows: ContestRow[] = [];
+  for (const shop of shops) {
+    const days = byShop.get(shop.code);
+    if (!days) continue;
+
+    const cells: Record<string, ContestCell> = {};
+    const score = emptyScore();
+    let fillSum = 0;
+
+    for (const date of dates) {
+      const cell = days.get(date);
+      if (!cell) continue;
+      cells[date] = cell;
+      addStatus(score, cell.status);
+      fillSum += cell.fill;
+
+      const manager = regionAt(history.get(shop.code), date) ?? shop.region;
+      if (!manager) continue;
+      let bucket = regions.get(manager);
+      if (!bucket) regions.set(manager, (bucket = { score: emptyScore(), fill: 0, shops: new Set() }));
+      addStatus(bucket.score, cell.status);
+      bucket.fill += cell.fill;
+      bucket.shops.add(shop.code);
+    }
+
+    if (score.rated === 0) continue;
+    rows.push({ shop, cells, score, avgFill: fillSum / score.rated });
+  }
+
+  // Больше баллов — выше; при равенстве вперёд тот, у кого меньше красных, а
+  // затем — у кого больше оценённых дней: за 0 из двух дней и 0 из двадцати
+  // стоят разные усилия.
+  rows.sort(
+    (a, b) =>
+      b.score.points - a.score.points ||
+      a.score.red - b.score.red ||
+      b.score.rated - a.score.rated ||
+      byShopNumber(a.shop, b.shop),
+  );
+
+  const regionRows: ContestRegionRow[] = [...regions.entries()]
+    .map(([region, v]) => ({
+      region,
+      shops: v.shops.size,
+      score: v.score,
+      avgFill: v.score.rated > 0 ? v.fill / v.score.rated : null,
+    }))
+    // Сумма баллов у РМ с двенадцатью лавками всегда больше, чем у РМ с
+    // четырьмя, поэтому сортируем по среднему баллу за день.
+    .sort(
+      (a, b) =>
+        (averagePoints(b.score) ?? -Infinity) - (averagePoints(a.score) ?? -Infinity) ||
+        b.score.points - a.score.points ||
+        a.region.localeCompare(b.region, 'ru'),
+    );
+
+  return {
+    dates,
+    rows,
+    regions: regionRows,
+    total: sumScores(rows.map((r) => r.score)),
+  };
 }
 
 /* ------------------------------- сводка ---------------------------------- */
@@ -460,15 +672,14 @@ export interface ShopTotals {
  * лавок красные». Иначе за неделю почти каждая лавка хоть раз была красной,
  * и показатель вырождается в «80 из 80».
  */
-export async function summaryByCriterion(
-  from: string,
-  to: string,
-  region?: string,
-): Promise<CriterionSummary[]> {
+export async function summaryByCriterion(f: SummaryFilters): Promise<CriterionSummary[]> {
+  const { from, to } = f;
   const snap = await loadSnapshot();
-  const shops = await shopsIn(region, undefined, from, to);
+  // Фильтр «Критерий» здесь не применяется намеренно: это разрез по всем
+  // шести, и сузить его до одного значило бы оставить блок с одной плиткой.
+  const shops = await shopsUnderFilters(f);
   const allowed = new Set(shops.map((s) => s.code));
-  const inRegion = await regionDayMatcher(region);
+  const inRegion = await regionDayMatcher(f.region);
 
   // критерий → день → статус → множество лавок
   const perDay = new Map<CriterionKey, Map<string, Map<Status, Set<string>>>>();
@@ -522,23 +733,24 @@ export async function summaryByCriterion(
  * Агрегированный статус лавки (правило — в `rules.shopAggregation`),
  * свёрнутый в счётчики. За период — так же среднее за день.
  */
-export async function shopTotals(
-  from: string,
-  to: string,
-  region?: string,
-): Promise<ShopTotals> {
+export async function shopTotals(f: SummaryFilters): Promise<ShopTotals> {
+  const { from, to } = f;
   const snap = await loadSnapshot();
   const config = loadConfig();
-  const byComponents = useComponents(config);
+  // Выбран критерий — плитки считаются по нему, а не по агрегату лавки:
+  // ровно так же, как ячейки радара под тем же фильтром.
+  const single = singleCriterion(f);
+  const byComponents = !single && useComponents(config);
   const people = byComponents ? await peopleIndex() : null;
   const fills = byComponents ? await showcaseIndex() : null;
-  const shops = await shopsIn(region, undefined, from, to);
+  const shops = await shopsUnderFilters(f);
   const allowed = new Set(shops.map((s) => s.code));
-  const inRegion = await regionDayMatcher(region);
+  const inRegion = await regionDayMatcher(f.region);
 
   // день → лавка → статусы её критериев
   const byDay = new Map<string, Map<string, Status[]>>();
   for (const c of snap.criteria) {
+    if (single && c.criterion !== single) continue;
     if (c.date < from || c.date > to || !allowed.has(c.shopCode) || !inRegion(c.shopCode, c.date)) continue;
     let shopsOfDay = byDay.get(c.date);
     if (!shopsOfDay) byDay.set(c.date, (shopsOfDay = new Map()));
@@ -580,19 +792,17 @@ export interface AntiTopRow {
 }
 
 /** Анти-топ: лавки с наибольшим числом 🔴 за период. */
-export async function antiTop(
-  from: string,
-  to: string,
-  limit = 12,
-  region?: string,
-): Promise<AntiTopRow[]> {
+export async function antiTop(f: SummaryFilters, limit = 12): Promise<AntiTopRow[]> {
+  const { from, to } = f;
   const snap = await loadSnapshot();
-  const shops = await shopsIn(region, undefined, from, to);
+  const single = singleCriterion(f);
+  const shops = await shopsUnderFilters(f);
   const byCode = new Map(shops.map((s) => [s.code, s]));
-  const inRegion = await regionDayMatcher(region);
+  const inRegion = await regionDayMatcher(f.region);
 
   const agg = new Map<string, { redCount: number; criteria: Set<CriterionKey> }>();
   for (const c of snap.criteria) {
+    if (single && c.criterion !== single) continue;
     if (c.status !== 'red' || c.date < from || c.date > to || !byCode.has(c.shopCode)) continue;
     if (!inRegion(c.shopCode, c.date)) continue;
     const cur = agg.get(c.shopCode) ?? { redCount: 0, criteria: new Set<CriterionKey>() };
@@ -648,19 +858,17 @@ export interface BestShopRow {
  * — не достижение. Порог — половина медианы по сети: медиана устойчива к
  * выбросам, а половина оставляет в списке и тех, кто работал не все дни.
  */
-export async function bestShops(
-  from: string,
-  to: string,
-  limit = 12,
-  region?: string,
-): Promise<BestShopRow[]> {
+export async function bestShops(f: SummaryFilters, limit = 12): Promise<BestShopRow[]> {
+  const { from, to } = f;
   const snap = await loadSnapshot();
-  const shops = await shopsIn(region, undefined, from, to);
+  const single = singleCriterion(f);
+  const shops = await shopsUnderFilters(f);
   const byCode = new Map(shops.map((s) => [s.code, s]));
-  const inRegion = await regionDayMatcher(region);
+  const inRegion = await regionDayMatcher(f.region);
 
   const agg = new Map<string, { green: number; total: number }>();
   for (const c of snap.criteria) {
+    if (single && c.criterion !== single) continue;
     if (c.date < from || c.date > to || !byCode.has(c.shopCode)) continue;
     if (!inRegion(c.shopCode, c.date)) continue;
     // Считаем только оценённое: «нет данных» и «другой график» — не результат.
@@ -708,13 +916,14 @@ export async function bestShops(
 
 /** «Где больше всего западает» — доля 🔴 по каждому критерию за период. */
 export async function weakestCriteria(
-  from: string,
-  to: string,
-  region?: string,
+  f: SummaryFilters,
 ): Promise<{ criterion: CriterionKey; red: number; total: number; share: number }[]> {
+  const { from, to } = f;
   const snap = await loadSnapshot();
-  const allowed = new Set((await shopsIn(region, undefined, from, to)).map((s) => s.code));
-  const inRegion = await regionDayMatcher(region);
+  // Как и в summaryByCriterion, фильтр «Критерий» здесь не применяется: блок
+  // отвечает на вопрос «какой критерий западает», а не «как дела у выбранного».
+  const allowed = new Set((await shopsUnderFilters(f)).map((s) => s.code));
+  const inRegion = await regionDayMatcher(f.region);
 
   const agg = new Map<CriterionKey, { red: number; total: number }>();
   for (const c of snap.criteria) {
@@ -742,14 +951,13 @@ export async function weakestCriteria(
  * `filled` — сколько лавок заполнили таблицу (за период — в среднем за день).
  */
 export async function showcaseStats(
-  from: string,
-  to: string,
-  region?: string,
+  f: SummaryFilters,
 ): Promise<{ avg: number | null; min: number | null; minShop: string | null; filled: number }> {
+  const { from, to } = f;
   const snap = await loadSnapshot();
-  const shops = await shopsIn(region, undefined, from, to);
+  const shops = await shopsUnderFilters(f);
   const byCode = new Map(shops.map((s) => [s.code, s]));
-  const inRegion = await regionDayMatcher(region);
+  const inRegion = await regionDayMatcher(f.region);
 
   const rows = snap.showcase.filter(
     (s) => s.date >= from && s.date <= to && byCode.has(s.shopCode) && inRegion(s.shopCode, s.date),

@@ -40,9 +40,9 @@ test('виджеты меняются при смене дня — иначе с
   // Берём три разнесённых дня из имеющихся, а не зашитые даты.
   const all = await q.listDates();
   const days = [all[0], all[Math.floor(all.length / 2)], all[all.length - 1]];
-  const totals = await Promise.all(days.map((d) => q.shopTotals(d, d)));
+  const totals = await Promise.all(days.map((d) => q.shopTotals({ from: d, to: d })));
   const drivers = await Promise.all(
-    days.map(async (d) => (await q.summaryByCriterion(d, d)).find((x) => x.criterion === 'driver')!),
+    days.map(async (d) => (await q.summaryByCriterion({ from: d, to: d })).find((x) => x.criterion === 'driver')!),
   );
 
   const asKey = (t: Awaited<ReturnType<typeof q.shopTotals>>) => `${t.green}/${t.yellow}/${t.red}`;
@@ -54,14 +54,14 @@ test('виджеты меняются при смене дня — иначе с
 
 test('за один день счётчики — точные, не усреднённые', async () => {
   const day = '2026-08-25';
-  const t = await q.shopTotals(day, day);
+  const t = await q.shopTotals({ from: day, to: day });
   assert.equal(t.days, 1);
   assert.equal(t.green + t.yellow + t.red, 80, 'все 80 лавок распределены по статусам');
   assert.equal(t.total, 80);
 });
 
 test('за период счётчики усреднены по дням и не вырождаются в «все красные»', async () => {
-  const period = await q.shopTotals(ALL.from, ALL.to);
+  const period = await q.shopTotals(ALL);
   assert.equal(period.days, (await q.listDates()).length);
   assert.ok(
     period.green + period.yellow + period.red <= period.total,
@@ -70,7 +70,7 @@ test('за период счётчики усреднены по дням и н�
 
   // Среднее обязано лежать между минимумом и максимумом посуточных значений.
   const daily = await Promise.all(
-    (await q.listDates()).map((d) => q.shopTotals(d, d)),
+    (await q.listDates()).map((d) => q.shopTotals({ from: d, to: d })),
   );
   const reds = daily.map((d) => d.red);
   assert.ok(
@@ -84,8 +84,8 @@ test('фильтр по РМ сужает выборку и счётчики', a
   const regions = await q.listRegions('2026-08-25', '2026-08-25');
   assert.ok(regions.current.length > 0, 'у лавок проставлены РМ');
 
-  const all = await q.shopTotals('2026-08-25', '2026-08-25');
-  const one = await q.shopTotals('2026-08-25', '2026-08-25', regions.current[0]);
+  const all = await q.shopTotals({ from: '2026-08-25', to: '2026-08-25' });
+  const one = await q.shopTotals({ from: '2026-08-25', to: '2026-08-25', region: regions.current[0] });
   assert.ok(
     one.total > 0 && one.total < all.total,
     `${regions.current[0]}: ${one.total} из ${all.total}`,
@@ -132,7 +132,7 @@ test('по ушедшему РМ видны его прежние лавки, а
 test('топ считает долю зелёных, а не их число', async () => {
   // По абсолютному счёту наверх лезли лавки покрупнее с посредственными 70%,
   // обгоняя тех, у кого 92%: у лавок разное число оценённых ячеек.
-  const best = await q.bestShops(ALL.from, ALL.to, 12);
+  const best = await q.bestShops(ALL, 12);
   assert.ok(best.length > 0);
 
   const shares = best.map((b) => b.share);
@@ -151,7 +151,7 @@ test('топ считает долю зелёных, а не их число', a
 
 test('лавки без достаточных данных в топ не попадают', async () => {
   // «1 из 1 = 100%» — не достижение: порог отсекает такие строки.
-  const best = await q.bestShops(ALL.from, ALL.to, 80);
+  const best = await q.bestShops(ALL, 80);
   const totals = best.map((b) => b.total);
   const min = Math.min(...totals);
   const median = [...totals].sort((a, b) => a - b)[Math.floor(totals.length / 2)];
@@ -160,8 +160,8 @@ test('лавки без достаточных данных в топ не по�
 });
 
 test('топ и анти-топ смотрят на одни данные с разных сторон', async () => {
-  const best = await q.bestShops(ALL.from, ALL.to, 5);
-  const worst = await q.antiTop(ALL.from, ALL.to, 5);
+  const best = await q.bestShops(ALL, 5);
+  const worst = await q.antiTop(ALL, 5);
 
   const bestCodes = new Set(best.map((b) => b.shop.code));
   const worstCodes = new Set(worst.map((w) => w.shop.code));
@@ -174,8 +174,8 @@ test('топ уважает фильтр по РМ', async () => {
   const regions = await q.listRegions(ALL.from, ALL.to);
   const region = regions.current[0];
 
-  const all = await q.bestShops(ALL.from, ALL.to, 80);
-  const one = await q.bestShops(ALL.from, ALL.to, 80, region);
+  const all = await q.bestShops(ALL, 80);
+  const one = await q.bestShops({ ...ALL, region }, 80);
 
   assert.ok(one.length > 0 && one.length < all.length, `${region}: ${one.length} из ${all.length}`);
 });
@@ -241,6 +241,56 @@ test('фильтр по лавке: точный код важнее подст�
   assert.deepEqual(nothing.rows, []);
 });
 
+test('сводка уважает фильтр по лавке — и точный код важнее подстроки', async () => {
+  // Раньше на сводку доезжали только период и РМ: «как дела у М1» приходилось
+  // смотреть в радаре.
+  const all = await q.shopTotals(ALL);
+  const one = await q.shopTotals({ ...ALL, shop: 'М1' });
+  assert.equal(one.total, 1, '«М1» — это ровно М1, а не М1 вместе с М10–М19');
+  assert.ok(one.total < all.total);
+
+  const group = await q.shopTotals({ ...ALL, shop: 'ская' });
+  assert.ok(group.total > 1, `по «ская» нашлось ${group.total}`);
+
+  // Те же лавки должны видеть и остальные виджеты сводки.
+  const top = await q.antiTop({ ...ALL, shop: 'М1' });
+  assert.ok(top.every((r) => r.shop.code === 'М1'), 'анти-топ показал чужие лавки');
+  const best = await q.bestShops({ ...ALL, shop: 'М1' }, 80);
+  assert.ok(best.every((r) => r.shop.code === 'М1'), 'топ показал чужие лавки');
+});
+
+test('на сводке выбранный критерий считается вместо агрегата лавки', async () => {
+  const day = { from: '2026-08-25', to: '2026-08-25' };
+  const whole = await q.shopTotals(day);
+  const showcase = await q.shopTotals({ ...day, criterion: 'showcase' });
+
+  // Агрегат лавки и один критерий — разные числа: иначе фильтр ни на что
+  // не влиял бы, а поле в шапке было бы украшением.
+  assert.notDeepEqual(
+    [whole.green, whole.yellow, whole.red],
+    [showcase.green, showcase.yellow, showcase.red],
+  );
+  assert.ok(showcase.green + showcase.yellow + showcase.red <= showcase.total);
+
+  // Анти-топ под тем же фильтром считает красные только по нему.
+  const top = await q.antiTop({ ...day, criterion: 'showcase' });
+  assert.ok(
+    top.every((r) => r.criteria.length === 1 && r.criteria[0] === 'showcase'),
+    'в анти-топ просочились чужие критерии',
+  );
+});
+
+test('фильтр по статусу оставляет на сводке те же лавки, что в радаре', async () => {
+  // Статус лавки за день — свёртка критериев, поэтому набор лавок сводка
+  // берёт у радара: два ответа на один вопрос разъезжаться не должны.
+  const f = { from: '2026-08-25', to: '2026-08-25', status: 'red' } as const;
+  const totals = await q.shopTotals(f);
+  const { rows } = await q.radar(f);
+
+  assert.equal(totals.total, rows.length);
+  assert.ok(totals.total > 0 && totals.total < 80, `под фильтром ${totals.total} лавок из 80`);
+});
+
 test('фильтр по лавке складывается с фильтром по РМ', async () => {
   // Проверяем через пересечение, а не через r.shop.region: РМ теперь
   // историчен, и лавка может попасть в выборку по периоду, который уже
@@ -263,7 +313,7 @@ test('фильтр по лавке складывается с фильтром 
 
 test('сумма по критерию не превышает числа лавок под фильтром', async () => {
   for (const range of [['2026-08-25', '2026-08-25'], [ALL.from, ALL.to]] as const) {
-    for (const s of await q.summaryByCriterion(range[0], range[1])) {
+    for (const s of await q.summaryByCriterion({ from: range[0], to: range[1] })) {
       assert.ok(
         s.green + s.yellow + s.red + s.missing === 80,
         `${s.criterion}: ${s.green}+${s.yellow}+${s.red}+${s.missing} ≠ 80`,
@@ -273,8 +323,8 @@ test('сумма по критерию не превышает числа лав
 });
 
 test('наполнение витрины считается за весь период, а не за один день', async () => {
-  const day = await q.showcaseStats('2026-08-25', '2026-08-25');
-  const period = await q.showcaseStats(ALL.from, ALL.to);
+  const day = await q.showcaseStats({ from: '2026-08-25', to: '2026-08-25' });
+  const period = await q.showcaseStats(ALL);
   assert.ok(period.filled >= 1);
   assert.notEqual(day.avg, period.avg, 'среднее за день и за неделю не должно совпадать');
   for (const s of [day, period]) {
@@ -292,9 +342,111 @@ test('период без данных не ломает выдачу', async ()
   assert.deepEqual(dates, []);
   assert.deepEqual(rows, []);
 
-  const t = await q.shopTotals('2026-07-01', '2026-07-15');
+  const t = await q.shopTotals({ from: '2026-07-01', to: '2026-07-15' });
   assert.deepEqual([t.green, t.yellow, t.red, t.days], [0, 0, 0, 0]);
 
-  const fill = await q.showcaseStats('2026-07-01', '2026-07-15');
+  const fill = await q.showcaseStats({ from: '2026-07-01', to: '2026-07-15' });
   assert.equal(fill.avg, null);
+});
+
+test('итог радара: знаменатель — дни с оценкой, а не длина периода', async () => {
+  // «7» в столбце итога не читалось: 7 из 8 дней или 7 из 30? Знаменатель
+  // берём по дням с оценкой — ровно по числу точек в строке.
+  const { dates, rows } = await q.radar({ from: ALL.from, to: ALL.to });
+  assert.ok(rows.length > 0);
+
+  for (const r of rows) {
+    assert.equal(
+      r.ratedCount,
+      Object.keys(r.cells).length,
+      `${r.shop.code}: знаменатель разошёлся с числом ячеек`,
+    );
+    assert.ok(
+      r.redCount <= r.ratedCount,
+      `${r.shop.code}: красных ${r.redCount} больше оценённых дней ${r.ratedCount}`,
+    );
+    assert.ok(r.ratedCount <= dates.length, `${r.shop.code}: оценённых дней больше, чем столбцов`);
+    assert.equal(
+      r.redCount,
+      Object.values(r.cells).filter((c) => c.status === 'red').length,
+      `${r.shop.code}: числитель разошёлся с красными ячейками`,
+    );
+  }
+
+  // Дни без данных в знаменатель не попадают: хотя бы у одной лавки
+  // оценённых дней меньше, чем столбцов в таблице.
+  assert.ok(
+    rows.some((r) => r.ratedCount < dates.length),
+    'ни одной лавки с пропущенным днём — тест не проверяет главное',
+  );
+});
+
+test('конкурс: баллы = зелёные минус красные, жёлтые в ноль', async () => {
+  const { rows } = await q.contest({ from: ALL.from, to: ALL.to });
+  assert.ok(rows.length > 0, 'за весь период витрины кто-то заполнял');
+
+  for (const r of rows) {
+    const cells = Object.values(r.cells);
+    assert.equal(r.score.rated, cells.length, `${r.shop.code}: знаменатель разошёлся с ячейками`);
+    assert.equal(
+      r.score.points,
+      r.score.green - r.score.red,
+      `${r.shop.code}: жёлтые не должны двигать сумму`,
+    );
+    assert.equal(
+      r.score.points,
+      cells.reduce((a, c) => a + c.points, 0),
+      `${r.shop.code}: сумма строки разошлась с ячейками`,
+    );
+  }
+});
+
+test('конкурс: лавки отсортированы по баллам сверху вниз', async () => {
+  const { rows } = await q.contest({ from: ALL.from, to: ALL.to });
+  const points = rows.map((r) => r.score.points);
+
+  assert.deepEqual(points, [...points].sort((a, b) => b - a), 'порядок лавок не по баллам');
+  assert.ok(new Set(points).size > 1, 'у всех лавок одинаковый балл — тест ничего не проверяет');
+});
+
+test('конкурс: сумма по РМ сходится с сетью', async () => {
+  const { rows, regions, total } = await q.contest({ from: ALL.from, to: ALL.to });
+
+  assert.equal(
+    total.points,
+    rows.reduce((a, r) => a + r.score.points, 0),
+    'итог сети разошёлся с лавками',
+  );
+  assert.equal(
+    regions.reduce((a, r) => a + r.score.rated, 0),
+    total.rated,
+    'дни РМ разошлись с днями сети — чей-то день потерялся или задвоился',
+  );
+  assert.ok(regions.length > 1, 'РМ в разрезе меньше двух — статистика по регионам ни о чём');
+});
+
+test('конкурс уважает фильтры по РМ и по лавке', async () => {
+  const { regions } = await q.contest({ from: ALL.from, to: ALL.to });
+  const rm = regions[0].region;
+
+  const scoped = await q.contest({ from: ALL.from, to: ALL.to, region: rm });
+  assert.deepEqual(scoped.regions.map((r) => r.region), [rm], 'в разрез затесался чужой РМ');
+
+  const one = await q.contest({ from: ALL.from, to: ALL.to, shop: scoped.rows[0].shop.code });
+  assert.equal(one.rows.length, 1, 'точный код лавки должен давать ровно одну строку');
+});
+
+test('конкурс: дни без витрины в баллы не попадают', async () => {
+  // Витрину заполняют не каждый день и не по всем лавкам — значит, у кого-то
+  // оценённых дней меньше, чем столбцов, и балл за пропуск не начисляется.
+  const { dates, rows } = await q.contest({ from: ALL.from, to: ALL.to });
+
+  assert.ok(
+    rows.some((r) => r.score.rated < dates.length),
+    'у всех лавок заполнены все дни — тест не проверяет главное',
+  );
+  for (const r of rows) {
+    assert.ok(r.score.rated > 0, `${r.shop.code}: строка без единого оценённого дня`);
+    assert.ok(r.avgFill != null && r.avgFill >= 0 && r.avgFill <= 1, `${r.shop.code}: витрина вне 0–1`);
+  }
 });

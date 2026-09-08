@@ -6,8 +6,20 @@ import { shortDate } from '@/lib/time';
 import { Filters } from '@/components/Filters';
 import { plural } from '@/lib/plural';
 import { StatusCell, STATUS_TEXT } from '@/components/Status';
+import type { CriterionKey } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Критерий, на котором радар открывается.
+ *
+ * Не «Общий результат»: радар открывают, чтобы смотреть наполнение витрин —
+ * это единственный критерий, который заполняют руками, и единственный, ради
+ * которого сюда заходят каждый день. Общий результат никуда не делся —
+ * он первый в списке, и выбранное руками всегда главнее (`criterion=all`
+ * остаётся в ссылке, см. Filters).
+ */
+const DEFAULT_CRITERION: CriterionKey = 'showcase';
 
 export default async function RadarPage({
   searchParams,
@@ -15,9 +27,16 @@ export default async function RadarPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const p = await resolveParams(sp);
+  const p = await resolveParams(sp, { criterion: DEFAULT_CRITERION });
   const config = loadConfig();
   const [regions, shops] = await Promise.all([listRegions(p.from, p.to), listShops()]);
+
+  // Критерий виден в подписи, а не только в фильтре: иначе неочевидно,
+  // почему в ячейках витрина, а не общий результат.
+  const criterionTitle =
+    p.criterion && p.criterion !== 'all'
+      ? (config.criteria[p.criterion]?.title ?? p.criterion)
+      : null;
 
   const { dates, rows } = await radar({
     from: p.from,
@@ -34,9 +53,10 @@ export default async function RadarPage({
         <h1 className="text-2xl font-semibold tracking-tight">
           {p.shop || p.region ? 'Радар по лавкам' : 'Радар по всем лавкам'}
         </h1>
-        {(p.shop || p.region) && (
+        {(p.shop || p.region || criterionTitle) && (
           <p className="mt-1 text-sm muted">
             {rows.length} {plural(rows.length, 'лавка', 'лавки', 'лавок')} под фильтром
+            {criterionTitle && ` · критерий «${criterionTitle}»`}
             {p.shop && ` · поиск «${p.shop}»`}
             {p.region && ` · РМ ${p.region}`}
           </p>
@@ -50,13 +70,16 @@ export default async function RadarPage({
         dates={p.dates}
         config={config}
         shops={shops.map((s) => ({ code: s.code, name: s.name }))}
+        criterionDefault={DEFAULT_CRITERION}
       />
 
       {dates.length === 0 || rows.length === 0 ? (
         <div className="surface p-8 text-center text-sm muted">
           {p.shop
             ? `По запросу «${p.shop}» лавок не нашлось. Попробуйте код (М17) или часть названия.`
-            : 'Под фильтры ничего не попало. Попробуй расширить период или снять фильтр по статусу.'}
+            : criterionTitle
+              ? `За период по критерию «${criterionTitle}» оценок нет. Возьми общий результат или расширь период.`
+              : 'Под фильтры ничего не попало. Попробуй расширить период или снять фильтр по статусу.'}
         </div>
       ) : (
         <div className="surface radar-scroll">
@@ -70,7 +93,12 @@ export default async function RadarPage({
                     {shortDate(d)}
                   </th>
                 ))}
-                <th className="px-2 py-2 text-right text-xs font-medium muted">🔴</th>
+                <th
+                  className="px-2 py-2 text-right text-xs font-medium whitespace-nowrap muted"
+                  title="Итог: красных дней из оценённых"
+                >
+                  🔴
+                </th>
                 <th className="w-full" aria-hidden />
               </tr>
             </thead>
@@ -101,8 +129,24 @@ export default async function RadarPage({
                       />
                     );
                   })}
-                  <td className="px-2 py-1 text-right text-xs font-semibold tabular-nums">
-                    {r.redCount || ''}
+                  {/* Голое число красных не читалось: «7» — это 7 из 8 дней или
+                      7 из 30? Знаменатель — дни с оценкой, дни без данных в него
+                      не входят, поэтому он совпадает с числом точек в строке. */}
+                  <td
+                    className="px-2 py-1 text-right text-xs font-semibold whitespace-nowrap tabular-nums"
+                    title={
+                      r.ratedCount > 0
+                        ? `${r.redCount} ${plural(r.redCount, 'красный день', 'красных дня', 'красных дней')} из ${r.ratedCount} ${plural(r.ratedCount, 'оценённого', 'оценённых', 'оценённых')}`
+                        : 'За период лавку ни разу не оценивали'
+                    }
+                  >
+                    {r.ratedCount > 0 ? (
+                      <span className={r.redCount === 0 ? 'muted' : undefined}>
+                        {r.redCount} из {r.ratedCount}
+                      </span>
+                    ) : (
+                      ''
+                    )}
                   </td>
                   <td aria-hidden />
                 </tr>

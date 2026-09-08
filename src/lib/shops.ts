@@ -52,3 +52,36 @@ export function pickCanonicalName(candidates: readonly string[]): string {
     cur.length > best.length ? cur : best,
   );
 }
+
+/**
+ * Поиск лавки по коду или названию: «М17» найдёт М17, «Сухаревский» — её же,
+ * «М1» — М1 и М10–М19 (но см. findShops: точный код важнее).
+ */
+export function matchesShop(shop: ShopRef, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (shop.code.toLowerCase() === q) return true;
+  return `${shop.code} ${shop.name}`.toLowerCase().includes(q);
+}
+
+/** Совпал ли код лавки с запросом точно: «м1» → М1, но не М10. */
+export function isExactCode(shop: ShopRef, query: string): boolean {
+  return shop.code.toLowerCase() === query.trim().toLowerCase();
+}
+
+/**
+ * Лавки под запрос с правилом радара: **точное совпадение кода важнее
+ * подстроки**. Набрав «М1», человек хочет посмотреть М1, а не М1 вместе
+ * с М10–М19.
+ *
+ * Функция чистая, без БД: то же правило нужно на клиенте — переключателю
+ * лавки в карточке (см. ShopSwitcher). Иначе правил стало бы два, и они
+ * разъехались бы при первой же правке.
+ */
+export function findShops<T extends ShopRef>(shops: readonly T[], query: string): T[] {
+  const q = query.trim();
+  if (!q) return [...shops];
+
+  const exact = shops.filter((s) => isExactCode(s, q));
+  return exact.length > 0 ? exact : shops.filter((s) => matchesShop(s, q));
+}
