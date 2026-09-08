@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { findShops } from '@/lib/shops';
+import { ClearButton } from './ClearButton';
 
 export interface ShopOption {
   code: string;
@@ -66,18 +67,13 @@ export function ShopSearch({
         style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
       />
       {draft && (
-        <button
-          type="button"
+        <ClearButton
           onClick={() => {
             setDraft('');
             onChange(undefined);
           }}
-          title="Сбросить"
-          aria-label="Сбросить фильтр по лавке"
-          className="absolute top-1/2 right-2 -translate-y-1/2 text-sm muted"
-        >
-          ✕
-        </button>
+          label="Сбросить фильтр по лавке"
+        />
       )}
       <datalist id={listId}>
         {shops.map((s) => (

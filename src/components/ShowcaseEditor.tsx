@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { plural } from '@/lib/plural';
 import { formatDay, formatMoment } from '@/lib/time';
 import type { Status } from '@/lib/types';
+import { ClearButton } from './ClearButton';
 
 /**
  * Редактор наполнения витрин.
@@ -279,14 +280,17 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
 
       {/* --- Фильтры: список из 80 лавок нужно уметь сузить --- */}
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск: М12 или Покровка"
-          className="w-56 rounded-lg border px-3 py-2 text-sm"
-          style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
-        />
-        <div className="w-56">
+        <div className="relative w-56">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск: М12 или Покровка"
+            className="w-full rounded-lg border px-3 py-2 pr-8 text-sm"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+          />
+          {query && <ClearButton onClick={() => setQuery('')} label="Очистить поиск" />}
+        </div>
+        <div className={`relative w-56 ${region ? 'has-clear' : ''}`}>
           <select
             value={region}
             onChange={(e) => setRegion(e.target.value)}
@@ -299,6 +303,7 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
               </option>
             ))}
           </select>
+          {region && <ClearButton onClick={() => setRegion('')} label="Сбросить фильтр по РМ" />}
         </div>
         <label
           className="flex items-center gap-2 text-sm"

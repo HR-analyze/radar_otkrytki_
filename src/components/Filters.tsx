@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useTransition } from 'react';
 import { CRITERION_ORDER, type CriterionKey, type ThresholdConfig } from '@/lib/types';
+import { ClearButton } from './ClearButton';
 import { DateRangePicker } from './DateRangePicker';
 import { ShopSearch, type ShopOption } from './ShopFilter';
 import { STATUS_FILTER_TITLE } from './Status';
@@ -95,7 +96,17 @@ export function Filters({
       className={`surface grid gap-3 p-3 sm:grid-cols-2 ${shops ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
       style={{ cursor: pending ? 'progress' : undefined }}
     >
-      <Field label="Период">
+      {/* Период сбрасывается не в пустоту, а в значение по умолчанию (текущий
+          месяц, см. defaultRange): период без границ бессмысленен. Крестик
+          поэтому появляется только когда даты стоят в ссылке явно. */}
+      <Field
+        label="Период"
+        onClear={
+          searchParams.has('from') || searchParams.has('to')
+            ? () => apply({ from: undefined, to: undefined })
+            : undefined
+        }
+      >
         <DateRangePicker
           from={state.from}
           to={state.to}
@@ -104,7 +115,10 @@ export function Filters({
         />
       </Field>
 
-      <Field label="РМ">
+      <Field
+        label="РМ"
+        onClear={state.region ? () => apply({ region: undefined }) : undefined}
+      >
         <select
           value={state.region ?? ''}
           onChange={(e) => apply({ region: e.target.value || undefined })}
@@ -150,7 +164,16 @@ export function Filters({
       )}
 
       {showCriterion && (
-        <Field label="Критерий">
+        <Field
+          label="Критерий"
+          /* Сброс возвращает предвыбор страницы, а не «Общий результат»:
+             радар открывается на витрине, туда же и откатываемся. */
+          onClear={
+            (state.criterion ?? criterionDefault) !== criterionDefault
+              ? () => apply({ criterion: criterionDefault })
+              : undefined
+          }
+        >
           <select
             value={state.criterion ?? criterionDefault}
             onChange={(e) => apply({ criterion: e.target.value as CriterionKey | 'all' })}
@@ -166,7 +189,14 @@ export function Filters({
       )}
 
       {showStatus && (
-        <Field label="Статус">
+        <Field
+          label="Статус"
+          onClear={
+            state.status && state.status !== 'all'
+              ? () => apply({ status: 'all' })
+              : undefined
+          }
+        >
           <select
             value={state.status ?? 'all'}
             onChange={(e) => apply({ status: e.target.value })}
@@ -182,11 +212,30 @@ export function Filters({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * Подпись + само поле. `onClear` не передан — крестика нет: значит фильтр
+ * стоит в значении по умолчанию и сбрасывать нечего.
+ *
+ * Кнопка живёт внутри <label> намеренно: по спецификации клик по интерактивному
+ * потомку не пробрасывается на связанный контрол, так что сброс не открывает
+ * заодно и выпадающий список.
+ */
+function Field({
+  label,
+  children,
+  onClear,
+}: {
+  label: string;
+  children: React.ReactNode;
+  onClear?: () => void;
+}) {
   return (
     <label className="flex min-w-0 flex-col gap-1">
       <span className="text-xs muted">{label}</span>
-      {children}
+      <div className={`relative ${onClear ? 'has-clear' : ''}`}>
+        {children}
+        {onClear && <ClearButton onClick={onClear} label={`Сбросить фильтр «${label}»`} />}
+      </div>
     </label>
   );
 }
