@@ -266,9 +266,9 @@ export default async function ShopPage({
                       <p className="text-xs muted sm:col-span-full">{person.note}</p>
                     )}
 
-                    {person.departures.length > 0 && (
+                    {person.criterion === 'driver' && (
                       <p className="text-xs sm:col-span-full">
-                        <DepartureNote trips={person.departures} />
+                        <DepartureNote trips={person.departures} units={day.departureUnits} />
                       </p>
                     )}
                   </div>
@@ -317,7 +317,31 @@ export default async function ShopPage({
  * Поэтому это именно справка: утверждать, что человек выехал в эту лавку,
  * нельзя, и в статус лавки время выезда не входит (см. queries.ts).
  */
-function DepartureNote({ trips }: { trips: readonly DepartureTrip[] }) {
+function DepartureNote({
+  trips,
+  units,
+}: {
+  trips: readonly DepartureTrip[];
+  units: readonly string[];
+}) {
+  // Три разных случая, и путать их нельзя: «мы не проверяли» — не то же самое,
+  // что «человек не отметился». Второе — претензия к водителю, первое — к нам.
+  if (units.length === 0) {
+    return (
+      <span className="muted" title="Загрузите выгрузку отметок по РЦ за этот день — она подтянется сама">
+        Выезд с РЦ: выгрузки за этот день нет
+      </span>
+    );
+  }
+
+  if (trips.length === 0) {
+    return (
+      <span className="muted" title={`Выгрузка по ${units.join(', ')} за этот день есть, но этого человека в ней нет`}>
+        Выезд с {units.join(', ')}: отметок нет
+      </span>
+    );
+  }
+
   const known = trips.filter((t) => t.minutes != null);
 
   return (

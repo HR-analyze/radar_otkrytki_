@@ -1372,6 +1372,15 @@ export interface ShopDay {
   shopScore: number | null;
   /** Разбор итога на слагаемые «Водитель + Сотрудники + Витрина»; null — итог считается иначе. */
   rating: ShopRating | null;
+  /**
+   * Склады, по которым за этот день есть выгрузка выездов: «РЦ Свобода».
+   *
+   * Пустой список — выгрузки за день нет вовсе, и это не то же самое, что
+   * «водитель не отметился»: в первом случае радар не знает, во втором знает,
+   * что отметки не было. Смешать их значило бы обвинить человека в том, чего
+   * мы не проверяли.
+   */
+  departureUnits: string[];
 }
 
 export async function shopHistory(
@@ -1390,11 +1399,13 @@ export async function shopHistory(
   // полному имени — фамилии мало, в выгрузках есть разные Егоровы и Смирновы.
   const rule = departureRule(config);
   const departures = new Map<string, DepartureTrip[]>();
+  const departureUnits = new Map<string, Set<string>>();
   if (rule) {
     for (const r of snap.departures) {
       if (!inRange(r.date)) continue;
       const key = `${r.date}|${r.employeeName.trim()}`;
       (departures.get(key) ?? departures.set(key, []).get(key)!).push(rule.tripOf(r));
+      (departureUnits.get(r.date) ?? departureUnits.set(r.date, new Set()).get(r.date)!).add(r.unit);
     }
   }
   const legacy = snap.legacyPeople.filter((r) => r.shopCode === shopCode && inRange(r.date));
@@ -1462,6 +1473,7 @@ export async function shopHistory(
       shopStatus: shop.status,
       shopScore: shop.score,
       rating,
+      departureUnits: [...(departureUnits.get(date) ?? [])].sort(),
     };
   });
 }
