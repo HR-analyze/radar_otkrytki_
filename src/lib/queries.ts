@@ -13,6 +13,7 @@ import { aggregateStatuses, roundScore, statusFromScore } from './status';
 import { parseClock } from './time';
 import { isExactCode, matchesShop } from './shops';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
+import type { DepartureRow } from './parsers/departure';
 import {
   addStatus,
   averagePoints,
@@ -1003,8 +1004,10 @@ export interface DepartureDay {
   status: Status;
 }
 
-/** Один выезд: то, что стоит в клетке детализации. */
+/** Один выезд: то, что стоит в клетке детализации и на карточке лавки. */
 export interface DepartureTrip {
+  /** Склад, с которого выехал: «РЦ Свобода». */
+  unit: string;
   /** Минуты от полуночи. null — приход на РЦ есть, а ухода нет. */
   minutes: number | null;
   /** Время на фабрике, минуты. null — не из чего считать. */
@@ -1058,6 +1061,56 @@ export interface DepartureSummary {
   drivers: DepartureDriver[];
 }
 
+/** Время на фабрике: уход минус приход. Обе отметки — одного дня. */
+function stayOf(r: { arrivalMinutes: number | null; departureMinutes: number | null }): number | null {
+  return r.arrivalMinutes != null &&
+    r.departureMinutes != null &&
+    r.departureMinutes >= r.arrivalMinutes
+    ? r.departureMinutes - r.arrivalMinutes
+    : null;
+}
+
+/**
+ * Правило выезда с РЦ: как один выезд превращается в зону и балл.
+ *
+ * Одно на всех, кто его применяет: сетевой блок на сводке и справка на
+ * карточке лавки. Разъедься они — на одном экране один и тот же выезд был бы
+ * жёлтым, на другом красным.
+ *
+ * null — правила в конфиге нет.
+ */
+function departureRule(config: ThresholdConfig) {
+  const rule = config.rules.driverDeparture;
+  if (!rule) return null;
+
+  const green = parseClock(rule.greenUntil);
+  const yellow = parseClock(rule.yellowUntil);
+  const zones = config.rules.scoreZones;
+
+  /**
+   * Границы включительные: выехавший ровно в 05:30 — уже красный. Поэтому в
+   * конфиге yellowUntil = 05:29, а не 05:30.
+   */
+  const zoneOf = (minutes: number): { status: 'green' | 'yellow' | 'red'; score: number } =>
+    minutes <= green
+      ? { status: 'green', score: zones.green }
+      : minutes <= yellow
+        ? { status: 'yellow', score: zones.yellow }
+        : { status: 'red', score: zones.red };
+
+  /** Строка выгрузки → выезд. Нет отметки ухода — выезд неизвестен. */
+  const tripOf = (r: DepartureRow): DepartureTrip => {
+    const stay = stayOf(r);
+    if (r.departureMinutes == null) {
+      return { unit: r.unit, minutes: null, stay, status: 'no_data', score: null };
+    }
+    const zone = zoneOf(r.departureMinutes);
+    return { unit: r.unit, minutes: r.departureMinutes, stay, ...zone };
+  };
+
+  return { zoneOf, tripOf };
+}
+
 /**
  * Выезд с РЦ за период — сетевой показатель.
  *
@@ -1071,29 +1124,9 @@ export async function departureSummary(from: string, to: string): Promise<Depart
   if (rows.length === 0) return null;
 
   const config = loadConfig();
-  const rule = config.rules.driverDeparture;
+  const rule = departureRule(config);
   if (!rule) return null;
-
-  const green = parseClock(rule.greenUntil);
-  const yellow = parseClock(rule.yellowUntil);
   const zones = config.rules.scoreZones;
-
-  /** Время на фабрике: уход минус приход. Обе отметки — одного дня. */
-  const stayOf = (r: { arrivalMinutes: number | null; departureMinutes: number | null }) =>
-    r.arrivalMinutes != null && r.departureMinutes != null && r.departureMinutes >= r.arrivalMinutes
-      ? r.departureMinutes - r.arrivalMinutes
-      : null;
-
-  /**
-   * Зона и балл одного выезда. Границы включительные: выехавший ровно в
-   * 05:30 — уже красный, поэтому yellowUntil в конфиге 05:29, а не 05:30.
-   */
-  const zoneOf = (minutes: number): { status: 'green' | 'yellow' | 'red'; score: number } =>
-    minutes <= green
-      ? { status: 'green', score: zones.green }
-      : minutes <= yellow
-        ? { status: 'yellow', score: zones.yellow }
-        : { status: 'red', score: zones.red };
 
   // Статус считается уже по собранному баллу, поэтому в накопителе его нет.
   type Bucket = Omit<DepartureDay, 'status'> & {
@@ -1148,31 +1181,37 @@ export async function departureSummary(from: string, to: string): Promise<Depart
     }
     const cell = (driver.days[r.date] ??= []);
 
-    const stay = stayOf(r);
-    if (stay != null) {
-      day.stays.push(stay);
-      driver.stays.push(stay);
+    const trip = rule.tripOf(r);
+    cell.push(trip);
+
+    if (trip.stay != null) {
+      day.stays.push(trip.stay);
+      driver.stays.push(trip.stay);
     }
 
-    if (r.departureMinutes == null) {
+    if (trip.minutes == null || trip.score == null) {
       day.unknown++;
       driver.unknown++;
-      cell.push({ minutes: null, stay, status: 'no_data', score: null });
       continue;
     }
 
-    day.times.push(r.departureMinutes);
-
-    const zone = zoneOf(r.departureMinutes);
-    day[zone.status]++;
-    day.scores.push(zone.score);
+    day.times.push(trip.minutes);
+    day.scores.push(trip.score);
     driver.trips++;
-    driver[zone.status]++;
-    driver.scores.push(zone.score);
-    cell.push({ minutes: r.departureMinutes, stay, status: zone.status, score: zone.score });
+    driver.scores.push(trip.score);
 
-    if (zone.status === 'red') {
-      late.push({ date: r.date, employeeName: r.employeeName, minutes: r.departureMinutes, stay });
+    if (trip.status === 'green' || trip.status === 'yellow' || trip.status === 'red') {
+      day[trip.status]++;
+      driver[trip.status]++;
+    }
+
+    if (trip.status === 'red') {
+      late.push({
+        date: r.date,
+        employeeName: r.employeeName,
+        minutes: trip.minutes,
+        stay: trip.stay,
+      });
     }
   }
 
@@ -1299,6 +1338,18 @@ export interface ShopDayPerson {
   homeShopCode: string | null;
   status: Status;
   note: string | null;
+  /**
+   * Выезды этого же человека с РЦ в этот день — справочно.
+   *
+   * Связь одна: полное совпадение ФИО в выгрузке по РЦ и в выгрузке отметок
+   * (форматы имён там одинаковые, «Фамилия Имя Отчество»). Ни лавки, ни
+   * маршрута в выгрузке по РЦ нет, поэтому утверждать, что человек выехал
+   * ИМЕННО в эту лавку, нельзя — цифра стоит рядом как справка и в статус
+   * лавки не входит.
+   *
+   * Пустой список — человека в выгрузке по РЦ за этот день нет.
+   */
+  departures: DepartureTrip[];
 }
 
 export interface ShopDay {
@@ -1334,6 +1385,18 @@ export async function shopHistory(
   const shopPeriods = regionIndexOf(snap).get(shopCode);
 
   const people = snap.attendance.filter((r) => r.shopCode === shopCode && inRange(r.date));
+
+  // Выезды с РЦ по ФИО и дню: справка в строке сотрудника. Совпадение по
+  // полному имени — фамилии мало, в выгрузках есть разные Егоровы и Смирновы.
+  const rule = departureRule(config);
+  const departures = new Map<string, DepartureTrip[]>();
+  if (rule) {
+    for (const r of snap.departures) {
+      if (!inRange(r.date)) continue;
+      const key = `${r.date}|${r.employeeName.trim()}`;
+      (departures.get(key) ?? departures.set(key, []).get(key)!).push(rule.tripOf(r));
+    }
+  }
   const legacy = snap.legacyPeople.filter((r) => r.shopCode === shopCode && inRange(r.date));
   const criteria = snap.criteria.filter((c) => c.shopCode === shopCode && inRange(c.date));
   const dayShowcase = snap.showcase.filter((s) => s.shopCode === shopCode && inRange(s.date));
@@ -1382,6 +1445,7 @@ export async function shopHistory(
         homeShopCode: p.homeShopCode,
         status: p.status,
         note: p.note,
+        departures: departures.get(`${p.date}|${p.employeeName.trim()}`) ?? [],
       })),
       // Критерии, которые за этот день посчитаны по отметкам, из легаси-списка
       // убираем: иначе за 19–21.08 водитель показывался бы дважды — реальным

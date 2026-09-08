@@ -163,6 +163,12 @@ function DriverDetails({ data }: { data: DepartureSummary }) {
               </th>
               <th className="px-2 py-2 text-right text-xs font-medium muted">Балл</th>
               <th className="px-2 py-2 text-right text-xs font-medium muted">Выездов</th>
+              <th
+                className="px-2 py-2 text-right text-xs font-medium muted"
+                title="Строки, где приход на РЦ есть, а отметки об уходе нет: во сколько человек выехал — неизвестно, балл по ним не ставится"
+              >
+                Без ухода
+              </th>
               <th className="hidden px-2 py-2 text-right text-xs font-medium muted sm:table-cell">
                 На фабрике
               </th>
@@ -192,9 +198,16 @@ function DriverDetails({ data }: { data: DepartureSummary }) {
                 </td>
                 <td className="px-2 py-1 text-right text-xs whitespace-nowrap tabular-nums muted">
                   {dr.trips}
-                  {dr.unknown > 0 && (
-                    <span title={`${dr.unknown} без отметки об уходе`}> +{dr.unknown}?</span>
-                  )}
+                </td>
+                <td
+                  className="px-2 py-1 text-right text-xs whitespace-nowrap tabular-nums muted"
+                  title={
+                    dr.unknown > 0
+                      ? `${dr.unknown} ${plural(dr.unknown, 'отметка', 'отметки', 'отметок')} прихода на РЦ без ухода — балл по ним не ставится`
+                      : undefined
+                  }
+                >
+                  {dr.unknown || ''}
                 </td>
                 <td className="hidden px-2 py-1 text-right text-xs whitespace-nowrap tabular-nums muted sm:table-cell">
                   {formatDuration(dr.medianStay)}
@@ -209,8 +222,10 @@ function DriverDetails({ data }: { data: DepartureSummary }) {
         </table>
       </div>
       <p className="mt-1.5 text-xs muted">
-        Сверху — худший балл. «Выездов» — сколько раз выехал; «+N?» — строки, где есть приход на
-        РЦ, но нет ухода: балл по ним не ставится. В клетке — время выезда за этот день.
+        Сверху — худший балл. «Выездов» — сколько раз выехал за период. «Без ухода» — строки, где
+        приход на РЦ есть, а отметки о выезде нет: во сколько уехал, выгрузка не говорит, поэтому
+        балл по ним не ставится (в клетке дня они стоят серой точкой). В клетке — время выезда за
+        этот день.
       </p>
     </details>
   );

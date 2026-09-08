@@ -2,12 +2,19 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { loadConfig } from '@/lib/config';
 import { resolveParams } from '@/lib/params';
-import { getShop, listShops, shopHistory, type ShopDayPerson } from '@/lib/queries';
-import { formatClock, formatDay, shortDate } from '@/lib/time';
+import {
+  getShop,
+  listShops,
+  shopHistory,
+  type DepartureTrip,
+  type ShopDayPerson,
+} from '@/lib/queries';
+import { formatClock, formatDuration, shortDate } from '@/lib/time';
 import { StatusBadge, STATUS_TEXT } from '@/components/Status';
 import { scheduleFor, scheduleShift } from '@/lib/status';
 import { CRITERION_ORDER, type CriterionKey } from '@/lib/types';
 import { RATING_COMPONENT_TITLE } from '@/lib/rating';
+import { plural } from '@/lib/plural';
 import { ShopSwitcher } from '@/components/ShopFilter';
 
 /**
@@ -258,6 +265,12 @@ export default async function ShopPage({
                     {person.note && (
                       <p className="text-xs muted sm:col-span-full">{person.note}</p>
                     )}
+
+                    {person.departures.length > 0 && (
+                      <p className="text-xs sm:col-span-full">
+                        <DepartureNote trips={person.departures} />
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -294,6 +307,42 @@ export default async function ShopPage({
         ))
       )}
     </div>
+  );
+}
+
+/**
+ * Справка «во сколько он выехал с РЦ» в строке сотрудника.
+ *
+ * Связь — по совпадению ФИО с выгрузкой по РЦ, лавки в той выгрузке нет.
+ * Поэтому это именно справка: утверждать, что человек выехал в эту лавку,
+ * нельзя, и в статус лавки время выезда не входит (см. queries.ts).
+ */
+function DepartureNote({ trips }: { trips: readonly DepartureTrip[] }) {
+  const known = trips.filter((t) => t.minutes != null);
+
+  return (
+    <span className="muted">
+      Выезд с {trips[0].unit}:{' '}
+      {known.length === 0 ? (
+        <span>приход есть, отметки об уходе нет</span>
+      ) : (
+        known.map((t, i) => (
+          <span key={i} className="whitespace-nowrap">
+            {i > 0 && ', '}
+            <span className={`dot-${t.status} mr-1 inline-block size-2 rounded-full align-middle`} />
+            <span className="tabular-nums" style={{ color: 'var(--text)' }}>
+              {formatClock(t.minutes)}
+            </span>
+            {t.score != null && ` · ${t.score} ${plural(t.score, 'балл', 'балла', 'баллов')}`}
+            {t.stay != null && ` · на фабрике ${formatDuration(t.stay)}`}
+          </span>
+        ))
+      )}
+      <span title="В выгрузке по РЦ нет лавок — связь только по ФИО, поэтому в статус лавки это не входит">
+        {' '}
+        — справочно
+      </span>
+    </span>
   );
 }
 
