@@ -298,3 +298,35 @@ test('период без данных не ломает выдачу', async ()
   const fill = await q.showcaseStats('2026-07-01', '2026-07-15');
   assert.equal(fill.avg, null);
 });
+
+test('итог радара: знаменатель — дни с оценкой, а не длина периода', async () => {
+  // «7» в столбце итога не читалось: 7 из 8 дней или 7 из 30? Знаменатель
+  // берём по дням с оценкой — ровно по числу точек в строке.
+  const { dates, rows } = await q.radar({ from: ALL.from, to: ALL.to });
+  assert.ok(rows.length > 0);
+
+  for (const r of rows) {
+    assert.equal(
+      r.ratedCount,
+      Object.keys(r.cells).length,
+      `${r.shop.code}: знаменатель разошёлся с числом ячеек`,
+    );
+    assert.ok(
+      r.redCount <= r.ratedCount,
+      `${r.shop.code}: красных ${r.redCount} больше оценённых дней ${r.ratedCount}`,
+    );
+    assert.ok(r.ratedCount <= dates.length, `${r.shop.code}: оценённых дней больше, чем столбцов`);
+    assert.equal(
+      r.redCount,
+      Object.values(r.cells).filter((c) => c.status === 'red').length,
+      `${r.shop.code}: числитель разошёлся с красными ячейками`,
+    );
+  }
+
+  // Дни без данных в знаменатель не попадают: хотя бы у одной лавки
+  // оценённых дней меньше, чем столбцов в таблице.
+  assert.ok(
+    rows.some((r) => r.ratedCount < dates.length),
+    'ни одной лавки с пропущенным днём — тест не проверяет главное',
+  );
+});

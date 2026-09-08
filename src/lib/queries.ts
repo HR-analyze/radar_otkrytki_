@@ -345,6 +345,12 @@ export interface RadarRow {
   /** дата → статус (агрегат лавки либо один критерий, если он выбран в фильтре). */
   cells: Record<string, RadarCell>;
   redCount: number;
+  /**
+   * Дней с оценкой у этой лавки — знаменатель для redCount.
+   * Дни без данных сюда не попадают: «3 из 4» честнее, чем «3 из 8»,
+   * если четыре дня лавку просто не оценивали.
+   */
+  ratedCount: number;
 }
 
 /**
@@ -424,7 +430,7 @@ export async function radar(
     if (filters.status && filters.status !== 'all') {
       if (!Object.values(cells).some((c) => c.status === filters.status)) continue;
     }
-    rows.push({ shop, cells, redCount });
+    rows.push({ shop, cells, redCount, ratedCount: Object.keys(cells).length });
   }
 
   return { dates, rows };

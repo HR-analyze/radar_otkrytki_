@@ -70,7 +70,12 @@ export default async function RadarPage({
                     {shortDate(d)}
                   </th>
                 ))}
-                <th className="px-2 py-2 text-right text-xs font-medium muted">🔴</th>
+                <th
+                  className="px-2 py-2 text-right text-xs font-medium whitespace-nowrap muted"
+                  title="Итог: красных дней из оценённых"
+                >
+                  🔴
+                </th>
                 <th className="w-full" aria-hidden />
               </tr>
             </thead>
@@ -101,8 +106,24 @@ export default async function RadarPage({
                       />
                     );
                   })}
-                  <td className="px-2 py-1 text-right text-xs font-semibold tabular-nums">
-                    {r.redCount || ''}
+                  {/* Голое число красных не читалось: «7» — это 7 из 8 дней или
+                      7 из 30? Знаменатель — дни с оценкой, дни без данных в него
+                      не входят, поэтому он совпадает с числом точек в строке. */}
+                  <td
+                    className="px-2 py-1 text-right text-xs font-semibold whitespace-nowrap tabular-nums"
+                    title={
+                      r.ratedCount > 0
+                        ? `${r.redCount} ${plural(r.redCount, 'красный день', 'красных дня', 'красных дней')} из ${r.ratedCount} ${plural(r.ratedCount, 'оценённого', 'оценённых', 'оценённых')}`
+                        : 'За период лавку ни разу не оценивали'
+                    }
+                  >
+                    {r.ratedCount > 0 ? (
+                      <span className={r.redCount === 0 ? 'muted' : undefined}>
+                        {r.redCount} из {r.ratedCount}
+                      </span>
+                    ) : (
+                      ''
+                    )}
                   </td>
                   <td aria-hidden />
                 </tr>
