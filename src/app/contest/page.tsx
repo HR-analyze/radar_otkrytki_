@@ -42,7 +42,8 @@ export default async function ContestPage({
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
         <h1 className="text-2xl font-semibold tracking-tight">Конкурс по витринам</h1>
         <p className="mt-1 text-sm muted">
           Только наполнение витрины. Балл за день: 🟢 +1 · 🟡 0 · 🔴 −1
@@ -56,6 +57,19 @@ export default async function ContestPage({
             </>
           )}
         </p>
+        </div>
+        {rows.length > 0 && (
+          /* Обычная ссылка, а не кнопка с JS: PDF собирается на сервере, и
+             файл должен скачиваться даже если скрипты не загрузились. */
+          <a
+            href={`/api/contest/report?${reportQuery(p)}`}
+            className="rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap hover:opacity-90"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+            title="Отчёт за выбранный период с теми же фильтрами"
+          >
+            ⬇ Скачать PDF
+          </a>
+        )}
       </div>
 
       <Filters
@@ -77,7 +91,7 @@ export default async function ContestPage({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <Tile
               title="Баллов у сети"
               value={formatPoints(total.points)}
@@ -87,11 +101,6 @@ export default async function ContestPage({
               title="Средний балл за день"
               value={avg == null ? '—' : formatPoints(avg)}
               hint="сумма баллов ÷ оценённые дни"
-            />
-            <Tile
-              title="Дней 🔴 / 🟡 / 🟢"
-              value={`${total.red} / ${total.yellow} / ${total.green}`}
-              hint="по всем лавкам под фильтром"
             />
             <Tile
               title="Лавок в конкурсе"
@@ -249,6 +258,14 @@ export default async function ContestPage({
       )}
     </div>
   );
+}
+
+/** Те же фильтры, что на экране, — иначе PDF показал бы другой период. */
+function reportQuery(p: { from: string; to: string; region?: string; shop?: string }): string {
+  const q = new URLSearchParams({ from: p.from, to: p.to });
+  if (p.region) q.set('region', p.region);
+  if (p.shop) q.set('shop', p.shop);
+  return q.toString();
 }
 
 /** Разбивка дней по цветам — статистика лавки рядом с её строкой. */
