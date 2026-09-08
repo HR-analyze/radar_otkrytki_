@@ -15,7 +15,7 @@ import {
   type SummaryFilters,
 } from '@/lib/queries';
 import { isWritable } from '@/lib/snapshot';
-import { shortDate } from '@/lib/time';
+import { formatMoment, shortDate } from '@/lib/time';
 import { Filters } from '@/components/Filters';
 import { DepartureBlock } from '@/components/DepartureBlock';
 import { StatusBadge, StatusBar, STATUS_FILTER_TITLE } from '@/components/Status';
@@ -455,7 +455,11 @@ function RunLine({
               {run.status === 'ok' ? 'ок' : 'ошибка'}
             </StatusBadge>{' '}
             <span className="muted">
-              {new Date(run.finishedAt ?? run.startedAt).toLocaleString('ru-RU')} · {run.rows} строк
+              {formatMoment(run.finishedAt ?? run.startedAt, {
+                dateStyle: 'short',
+                timeStyle: 'medium',
+              })}{' '}
+              МСК · {run.rows} строк
             </span>
           </>
         ) : (

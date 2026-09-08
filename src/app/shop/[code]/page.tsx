@@ -97,11 +97,7 @@ export default async function ShopPage({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-base font-semibold">
-                  {new Date(`${day.date}T00:00:00`).toLocaleDateString('ru-RU', {
-                    day: '2-digit',
-                    month: 'long',
-                    weekday: 'short',
-                  })}
+                  {formatDay(day.date, { day: '2-digit', month: 'long', weekday: 'short' })}
                 </h2>
                 {/* Показываем, только если РМ в этот день отличается от текущего:
                     иначе строка повторялась бы на каждой карточке без пользы. */}

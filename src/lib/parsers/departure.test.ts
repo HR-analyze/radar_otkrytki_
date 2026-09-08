@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as XLSX from 'xlsx';
-import { looksLikeDeparture, parseDepartures } from './departure';
+import { looksLikeDeparture, mergeDepartures, parseDepartures } from './departure';
 import { detectFixtureKind, peekGrid } from '../fixtures';
 
 /**
@@ -77,4 +77,38 @@ test('файл без нужных колонок отвергается с по
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 
   assert.throws(() => parseDepartures(buf), /не выгрузка по РЦ/);
+});
+
+test('несколько выгрузок склеиваются в одну ленту по дням', () => {
+  const first = parseDepartures(book(RC)).rows; // 05.09
+  const second = parseDepartures(
+    book([
+      ['РЦ Свобода', 'Иванов Иван Иванович', 'Водитель-экспедитор', '08.09.2026 3:10:00', '08.09.2026 4:40:00'],
+    ]),
+  ).rows;
+
+  const merged = mergeDepartures([first, second]);
+  assert.deepEqual(
+    [...new Set(merged.map((r) => r.date))],
+    ['2026-09-05', '2026-09-08'],
+    'день из второго файла не должен теряться — из-за этого он и не появлялся на сводке',
+  );
+  assert.equal(merged.length, first.length + second.length);
+});
+
+test('день, попавший в две выгрузки, берётся из последней, а не удваивается', () => {
+  const stale = parseDepartures(
+    book([
+      ['РЦ Свобода', 'Иванов Иван Иванович', 'Водитель-экспедитор', '05.09.2026 3:22:14', '05.09.2026 5:44:00'],
+    ]),
+  ).rows;
+  const fixed = parseDepartures(
+    book([
+      ['РЦ Свобода', 'Иванов Иван Иванович', 'Водитель-экспедитор', '05.09.2026 3:22:14', '05.09.2026 4:17:06'],
+    ]),
+  ).rows;
+
+  const merged = mergeDepartures([stale, fixed]);
+  assert.equal(merged.length, 1, 'один выезд, а не два');
+  assert.equal(merged[0].departureMinutes, 4 * 60 + 17, 'время из исправленной выгрузки');
 });

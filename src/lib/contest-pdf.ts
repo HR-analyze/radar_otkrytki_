@@ -9,7 +9,7 @@ import type {
 } from 'pdfmake/interfaces';
 import { averagePoints, formatPoints, type ContestScore } from './contest';
 import type { ContestRegionRow, ContestRow } from './queries';
-import { shortDate } from './time';
+import { RADAR_TZ, shortDate } from './time';
 import type { Status } from './types';
 
 /**
@@ -405,7 +405,7 @@ function fullDate(iso: string): string {
  */
 function formatStamp(d: Date): string {
   return new Intl.DateTimeFormat('ru-RU', {
-    timeZone: 'Europe/Moscow',
+    timeZone: RADAR_TZ,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

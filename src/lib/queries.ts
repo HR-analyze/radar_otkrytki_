@@ -257,9 +257,18 @@ export async function regionTransitions(): Promise<RegionTransition[]> {
   return out.sort((a, b) => b.since.localeCompare(a.since) || a.shopCode.localeCompare(b.shopCode));
 }
 
+/**
+ * Дни, за которые в радаре есть хоть что-то.
+ *
+ * Не только дни со статусами лавок: выезд с РЦ — сетевой показатель, и его
+ * выгрузку заливают отдельно от отметок. Пока сюда шли одни статусы, день,
+ * за который приехал только файл по РЦ, не попадал ни в период по умолчанию
+ * (см. defaultRange), ни в подсветку календаря — загруженные выезды просто
+ * не показывались, и это выглядело как потерянный файл.
+ */
 export async function listDates(): Promise<string[]> {
   const s = await loadSnapshot();
-  return [...new Set(s.criteria.map((c) => c.date))].sort();
+  return [...new Set([...s.criteria.map((c) => c.date), ...s.departures.map((d) => d.date)])].sort();
 }
 
 export async function latestDate(): Promise<string | null> {

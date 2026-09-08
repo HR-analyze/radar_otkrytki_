@@ -4,7 +4,7 @@ import { loadConfig } from '../config';
 import { fixturesFingerprint, readFixtures } from '../fixtures';
 import { parseAttendanceBuffer } from '../parsers/attendance';
 import { parseDeliveryTimes } from '../parsers/delivery';
-import { parseDepartures, type DepartureRow } from '../parsers/departure';
+import { mergeDepartures, parseDepartures, type DepartureRow } from '../parsers/departure';
 import { parseLegacyVitriny } from '../parsers/legacy-vitriny';
 import { parseRoster } from '../parsers/roster';
 import { mergeDeliveryTimes } from '../delivery-merge';
@@ -45,7 +45,7 @@ export interface SnapshotBuildResult {
     legacy: string | null;
     delivery: string | null;
     roster: string | null;
-    departure: string | null;
+    departures: string[];
     attendance: string[];
   };
   dates: string[];
@@ -143,18 +143,29 @@ export function buildSnapshot(
 
   // 3.2. Выезды с РЦ: сетевой показатель, в статусы лавок не входит — привязки
   //      к лавкам в выгрузке нет (см. parsers/departure.ts).
+  //      Файлов может быть несколько — по одному на день, как и с отметками;
+  //      день, попавший сразу в две выгрузки, берётся из последней (см.
+  //      mergeDepartures).
   let departures: DepartureRow[] = [];
   let departureStats = '';
-  if (files.departure) {
-    const parsed = parseDepartures(files.departure.buffer);
-    warnings.push(...parsed.warnings.map((w) => `[${files.departure!.name}] ${w}`));
-    departures = parsed.rows;
+  if (files.departures.length > 0) {
+    const units = new Set<string>();
+    const parsedFiles = files.departures.map((file) => {
+      const parsed = parseDepartures(file.buffer);
+      warnings.push(...parsed.warnings.map((w) => `[${file.name}] ${w}`));
+      for (const u of parsed.units) units.add(u);
+      return parsed.rows;
+    });
 
-    const withTime = parsed.rows.filter((r) => r.departureMinutes != null).length;
-    const people = new Set(parsed.rows.map((r) => r.employeeName)).size;
+    departures = mergeDepartures(parsedFiles);
+
+    const withTime = departures.filter((r) => r.departureMinutes != null).length;
+    const people = new Set(departures.map((r) => r.employeeName)).size;
+    const dates = [...new Set(departures.map((r) => r.date))].sort();
     departureStats =
-      `  выезды с ${parsed.units.join(', ')}: ${withTime} выездов, ` +
-      `${people} водителей, дни ${parsed.dates[0]} — ${parsed.dates[parsed.dates.length - 1]}`;
+      `  выезды с ${[...units].sort().join(', ')}: ${withTime} выездов, ` +
+      `${people} водителей, дни ${dates[0]} — ${dates[dates.length - 1]} ` +
+      `(файлов: ${files.departures.length})`;
   }
 
   // 3.3. Журнал отгрузок: время приезда водителя там, где нет отметки face id.
@@ -245,7 +256,7 @@ export function buildSnapshot(
       legacy: files.legacy?.name ?? null,
       delivery: files.delivery?.name ?? null,
       roster: files.roster?.name ?? null,
-      departure: files.departure?.name ?? null,
+      departures: files.departures.map((f) => f.name),
       attendance: files.attendance.map((f) => f.name),
     },
     dates: [...new Set(snapshot.criteria.map((c) => c.date))].sort(),

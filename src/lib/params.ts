@@ -1,5 +1,5 @@
 import { listDates } from './queries';
-import { isoDate } from './time';
+import { todayIso } from './time';
 import type { CriterionKey, Status } from './types';
 import { CRITERION_ORDER } from './types';
 
@@ -28,7 +28,7 @@ const STATUSES: Status[] = ['green', 'yellow', 'red', 'other_schedule', 'no_data
  * данных ещё нет вовсе (первое число, выгрузку не залили), показываем
  * последний месяц с данными — пустой экран выглядел бы поломкой.
  */
-export function defaultRange(dates: readonly string[], today = isoDate(new Date())): {
+export function defaultRange(dates: readonly string[], today = todayIso()): {
   from: string;
   to: string;
 } {

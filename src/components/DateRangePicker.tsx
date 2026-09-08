@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { dateRange, isoDate, shortDate } from '@/lib/time';
+import { dateRange, formatDay, isoDate, shortDate } from '@/lib/time';
 
 const MONTHS = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -303,9 +303,5 @@ function monthGrid(month: Date): (string | null)[] {
 }
 
 function formatLong(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  return formatDay(iso, { day: 'numeric', month: 'long', year: 'numeric' });
 }
