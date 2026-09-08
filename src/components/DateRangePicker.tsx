@@ -112,7 +112,7 @@ export function DateRangePicker({
         }}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-[0.45rem] text-left text-sm"
+        className="date-trigger flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-[0.45rem] text-left text-sm"
         style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
       >
         <span className="truncate">{label}</span>

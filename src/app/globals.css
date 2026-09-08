@@ -96,6 +96,17 @@ select:focus-visible {
   outline-offset: -1px;
 }
 
+/* Поле с крестиком сброса (см. ClearButton): освобождаем справа место под
+   кнопку и отодвигаем нарисованную стрелку, иначе они наезжают друг на друга
+   и на длинное значение вроде «Наполнение витрины». */
+.has-clear select {
+  padding-right: 3rem;
+  background-position: right 2rem center, right 1.7rem center;
+}
+.has-clear .date-trigger {
+  padding-right: 2.2rem;
+}
+
 /* Таблица-радар: закреплённая первая колонка. */
 .radar-scroll { overflow-x: auto; }
 .radar-table { border-collapse: separate; border-spacing: 0; }
