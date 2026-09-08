@@ -9,7 +9,7 @@ import {
   type DepartureTrip,
   type ShopDayPerson,
 } from '@/lib/queries';
-import { formatClock, formatDuration, shortDate } from '@/lib/time';
+import { formatClock, formatDay, formatDuration, shortDate } from '@/lib/time';
 import { StatusBadge, STATUS_TEXT } from '@/components/Status';
 import { scheduleFor, scheduleShift } from '@/lib/status';
 import { CRITERION_ORDER, type CriterionKey } from '@/lib/types';
