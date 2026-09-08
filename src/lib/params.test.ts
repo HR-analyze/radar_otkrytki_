@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultRange } from './params';
+import { defaultRange, resolveCriterion } from './params';
 
 /**
  * Период по умолчанию. Радар открывают каждый день, и почти всегда смотрят
@@ -41,4 +41,26 @@ test('в новом месяце данных ещё нет — показыва
 
 test('данных нет вовсе — берём сегодняшний день, а не падаем', () => {
   assert.deepEqual(defaultRange([], '2026-09-04'), { from: '2026-09-04', to: '2026-09-04' });
+});
+
+/**
+ * Критерий по умолчанию. Радар открывается на наполнении витрины — ради него
+ * туда и заходят, — но уйти с него должно быть можно.
+ */
+
+test('критерия в URL нет — берётся предвыбор страницы', () => {
+  assert.equal(resolveCriterion(undefined, 'showcase'), 'showcase');
+  assert.equal(resolveCriterion(undefined), 'all', 'без предвыбора — общий результат');
+});
+
+test('«Общий результат» из URL важнее предвыбора страницы', () => {
+  // Ровно то, ради чего criterion=all пишется в ссылку явно (см. Filters):
+  // иначе с предвыбранной витрины нельзя было бы уйти.
+  assert.equal(resolveCriterion('all', 'showcase'), 'all');
+});
+
+test('выбранный критерий важнее предвыбора, мусор — молча в предвыбор', () => {
+  assert.equal(resolveCriterion('driver', 'showcase'), 'driver');
+  assert.equal(resolveCriterion('нет такого', 'showcase'), 'showcase');
+  assert.equal(resolveCriterion('', 'showcase'), 'showcase');
 });
