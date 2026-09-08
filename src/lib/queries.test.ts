@@ -330,3 +330,73 @@ test('итог радара: знаменатель — дни с оценкой
     'ни одной лавки с пропущенным днём — тест не проверяет главное',
   );
 });
+
+test('конкурс: баллы = зелёные минус красные, жёлтые в ноль', async () => {
+  const { rows } = await q.contest({ from: ALL.from, to: ALL.to });
+  assert.ok(rows.length > 0, 'за весь период витрины кто-то заполнял');
+
+  for (const r of rows) {
+    const cells = Object.values(r.cells);
+    assert.equal(r.score.rated, cells.length, `${r.shop.code}: знаменатель разошёлся с ячейками`);
+    assert.equal(
+      r.score.points,
+      r.score.green - r.score.red,
+      `${r.shop.code}: жёлтые не должны двигать сумму`,
+    );
+    assert.equal(
+      r.score.points,
+      cells.reduce((a, c) => a + c.points, 0),
+      `${r.shop.code}: сумма строки разошлась с ячейками`,
+    );
+  }
+});
+
+test('конкурс: лавки отсортированы по баллам сверху вниз', async () => {
+  const { rows } = await q.contest({ from: ALL.from, to: ALL.to });
+  const points = rows.map((r) => r.score.points);
+
+  assert.deepEqual(points, [...points].sort((a, b) => b - a), 'порядок лавок не по баллам');
+  assert.ok(new Set(points).size > 1, 'у всех лавок одинаковый балл — тест ничего не проверяет');
+});
+
+test('конкурс: сумма по РМ сходится с сетью', async () => {
+  const { rows, regions, total } = await q.contest({ from: ALL.from, to: ALL.to });
+
+  assert.equal(
+    total.points,
+    rows.reduce((a, r) => a + r.score.points, 0),
+    'итог сети разошёлся с лавками',
+  );
+  assert.equal(
+    regions.reduce((a, r) => a + r.score.rated, 0),
+    total.rated,
+    'дни РМ разошлись с днями сети — чей-то день потерялся или задвоился',
+  );
+  assert.ok(regions.length > 1, 'РМ в разрезе меньше двух — статистика по регионам ни о чём');
+});
+
+test('конкурс уважает фильтры по РМ и по лавке', async () => {
+  const { regions } = await q.contest({ from: ALL.from, to: ALL.to });
+  const rm = regions[0].region;
+
+  const scoped = await q.contest({ from: ALL.from, to: ALL.to, region: rm });
+  assert.deepEqual(scoped.regions.map((r) => r.region), [rm], 'в разрез затесался чужой РМ');
+
+  const one = await q.contest({ from: ALL.from, to: ALL.to, shop: scoped.rows[0].shop.code });
+  assert.equal(one.rows.length, 1, 'точный код лавки должен давать ровно одну строку');
+});
+
+test('конкурс: дни без витрины в баллы не попадают', async () => {
+  // Витрину заполняют не каждый день и не по всем лавкам — значит, у кого-то
+  // оценённых дней меньше, чем столбцов, и балл за пропуск не начисляется.
+  const { dates, rows } = await q.contest({ from: ALL.from, to: ALL.to });
+
+  assert.ok(
+    rows.some((r) => r.score.rated < dates.length),
+    'у всех лавок заполнены все дни — тест не проверяет главное',
+  );
+  for (const r of rows) {
+    assert.ok(r.score.rated > 0, `${r.shop.code}: строка без единого оценённого дня`);
+    assert.ok(r.avgFill != null && r.avgFill >= 0 && r.avgFill <= 1, `${r.shop.code}: витрина вне 0–1`);
+  }
+});

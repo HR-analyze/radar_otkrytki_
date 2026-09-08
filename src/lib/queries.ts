@@ -12,6 +12,14 @@ import {
 import { aggregateStatuses, roundScore, statusFromScore } from './status';
 import { parseClock } from './time';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
+import {
+  addStatus,
+  averagePoints,
+  emptyScore,
+  pointsOf,
+  sumScores,
+  type ContestScore,
+} from './contest';
 
 /**
  * Чтение для дашборда поверх снимка в памяти (см. snapshot.ts).
@@ -434,6 +442,158 @@ export async function radar(
   }
 
   return { dates, rows };
+}
+
+/* ------------------------------- конкурс --------------------------------- */
+
+export interface ContestFilters {
+  from: string;
+  to: string;
+  region?: string;
+  /** Код или часть названия лавки — тот же поиск, что в радаре. */
+  shop?: string;
+}
+
+export interface ContestCell {
+  status: Status;
+  /** Наполнение витрины 0–1 в этот день. */
+  fill: number;
+  /** Балл дня: +1 / 0 / −1. */
+  points: number;
+}
+
+export interface ContestRow {
+  shop: ShopRow;
+  /** дата → ячейка. Дни без заполненной витрины сюда не попадают. */
+  cells: Record<string, ContestCell>;
+  score: ContestScore;
+  /** Средняя наполненность за оценённые дни; null — дней нет. */
+  avgFill: number | null;
+}
+
+export interface ContestRegionRow {
+  region: string;
+  /** Лавок с оценёнными днями у этого РМ. */
+  shops: number;
+  score: ContestScore;
+  avgFill: number | null;
+}
+
+/**
+ * Конкурс по наполнению витрин: та же таблица «лавки × дни», что и радар, но
+ * единственный критерий — витрина, а в итоге баллы (🟢 +1, 🟡 0, 🔴 −1), а не
+ * число красных. Правило считает contest.ts.
+ *
+ * Источник — `snap.showcase`: там и процент, и статус по действующим порогам.
+ * Через `snap.criteria` идти незачем — статусы витрины приходят туда из того же
+ * стора (см. showcase-store.ts), но без процента.
+ *
+ * День лавки относится к тому РМ, который вёл её в этот день (regionAt), а не
+ * к нынешнему: иначе после передачи лавки чужие дни утекали бы в статистику
+ * преемника.
+ */
+export async function contest(
+  filters: ContestFilters,
+): Promise<{
+  dates: string[];
+  rows: ContestRow[];
+  regions: ContestRegionRow[];
+  total: ContestScore;
+}> {
+  const snap = await loadSnapshot();
+
+  // Точный код важнее подстроки: «М1» — это М1, а не М1 вместе с М10–М19.
+  const exact = filters.shop ? await hasExactShop(filters.shop) : false;
+  const shops = (await shopsIn(filters.region, filters.shop, filters.from, filters.to)).filter(
+    (s) => !exact || s.code.toLowerCase() === filters.shop!.trim().toLowerCase(),
+  );
+  const allowedShops = new Set(shops.map((s) => s.code));
+  const inRegion = await regionDayMatcher(filters.region);
+
+  const relevant = snap.showcase.filter(
+    (s) =>
+      s.date >= filters.from &&
+      s.date <= filters.to &&
+      allowedShops.has(s.shopCode) &&
+      inRegion(s.shopCode, s.date) &&
+      pointsOf(s.status) != null,
+  );
+
+  const dates = [...new Set(relevant.map((s) => s.date))].sort();
+  if (dates.length === 0) return { dates, rows: [], regions: [], total: emptyScore() };
+
+  const byShop = new Map<string, Map<string, ContestCell>>();
+  for (const s of relevant) {
+    let days = byShop.get(s.shopCode);
+    if (!days) byShop.set(s.shopCode, (days = new Map()));
+    days.set(s.date, { status: s.status, fill: s.fill, points: pointsOf(s.status)! });
+  }
+
+  const history = regionIndexOf(snap);
+  const regions = new Map<string, { score: ContestScore; fill: number; shops: Set<string> }>();
+
+  const rows: ContestRow[] = [];
+  for (const shop of shops) {
+    const days = byShop.get(shop.code);
+    if (!days) continue;
+
+    const cells: Record<string, ContestCell> = {};
+    const score = emptyScore();
+    let fillSum = 0;
+
+    for (const date of dates) {
+      const cell = days.get(date);
+      if (!cell) continue;
+      cells[date] = cell;
+      addStatus(score, cell.status);
+      fillSum += cell.fill;
+
+      const manager = regionAt(history.get(shop.code), date) ?? shop.region;
+      if (!manager) continue;
+      let bucket = regions.get(manager);
+      if (!bucket) regions.set(manager, (bucket = { score: emptyScore(), fill: 0, shops: new Set() }));
+      addStatus(bucket.score, cell.status);
+      bucket.fill += cell.fill;
+      bucket.shops.add(shop.code);
+    }
+
+    if (score.rated === 0) continue;
+    rows.push({ shop, cells, score, avgFill: fillSum / score.rated });
+  }
+
+  // Больше баллов — выше; при равенстве вперёд тот, у кого меньше красных, а
+  // затем — у кого больше оценённых дней: за 0 из двух дней и 0 из двадцати
+  // стоят разные усилия.
+  rows.sort(
+    (a, b) =>
+      b.score.points - a.score.points ||
+      a.score.red - b.score.red ||
+      b.score.rated - a.score.rated ||
+      byShopNumber(a.shop, b.shop),
+  );
+
+  const regionRows: ContestRegionRow[] = [...regions.entries()]
+    .map(([region, v]) => ({
+      region,
+      shops: v.shops.size,
+      score: v.score,
+      avgFill: v.score.rated > 0 ? v.fill / v.score.rated : null,
+    }))
+    // Сумма баллов у РМ с двенадцатью лавками всегда больше, чем у РМ с
+    // четырьмя, поэтому сортируем по среднему баллу за день.
+    .sort(
+      (a, b) =>
+        (averagePoints(b.score) ?? -Infinity) - (averagePoints(a.score) ?? -Infinity) ||
+        b.score.points - a.score.points ||
+        a.region.localeCompare(b.region, 'ru'),
+    );
+
+  return {
+    dates,
+    rows,
+    regions: regionRows,
+    total: sumScores(rows.map((r) => r.score)),
+  };
 }
 
 /* ------------------------------- сводка ---------------------------------- */
