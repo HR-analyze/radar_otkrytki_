@@ -4,7 +4,7 @@ import { readUploadLog, type UploadLogEntry } from '@/lib/upload-log';
 import { fixturesDir } from '@/lib/upload-store';
 import { readShowcase } from '@/lib/showcase-store';
 import { regionTransitions } from '@/lib/queries';
-import { shortDate } from '@/lib/time';
+import { formatMoment, shortDate } from '@/lib/time';
 import { plural } from '@/lib/plural';
 
 export const dynamic = 'force-dynamic';
@@ -192,10 +192,7 @@ function describeDates(dates: readonly string[]): string {
   return `за ${shortDate(sorted[0])} — ${shortDate(sorted[sorted.length - 1])}`;
 }
 
+/** Когда загрузили — по Москве: сервер живёт в UTC, а человек — нет. */
 function stamp(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
-  } catch {
-    return iso;
-  }
+  return `${formatMoment(iso)} МСК`;
 }

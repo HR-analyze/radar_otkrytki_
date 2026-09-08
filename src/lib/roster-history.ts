@@ -1,5 +1,5 @@
 import { getMeta, openManualDb, setMeta } from './manual-db';
-import { isoDate } from './time';
+import { isoDate, todayIso } from './time';
 import type { RegionPeriod } from './types';
 
 /**
@@ -118,7 +118,7 @@ const SEED_META_KEY = 'region_history_seeded';
 export async function reconcileRegionHistory(
   current: ReadonlyMap<string, string>,
   seed: readonly RegionPeriod[],
-  today = isoDate(new Date()),
+  today = todayIso(),
 ): Promise<RegionPeriod[] | null> {
   const db = await openManualDb();
   if (!db) return null;

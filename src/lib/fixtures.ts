@@ -75,8 +75,12 @@ export interface FixtureSet {
   delivery: FixtureFile | null;
   /** Справочник лавок «Лавки БК» — кто из РМ за какую лавку отвечает. */
   roster: FixtureFile | null;
-  /** Выгрузка по РЦ: во сколько водители выехали со склада. */
-  departure: FixtureFile | null;
+  /**
+   * Выгрузки по РЦ: во сколько водители выехали со склада.
+   *
+   * Список, а не один файл, — их кладут по одной на день, как и отметки.
+   */
+  departures: FixtureFile[];
   /** Выгрузки отметок, отсортированные по имени. */
   attendance: FixtureFile[];
   warnings: string[];
@@ -90,8 +94,8 @@ export interface FixtureSet {
  * `npm test` это поймает — иначе данные молча остались бы старыми.
  */
 export function fixturesFingerprint(dir: string): string {
-  const { legacy, delivery, roster, attendance } = readFixtures(dir);
-  const parts = [legacy, delivery, roster, ...attendance]
+  const { legacy, delivery, roster, departures, attendance } = readFixtures(dir);
+  const parts = [legacy, delivery, roster, ...departures, ...attendance]
     .filter((f): f is FixtureFile => f !== null)
     .map((f) => `${f.name}:${crypto.createHash('sha1').update(f.buffer).digest('hex')}`)
     .sort();
@@ -105,7 +109,7 @@ export function readFixtures(dir: string): FixtureSet {
       legacy: null,
       delivery: null,
       roster: null,
-      departure: null,
+      departures: [],
       attendance: [],
       warnings: [`Папки ${dir} нет`],
     };
@@ -119,7 +123,7 @@ export function readFixtures(dir: string): FixtureSet {
   let legacy: FixtureFile | null = null;
   let delivery: FixtureFile | null = null;
   let roster: FixtureFile | null = null;
-  let departure: FixtureFile | null = null;
+  const departures: FixtureFile[] = [];
   const attendance: FixtureFile[] = [];
   const warnings: string[] = [];
 
@@ -158,19 +162,18 @@ export function readFixtures(dir: string): FixtureSet {
       }
       roster = { name, buffer };
     } else if (kind === 'departure') {
-      if (departure) {
-        warnings.push(`${name}: вторая выгрузка по РЦ, используется ${departure.name}`);
-        continue;
-      }
-      departure = { name, buffer };
+      // Выгрузки по РЦ накапливаются, как и отметки: их кладут по одной на
+      // день. Раньше бралась только первая, и файл за новый день молча не
+      // попадал в снимок — день просто не появлялся на сводке.
+      departures.push({ name, buffer });
     } else {
       attendance.push({ name, buffer });
     }
   }
 
-  if (!legacy && !delivery && !roster && !departure && attendance.length === 0) {
+  if (!legacy && !delivery && !roster && departures.length === 0 && attendance.length === 0) {
     warnings.push(`В ${dir} нет ни одного файла .xls/.xlsx`);
   }
 
-  return { legacy, delivery, roster, departure, attendance, warnings };
+  return { legacy, delivery, roster, departures, attendance, warnings };
 }

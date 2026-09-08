@@ -3,7 +3,7 @@ import type { CriterionKey, CriterionStatusRow, ShowcaseRow, Status } from '../t
 import type { ThresholdConfig } from '../types';
 import { parseShop } from '../shops';
 import { aggregateStatuses, normalizeFill, statusForFill, statusFromEmoji } from '../status';
-import { isoDate } from '../time';
+import { excelDay } from '../time';
 
 /**
  * Парсер легаси-книги «Витрины.xlsx», лист «Все данные».
@@ -71,7 +71,7 @@ export function parseLegacyVitriny(
   const dateCols: { col: number; date: string }[] = [];
   header.forEach((cell, col) => {
     const d = asDate(cell);
-    if (d) dateCols.push({ col, date: isoDate(d) });
+    if (d) dateCols.push({ col, date: excelDay(d) });
   });
   if (dateCols.length === 0) throw new Error('В заголовке листа не найдено ни одной колонки-даты');
 

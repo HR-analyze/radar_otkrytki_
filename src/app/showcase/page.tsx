@@ -1,7 +1,7 @@
 import { latestDate, listDates, showcaseNotes } from '@/lib/queries';
 import { defaultRange } from '@/lib/params';
 import { canEditShowcase } from '@/lib/showcase-store';
-import { isoDate } from '@/lib/time';
+import { todayIso } from '@/lib/time';
 import { ShowcaseEditor } from '@/components/ShowcaseEditor';
 import { NotesSummary } from '@/components/NotesSummary';
 
@@ -24,7 +24,7 @@ export default async function ShowcasePage({
   const asked = typeof sp.date === 'string' ? sp.date : null;
 
   // По умолчанию открываем сегодняшний день: его и заполняют.
-  const initial = asked ?? isoDate(new Date());
+  const initial = asked ?? todayIso();
   const last = await latestDate();
 
   // Месяц сводки — тот же, на котором открывается весь радар (см. defaultRange),

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import * as XLSX from 'xlsx';
-import { readFixtures } from './fixtures';
+import { fixturesFingerprint, readFixtures } from './fixtures';
 
 const FIXTURES = path.join(process.cwd(), 'fixtures');
 
@@ -96,6 +96,57 @@ test('пустая и отсутствующая папка не роняют с
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('выгрузки по РЦ накапливаются, а не теряются после первой', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'radar-fx-'));
+  try {
+    // Их кладут по одной на день: раньше бралась только первая по имени, и
+    // файл за сегодняшний день молча не доезжал до сводки.
+    writeDeparture(dir, '2026-09-05_2026-09-07_vyezd-rc.xlsx');
+    writeDeparture(dir, '2026-09-08_vyezd-rc.xlsx');
+
+    const f = readFixtures(dir);
+    assert.deepEqual(f.departures.map((x) => x.name), [
+      '2026-09-05_2026-09-07_vyezd-rc.xlsx',
+      '2026-09-08_vyezd-rc.xlsx',
+    ]);
+    assert.deepEqual(f.attendance, [], 'выгрузка по РЦ — не отметки по лавкам');
+    assert.deepEqual(f.warnings, []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('отпечаток папки меняется, когда добавили выгрузку по РЦ', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'radar-fx-'));
+  try {
+    writeDeparture(dir, '2026-09-05_vyezd-rc.xlsx');
+    const before = fixturesFingerprint(dir);
+
+    writeDeparture(dir, '2026-09-08_vyezd-rc.xlsx', '08.09.2026');
+    assert.notEqual(
+      fixturesFingerprint(dir),
+      before,
+      'иначе несобранный снимок с новыми выездами выглядел бы актуальным',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** Минимальная выгрузка по РЦ: колонки как у отметок, но в лавке — склад. */
+function writeDeparture(dir: string, name: string, day = '05.09.2026'): void {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.aoa_to_sheet([
+      ['Подразделение', 'Сотрудник', 'Должность', 'Приход', 'Уход'],
+      ['РЦ Свобода', 'Иванов Иван Иванович', 'Водитель-экспедитор', `${day} 3:22:14`, `${day} 4:17:06`],
+    ]),
+    'Лист_1',
+  );
+  XLSX.writeFile(wb, path.join(dir, name));
+}
 
 /** Минимальная книга с заданными листами. */
 function write(dir: string, name: string, sheets: string[]): void {

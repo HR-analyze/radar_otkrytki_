@@ -22,6 +22,9 @@ function main(): void {
     `  файлы: ${r.files.legacy ? r.files.legacy + ' (легаси)' : 'легаси-книги нет'}` +
       (r.files.delivery ? `, отгрузки: ${r.files.delivery}` : ', журнала отгрузок нет') +
       (r.files.roster ? `, справочник: ${r.files.roster}` : ', справочника лавок нет') +
+      (r.files.departures.length
+        ? `, выезды с РЦ: ${r.files.departures.join(', ')}`
+        : ', выгрузок по РЦ нет') +
       (r.files.attendance.length
         ? `, выгрузки: ${r.files.attendance.join(', ')}`
         : ', выгрузок нет'),

@@ -87,6 +87,34 @@ export function looksLikeDeparture(grid: readonly unknown[][]): boolean {
   return units > 0 && shops === 0;
 }
 
+/**
+ * Строки из нескольких выгрузок по РЦ — в одну ленту.
+ *
+ * Файлы кладут по одному на день, но один и тот же день иногда попадает сразу
+ * в две выгрузки: залили период 05–07, потом отдельно 08, потом переслали
+ * исправленный 07. Складывать такие строки нельзя — водитель получил бы два
+ * выезда там, где был один, — поэтому день целиком берётся из последней
+ * выгрузки, где он есть. Порядок задаёт вызывающий: файлы отсортированы по
+ * имени, а имя выгрузки начинается с её даты (см. canonicalFixtureName).
+ */
+export function mergeDepartures(files: readonly (readonly DepartureRow[])[]): DepartureRow[] {
+  const byDate = new Map<string, DepartureRow[]>();
+
+  for (const rows of files) {
+    const incoming = new Map<string, DepartureRow[]>();
+    for (const r of rows) {
+      const day = incoming.get(r.date);
+      if (day) day.push(r);
+      else incoming.set(r.date, [r]);
+    }
+    for (const [date, day] of incoming) byDate.set(date, day);
+  }
+
+  return [...byDate.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .flatMap(([, rows]) => rows);
+}
+
 export function parseDepartures(buffer: Buffer): DepartureParseResult {
   const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false, raw: false });
   const sheet = wb.Sheets[wb.SheetNames[0]];

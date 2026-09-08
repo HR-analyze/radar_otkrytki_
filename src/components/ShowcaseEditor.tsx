@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { plural } from '@/lib/plural';
+import { formatDay, formatMoment } from '@/lib/time';
 import type { Status } from '@/lib/types';
 
 /**
@@ -471,23 +472,12 @@ function shift(date: string, days: number): string {
 
 /** «пн, 31 августа» — чтобы не гадать, какой это день недели. */
 function humanDate(date: string): string {
-  try {
-    return new Date(`${date}T00:00:00`).toLocaleDateString('ru-RU', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'long',
-    });
-  } catch {
-    return date;
-  }
+  return formatDay(date, { weekday: 'short', day: 'numeric', month: 'long' });
 }
 
+/** Когда правку сохранили — по Москве, как и всё время на дашборде. */
 function when(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
-  } catch {
-    return iso;
-  }
+  return `${formatMoment(iso)} МСК`;
 }
 
 function StepButton({

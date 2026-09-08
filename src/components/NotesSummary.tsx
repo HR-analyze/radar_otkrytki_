@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { ShowcaseNote } from '@/lib/queries';
-import { shortDate } from '@/lib/time';
+import { formatDay, shortDate } from '@/lib/time';
 import { plural } from '@/lib/plural';
 
 /**
@@ -112,7 +112,5 @@ function MonthLink({ month, label, title }: { month: string; label: string; titl
 
 /** «2026-09» → «сентябрь 2026». */
 function monthName(month: string): string {
-  const [year, m] = month.split('-');
-  const date = new Date(Number(year), Number(m) - 1, 1);
-  return date.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }).replace(' г.', '');
+  return formatDay(`${month}-01`, { month: 'long', year: 'numeric' }).replace(' г.', '');
 }
