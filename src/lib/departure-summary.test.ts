@@ -37,16 +37,43 @@ function row(date: string, name: string, arrival: string | null, departure: stri
   };
 }
 
-function writeSnapshot(departures: ReturnType<typeof row>[]): void {
+/** Отметка водителя в лавке — то, с чем связывается выезд с РЦ. */
+function mark(date: string, name: string, shopCode: string, arrival: string) {
+  return {
+    date,
+    shopCode,
+    shopName: shopCode,
+    employeeName: name,
+    role: 'Водитель-экспедитор',
+    criterion: 'driver',
+    trainee: false,
+    homeShopCode: shopCode,
+    arrivalMinutes: hhmm(arrival),
+    arrivalSource: 'mark',
+    rawArrival: arrival,
+    rawDeparture: null,
+    status: 'green',
+    note: null,
+  };
+}
+
+function writeSnapshot(
+  departures: ReturnType<typeof row>[],
+  attendance: ReturnType<typeof mark>[] = [],
+): void {
   fs.writeFileSync(
     process.env.RADAR_SNAPSHOT_PATH!,
     JSON.stringify({
       generatedAt: new Date().toISOString(),
       source: 'json',
       configFingerprint: 'test',
-      fixturesFingerprint: String(departures.length),
-      shops: [],
-      attendance: [],
+      fixturesFingerprint: `${departures.length}/${attendance.length}`,
+      shops: [...new Set(attendance.map((a) => a.shopCode))].map((code) => ({
+        code,
+        name: code,
+        region: null,
+      })),
+      attendance,
       showcase: [],
       criteria: [],
       legacyPeople: [],
@@ -141,7 +168,7 @@ test('детализация: у каждого водителя свой бал
   assert.equal(late.red, 1);
   assert.equal(late.status, 'red');
   assert.deepEqual(late.days['2026-09-10'], [
-    { minutes: 360, stay: 60, status: 'red', score: 1 },
+    { unit: 'РЦ Свобода', minutes: 360, stay: 60, status: 'red', score: 1 },
   ]);
   assert.equal(late.days['2026-09-11'], undefined, 'в этот день он не выезжал');
 });
@@ -172,6 +199,54 @@ test('детализация: два выезда за день не затир�
   assert.equal(noExit.score, null, 'балла нет — уезжал ли он, выгрузка не говорит');
   assert.equal(noExit.status, 'no_data');
   assert.equal(s.drivers[s.drivers.length - 1], noExit, 'и он уходит в конец списка');
+});
+
+test('на карточке лавки: выезд с РЦ цепляется к водителю по полному ФИО', async () => {
+  writeSnapshot(
+    [
+      row('2026-09-15', 'Ороспаев Павел Юрьевич', '04:00', '04:20'),
+      // Однофамилец: в выгрузках есть разные Егоровы, и путать их нельзя.
+      row('2026-09-15', 'Егоров Сергей Александрович', '04:00', '05:40'),
+      // Тот же водитель днём позже — не должен попасть в чужой день.
+      row('2026-09-16', 'Ороспаев Павел Юрьевич', '04:00', '05:50'),
+    ],
+    [
+      mark('2026-09-15', 'Ороспаев Павел Юрьевич', 'М1', '06:05'),
+      mark('2026-09-15', 'Егоров Дмитрий Иванович', 'М1', '06:10'),
+    ],
+  );
+
+  const { shopHistory } = await import('./queries');
+  const [day] = await shopHistory('М1', '2026-09-15', '2026-09-15');
+
+  const orospaev = day.people.find((p) => p.employeeName === 'Ороспаев Павел Юрьевич')!;
+  assert.equal(orospaev.departures.length, 1);
+  assert.deepEqual(orospaev.departures[0], {
+    unit: 'РЦ Свобода',
+    minutes: 260,
+    stay: 20,
+    status: 'green',
+    score: 3,
+  });
+
+  const egorov = day.people.find((p) => p.employeeName === 'Егоров Дмитрий Иванович')!;
+  assert.deepEqual(egorov.departures, [], 'однофамилец — это другой человек');
+});
+
+test('на карточке лавки: выезда нет — строка пустая, а не выдуманная', async () => {
+  writeSnapshot(
+    [row('2026-09-17', 'Ороспаев Павел Юрьевич', '04:00', '04:20')],
+    [mark('2026-09-18', 'Ороспаев Павел Юрьевич', 'М1', '06:05')],
+  );
+
+  const { shopHistory } = await import('./queries');
+  const [day] = await shopHistory('М1', '2026-09-18', '2026-09-18');
+
+  assert.deepEqual(
+    day.people[0].departures,
+    [],
+    'выезд был в другой день — подставлять его в этот нельзя',
+  );
 });
 
 test('период без выгрузки по РЦ — блока нет', async () => {
