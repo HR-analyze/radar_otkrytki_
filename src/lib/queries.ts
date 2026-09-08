@@ -11,6 +11,7 @@ import {
 } from './types';
 import { aggregateStatuses, roundScore, statusFromScore } from './status';
 import { parseClock } from './time';
+import { isExactCode, matchesShop } from './shops';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
 import {
   addStatus,
@@ -314,21 +315,15 @@ async function shopsIn(
 }
 
 /**
- * Поиск лавки по коду или названию: «М17» найдёт М17, «Сухаревский» — её же,
- * «М1» — М1 и М10–М19. Точное совпадение кода имеет приоритет: иначе, набрав
- * «М1», человек не смог бы посмотреть только М1.
+ * Поиск лавки по коду или названию живёт в shops.ts: то же правило нужно
+ * клиентскому переключателю лавки, а queries тянет за собой снимок и БД.
+ * Реэкспорт — чтобы страницы и тесты не расходились в том, откуда его брать.
  */
-export function matchesShop(shop: { code: string; name: string }, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  if (shop.code.toLowerCase() === q) return true;
-  return `${shop.code} ${shop.name}`.toLowerCase().includes(q);
-}
+export { matchesShop };
 
 /** Есть ли лавка, чей код совпал с запросом точно. */
 export async function hasExactShop(query: string): Promise<boolean> {
-  const q = query.trim().toLowerCase();
-  return (await listShops()).some((s) => s.code.toLowerCase() === q);
+  return (await listShops()).some((s) => isExactCode(s, query));
 }
 
 /* --------------------------------- радар --------------------------------- */
@@ -380,7 +375,7 @@ export async function radar(
   // Точный код важнее подстроки: «М1» — это М1, а не М1 вместе с М10–М19.
   const exact = filters.shop ? await hasExactShop(filters.shop) : false;
   const shops = (await shopsIn(filters.region, filters.shop, filters.from, filters.to)).filter(
-    (s) => !exact || s.code.toLowerCase() === filters.shop!.trim().toLowerCase(),
+    (s) => !exact || isExactCode(s, filters.shop!),
   );
   const allowedShops = new Set(shops.map((s) => s.code));
   const inRegion = await regionDayMatcher(filters.region);
@@ -505,7 +500,7 @@ export async function contest(
   // Точный код важнее подстроки: «М1» — это М1, а не М1 вместе с М10–М19.
   const exact = filters.shop ? await hasExactShop(filters.shop) : false;
   const shops = (await shopsIn(filters.region, filters.shop, filters.from, filters.to)).filter(
-    (s) => !exact || s.code.toLowerCase() === filters.shop!.trim().toLowerCase(),
+    (s) => !exact || isExactCode(s, filters.shop!),
   );
   const allowedShops = new Set(shops.map((s) => s.code));
   const inRegion = await regionDayMatcher(filters.region);

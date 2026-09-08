@@ -45,12 +45,35 @@ export function defaultRange(dates: readonly string[], today = isoDate(new Date(
   return last ? (span(monthOf(last)) ?? { from: last, to: last }) : { from: today, to: today };
 }
 
+export interface ParamDefaults {
+  /**
+   * Критерий, на котором открывается страница, если в URL его нет.
+   * Радар открывается на наполнении витрины — см. `/radar`.
+   */
+  criterion?: CriterionKey | 'all';
+}
+
+/**
+ * Критерий из URL. `criterion=all` — это осознанно выбранный «Общий
+ * результат», и он важнее предвыбора страницы: иначе с предвыбранной витрины
+ * нельзя было бы уйти. Мусор в параметре молча превращается в предвыбор.
+ */
+export function resolveCriterion(
+  raw: string | undefined,
+  fallback: CriterionKey | 'all' = 'all',
+): CriterionKey | 'all' {
+  if (raw === 'all') return 'all';
+  return CRITERION_ORDER.includes(raw as CriterionKey) ? (raw as CriterionKey) : fallback;
+}
+
 /**
  * Параметры из URL с безопасными значениями по умолчанию: период — текущий
- * месяц (см. defaultRange), остальные фильтры пусты.
+ * месяц (см. defaultRange), остальные фильтры пусты. Страница может задать
+ * свой предвыбор — см. ParamDefaults.
  */
 export async function resolveParams(
   sp: Record<string, string | string[] | undefined>,
+  defaults: ParamDefaults = {},
 ): Promise<ResolvedParams> {
   const dates = await listDates();
   const { from: fallbackFrom, to: fallbackTo } = defaultRange(dates);
@@ -66,10 +89,7 @@ export async function resolveParams(
   let to = isDate(one('to')) ? (one('to') as string) : fallbackTo;
   if (from > to) [from, to] = [to, from];
 
-  const criterionRaw = one('criterion');
-  const criterion = CRITERION_ORDER.includes(criterionRaw as CriterionKey)
-    ? (criterionRaw as CriterionKey)
-    : 'all';
+  const criterion = resolveCriterion(one('criterion'), defaults.criterion);
 
   const statusRaw = one('status');
   const status = STATUSES.includes(statusRaw as Status) ? (statusRaw as Status) : 'all';
