@@ -146,7 +146,10 @@ async function saveToDisk(
   // Снимок на диске — то, что читает дашборд в режиме снимка. Пересобираем
   // сразу, иначе файл лежит, а цифры прежние.
   const { buildSnapshot } = await import('./etl/snapshot-build');
-  buildSnapshot({ fixturesDir: dir });
+  // Нормы берём вместе с правками из базы: иначе загрузка выгрузки молча
+  // откатывала бы статусы к цифрам справочника.
+  const { readNorms } = await import('./shop-norms-store');
+  buildSnapshot({ fixturesDir: dir, norms: (await readNorms()).byCode });
   invalidateSnapshot();
 
   if (storageMode() === 'sqlite') {

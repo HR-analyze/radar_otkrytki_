@@ -4,13 +4,15 @@ import { parseAttendanceBuffer, type ParseWarning } from '../parsers/attendance'
 import { parseDeliveryTimes } from '../parsers/delivery';
 import { mergeDeliveryTimes } from '../delivery-merge';
 import { dedupeAttendance } from '../rollup';
+import { applyShopNorms, normsEnabled } from '../norms';
+import { readNormsSeed } from '../shop-norms-store';
 import {
   replaceAttendance,
   rollUpAttendance,
   upsertCriterionStatuses,
   upsertShops,
 } from '../repository';
-import type { AttendanceRow } from '../types';
+import type { AttendanceRow, ShopNorms } from '../types';
 
 export interface AttendanceSource {
   /** Человекочитаемое имя источника для журнала (имя файла / ID на Диске). */
@@ -38,6 +40,12 @@ export interface AttendanceJobOptions {
    * за эти дни отметок нет вовсе, а время отгрузки есть.
    */
   knownDates?: readonly string[];
+  /**
+   * Нормативы лавок. По умолчанию — справочник из репозитория; вызывающий,
+   * у которого есть база ручных данных, передаёт нормы вместе с правками
+   * (см. shop-norms-store.ts).
+   */
+  norms?: Readonly<Record<string, ShopNorms>>;
 }
 
 /**
@@ -95,6 +103,15 @@ export function runAttendanceJob(
       const merged = mergeDeliveryTimes(all, parsed.rows, knownDates, names, config);
       all = merged.rows;
       deliveryApplied = merged.applied;
+    }
+
+    // Нормативы лавок — последними из правок над отметками: после журнала
+    // отгрузок, иначе подставленный оттуда приезд водителя остался бы
+    // посчитанным по сетевому порогу (см. lib/norms.ts).
+    if (normsEnabled(config)) {
+      const norms =
+        options.norms ?? Object.fromEntries(readNormsSeed().map((n) => [n.code, n]));
+      all = applyShopNorms(all, norms, config);
     }
 
     const dates = [...new Set(all.map((r) => r.date))].sort();

@@ -14,6 +14,7 @@ import { readFixtures } from '../src/lib/fixtures';
 import { parseAttendanceBuffer } from '../src/lib/parsers/attendance';
 import { parseLegacyVitriny } from '../src/lib/parsers/legacy-vitriny';
 import { exportCoverage, isLegacyStale } from '../src/lib/rollup';
+import { readNorms } from '../src/lib/shop-norms-store';
 import { runAttendanceJob } from '../src/lib/etl/attendance-job';
 import {
   upsertCriterionStatuses,
@@ -24,7 +25,7 @@ import {
 
 const FIXTURES = process.env.RADAR_FIXTURES_DIR ?? path.join(process.cwd(), 'fixtures');
 
-function main(): void {
+async function main(): Promise<void> {
   const config = loadConfig();
   const reset = process.argv.includes('--reset');
 
@@ -106,6 +107,7 @@ function main(): void {
         ? { label: files.delivery.name, buffer: files.delivery.buffer }
         : undefined,
       knownDates: legacyDates,
+      norms: (await readNorms()).byCode,
     },
   );
 
@@ -150,4 +152,4 @@ function printTotals(d: ReturnType<typeof getDb>): void {
   console.log('\nГотово. Запусти дашборд: npm run dev');
 }
 
-main();
+void main();

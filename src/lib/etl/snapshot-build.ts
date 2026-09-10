@@ -8,10 +8,12 @@ import { mergeDepartures, parseDepartures, type DepartureRow } from '../parsers/
 import { parseLegacyVitriny } from '../parsers/legacy-vitriny';
 import { parseRoster } from '../parsers/roster';
 import { mergeDeliveryTimes } from '../delivery-merge';
+import { applyShopNorms, normsEnabled } from '../norms';
+import { readNormsSeed } from '../shop-norms-store';
 import { deriveRegionHistory } from '../roster-history';
 import { dedupeAttendance, exportCoverage, isLegacyStale, rollUpAttendance } from '../rollup';
-import { configFingerprint, type Snapshot } from '../snapshot';
-import type { AttendanceRow, CriterionStatusRow, Shop } from '../types';
+import { configFingerprint, normsFingerprint, type Snapshot } from '../snapshot';
+import type { AttendanceRow, CriterionStatusRow, Shop, ShopNorms } from '../types';
 
 /**
  * Сборка `src/generated/snapshot.json` из fixtures — без SQLite и без записи в БД.
@@ -56,16 +58,30 @@ export interface SnapshotBuildResult {
   rosterStats: string;
   /** Строка статистики по выездам с РЦ — пустая, если выгрузки нет. */
   departureStats: string;
+  /** Строка статистики по нормам лавок — пустая, если нормы выключены. */
+  normsStats: string;
   dedupedRemoved: number;
   droppedLegacy: number;
 }
 
 export function buildSnapshot(
-  options: { fixturesDir?: string; outPath?: string } = {},
+  options: {
+    fixturesDir?: string;
+    outPath?: string;
+    /**
+     * Нормативы лавок. По умолчанию — сид из репозитория; вызывающий, у
+     * которого есть база ручных данных, передаёт сюда нормы вместе с правками
+     * (см. shop-norms-store.ts). Дефолт именно такой, чтобы забытый аргумент
+     * давал справочник, а не отключал нормы вовсе.
+     */
+    norms?: Readonly<Record<string, ShopNorms>>;
+  } = {},
 ): SnapshotBuildResult {
   const fixturesDir = options.fixturesDir ?? defaultFixturesDir();
   const outPath = options.outPath ?? defaultSnapshotPath();
   const config = loadConfig();
+  const norms =
+    options.norms ?? Object.fromEntries(readNormsSeed().map((n) => [n.code, n]));
 
   // Файлы не перечислены в коде: чтобы добавить день, достаточно положить
   // очередную выгрузку в fixtures/ — см. src/lib/fixtures.ts.
@@ -186,6 +202,25 @@ export function buildSnapshot(
       `скрыто отметок без face id ${merged.suppressed}, вне периода ${merged.skippedDates}`;
   }
 
+  // 3.4. Нормативы лавок: у каждой лавки свой час приезда водителя и выхода
+  //      поваров, и статус считается от него, а не от сетевого порога
+  //      (см. lib/norms.ts). Делается последним из шагов над отметками —
+  //      после журнала отгрузок, иначе подставленный оттуда приезд водителя
+  //      остался бы посчитанным по общему порогу.
+  let normsStats = '';
+  if (normsEnabled(config)) {
+    const before = attendance;
+    attendance = applyShopNorms(attendance, norms, config);
+
+    const changed = attendance.filter((r, i) => r.status !== before[i].status).length;
+    const covered = new Set(
+      attendance.filter((r) => norms[r.shopCode]).map((r) => r.shopCode),
+    ).size;
+    normsStats =
+      `  нормы лавок: справочник на ${Object.keys(norms).length} лавок, ` +
+      `совпало с выгрузками ${covered} из ${shops.size}, пересчитано статусов ${changed}`;
+  }
+
   // 4. Статусы критериев: посчитанное перекрывает легаси, а устаревшее
   //    легаси не берётся вовсе — см. isLegacyStale.
   //
@@ -214,6 +249,7 @@ export function buildSnapshot(
     source: 'json',
     configFingerprint: configFingerprint(),
     fixturesFingerprint: fixturesFingerprint(fixturesDir),
+    normsFingerprint: normsFingerprint(norms),
     shops: [...shops.values()],
     attendance,
     // Витрины подмешиваются при чтении из базы ручных данных.
@@ -264,6 +300,7 @@ export function buildSnapshot(
     deliveryStats,
     rosterStats,
     departureStats,
+    normsStats,
     dedupedRemoved: deduped.removed,
     droppedLegacy,
   };

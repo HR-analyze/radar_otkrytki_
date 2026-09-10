@@ -90,6 +90,37 @@ export interface ScoreZonesConfig {
   note: string;
 }
 
+/** Смена поваров: сколько человек и к какому времени они должны быть в лавке. */
+export interface CookShift {
+  count: number;
+  /** «06:20» */
+  at: string;
+}
+
+/**
+ * Нормативы открытия одной лавки из справочника «Лавки».
+ *
+ * Общие пороги в `criteria` — сетевые, одни на все лавки. Но норма у каждой
+ * лавки своя: где-то водитель должен приехать к 5:50, где-то к 8:00, и поваров
+ * тоже ждут не всех к одному времени. Норма отсюда заменяет сетевой порог
+ * зелёной зоны, жёлтая едет за ней с шагом `rules.shopNorms.yellowStepMinutes`.
+ */
+export interface ShopNorms {
+  code: string;
+  name: string;
+  /** Норма приезда водителя, «06:30»; null — в справочнике пусто. */
+  driverAt: string | null;
+  /** Смены поваров, от ранней к поздней. Пусто — нормы нет. */
+  cookShifts: CookShift[];
+  /** Как норма записана в справочнике — для сверки глазами в редакторе. */
+  rawDriver: string | null;
+  rawCook: string | null;
+  /** reference — из справочника, manual — поправлено на сайте. */
+  source: 'reference' | 'manual';
+  /** Что в строке справочника не разобралось. */
+  warnings: string[];
+}
+
 /** Особый график лавки — см. ThresholdConfig.shopSchedules. */
 export interface ShopSchedule {
   /** Во сколько открывается эта лавка, «10:00». */
@@ -121,6 +152,18 @@ export interface ThresholdConfig {
   rules: {
     /** Обычное время открытия лавки — база, от которой считается сдвиг порогов. */
     opensAt?: { network: string; note: string };
+    /**
+     * Пер-лавочные нормы приезда водителя и прихода поваров (справочник «Лавки»).
+     *
+     * Пока выключено, лавка считается по сетевым порогам `criteria`.
+     */
+    shopNorms?: {
+      enabled: boolean;
+      /** Ширина жёлтой зоны в минутах: норма+1…норма+шаг → 🟡, дальше 🔴. */
+      yellowStepMinutes: number;
+      confirmed: boolean;
+      note: string;
+    };
     otherSchedule: {
       enabled: boolean;
       after: string;
