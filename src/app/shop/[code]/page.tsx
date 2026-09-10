@@ -61,7 +61,10 @@ export default async function ShopPage({
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <Link href={`/radar?from=${p.from}&to=${p.to}`} className="text-sm muted hover:underline">
+        {/* Возврат забирает те же фильтры, с которыми человек сюда пришёл.
+            Раньше ссылка вела на голый радар: РМ, критерий и статус, отобранные
+            до провала в карточку, приходилось выставлять заново. */}
+        <Link href={`/radar?${backQuery(p)}`} className="text-sm muted hover:underline">
           ← к радару
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{shop.name}</h1>
@@ -368,6 +371,26 @@ function DepartureNote({
       </span>
     </span>
   );
+}
+
+/**
+ * Ссылка обратно в радар: период плюс всё, что человек отобрал до провала
+ * в карточку. Значения по умолчанию в адрес не пишем — см. Filters.
+ */
+function backQuery(p: {
+  from: string;
+  to: string;
+  region?: string;
+  shop?: string;
+  criterion?: CriterionKey;
+  status?: string;
+}): string {
+  const q = new URLSearchParams({ from: p.from, to: p.to });
+  if (p.region) q.set('region', p.region);
+  if (p.shop) q.set('shop', p.shop);
+  if (p.criterion) q.set('criterion', p.criterion);
+  if (p.status && p.status !== 'all') q.set('status', p.status);
+  return q.toString();
 }
 
 /** Сначала по критерию (как на радаре), внутри — по времени прихода. */

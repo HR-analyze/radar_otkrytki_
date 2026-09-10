@@ -154,7 +154,10 @@ export function StatusLegend({ note }: { note?: string }) {
           {i.text}
         </span>
       ))}
-      {note && <span>{note}</span>}
+      {/* Подсказка про клики — длинная, и на телефоне она съедала две строки
+          из тех немногих, что достались таблице. Там она и не нужна: пальцем
+          по ячейке всё равно тыкают, а заголовок виден. */}
+      {note && <span className="hidden sm:inline">{note}</span>}
     </div>
   );
 }

@@ -57,10 +57,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           className="sticky top-0 z-50 border-b backdrop-blur"
           style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--surface) 88%, transparent)' }}
         >
+          {/*
+            На телефоне шапка разъезжалась на три ряда: логотип, вкладки,
+            кнопки — и съедала треть экрана ещё до заголовка страницы. Здесь
+            вкладки уходят отдельной строкой во всю ширину (order-3 basis-full),
+            а логотип и кнопки делят первый ряд. С sm и выше всё встаёт в строку.
+          */}
           <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
             <Link
               href="/"
-              className="flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight"
+              className="order-1 flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight"
             >
               {/* Иконка та же, что во вкладке браузера: логотип один. */}
               <Image src="/favicon-32x32.png" alt="" width={22} height={22} priority />
@@ -70,12 +76,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             {/* Вкладки тащат за собой фильтры — см. SiteNav. Suspense нужен
                 из-за чтения адреса: без него страница-404 не собирается. */}
-            <Suspense fallback={<SiteNavFallback />}>
-              <SiteNav />
-            </Suspense>
+            <div className="order-3 min-w-0 basis-full sm:order-2 sm:basis-auto">
+              <Suspense fallback={<SiteNavFallback />}>
+                <SiteNav />
+              </Suspense>
+            </div>
             {/* Загрузка — в шапке: данными занимается вся команда, а не только
                 тот, у кого открыт репозиторий. */}
-            <div className="ml-auto flex shrink-0 items-center gap-2">
+            <div className="order-2 ml-auto flex shrink-0 items-center gap-2 sm:order-3">
               <ThemeToggle />
               <UploadButton />
             </div>

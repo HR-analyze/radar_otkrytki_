@@ -43,12 +43,12 @@ export default async function RadarPage({
   return (
     /* radar-shell: на широком экране таблица получает собственный скролл,
        иначе шапка с датами не липнет — см. globals.css. */
-    <div className="radar-shell flex flex-col gap-5">
+    <div className="radar-shell flex flex-col gap-3 sm:gap-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
           {p.shop || p.region ? 'Радар по лавкам' : 'Радар по всем лавкам'}
         </h1>
-        <p className="mt-1 text-sm muted">
+        <p className="mt-1 text-xs muted sm:text-sm">
           {rows.length} {plural(rows.length, 'лавка', 'лавки', 'лавок')} под фильтром
           {` · критерий «${criterionTitle}»`}
           {p.shop && ` · поиск «${p.shop}»`}

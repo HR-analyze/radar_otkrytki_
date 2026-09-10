@@ -146,19 +146,8 @@ export function Filters({
   const presets = periodPresets(dates);
   const currentPreset = activePreset(presets, state.from, state.to);
 
-  return (
-    /*
-     * Пока страница пересобирается, панель гаснет и не ловит клики: единственным
-     * признаком работы был курсор-«часы», а его не видно ни на телефоне, ни
-     * краем глаза — сайт выглядел так, будто фильтр не сработал, и по нему
-     * щёлкали второй раз.
-     */
-    <div className="surface p-3">
-      {pending && <span className="route-progress" aria-hidden />}
-      <div
-        aria-busy={pending}
-        className={`${pending ? 'is-busy' : ''} grid gap-3 sm:grid-cols-2 ${shops ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
-      >
+  const fields = (
+    <>
       {/* Период сбрасывается не в пустоту, а в значение по умолчанию (текущий
           месяц, см. defaultRange): период без границ бессмысленен. Крестик
           поэтому появляется только когда даты стоят в ссылке явно. */}
@@ -259,6 +248,49 @@ export function Filters({
           </select>
         </Field>
       )}
+    </>
+  );
+
+  return (
+    /*
+     * Пока страница пересобирается, панель гаснет и не ловит клики: единственным
+     * признаком работы был курсор-«часы», а его не видно ни на телефоне, ни
+     * краем глаза — сайт выглядел так, будто фильтр не сработал, и по нему
+     * щёлкали второй раз.
+     */
+    <div className="surface p-3">
+      {pending && <span className="route-progress" aria-hidden />}
+
+      {/*
+        На телефоне пять полей в столбик занимали весь экран: до таблицы,
+        ради которой страницу и открыли, нужно было пролистать всю панель.
+        Прячем их за раскрывающийся заголовок — но только на узком экране:
+        на широком места хватает, и лишний клик там был бы вредом.
+
+        <details> вместо кнопки с состоянием: работает без скриптов, открывается
+        с клавиатуры и не требует хранить «открыто/закрыто» отдельно.
+      */}
+      <details className="group sm:hidden" open={activeCount > 0}>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm">
+          <span className="font-medium">
+            Фильтры
+            {activeCount > 0 && <span className="muted"> · активно {activeCount}</span>}
+          </span>
+          <span aria-hidden className="muted transition-transform group-open:rotate-180">
+            ⌄
+          </span>
+        </summary>
+        <div className="mt-3">
+          <FilterGrid pending={pending} wide={!!shops}>
+            {fields}
+          </FilterGrid>
+        </div>
+      </details>
+
+      <div className="hidden sm:block">
+        <FilterGrid pending={pending} wide={!!shops}>
+          {fields}
+        </FilterGrid>
       </div>
 
       {(presets.length > 0 || activeCount > 0) && (
@@ -309,6 +341,31 @@ export function Filters({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Сетка полей. Живёт отдельным компонентом, потому что рисуется дважды: под
+ * раскрывающимся заголовком на телефоне и в открытую на широком экране.
+ * Разметка при этом одна — иначе два варианта разъехались бы при первой правке.
+ */
+function FilterGrid({
+  pending,
+  wide,
+  children,
+}: {
+  pending: boolean;
+  /** Есть ли поле «Лавка»: от него зависит, пять колонок или четыре. */
+  wide: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      aria-busy={pending}
+      className={`${pending ? 'is-busy' : ''} grid gap-3 sm:grid-cols-2 ${wide ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
+    >
+      {children}
     </div>
   );
 }

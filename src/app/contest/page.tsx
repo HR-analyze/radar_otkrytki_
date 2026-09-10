@@ -6,7 +6,7 @@ import { averagePoints, formatPoints, type ContestScore } from '@/lib/contest';
 import { shortDate } from '@/lib/time';
 import { Filters } from '@/components/Filters';
 import { plural } from '@/lib/plural';
-import { StatusCell, STATUS_TEXT } from '@/components/Status';
+import { StatusCell, StatusLegend, STATUS_TEXT } from '@/components/Status';
 
 export const dynamic = 'force-dynamic';
 
@@ -108,6 +108,10 @@ export default async function ContestPage({
               hint={`дней в таблице: ${dates.length}`}
             />
           </div>
+
+          {/* Обозначения те же, что на радаре, но балл — своё правило, и
+              его стоит держать перед глазами рядом с таблицей. */}
+          <StatusLegend note="Балл за день: 🟢 +1 · 🟡 0 · 🔴 −1. Клик по ячейке — карточка лавки за этот день." />
 
           {/* --- Лавки --- */}
           <div className="surface radar-scroll">

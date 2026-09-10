@@ -702,7 +702,9 @@ function StepButton({
       onClick={onClick}
       title={title}
       aria-label={title}
-      className="rounded-lg border px-3 py-2 text-sm"
+      /* 44 пикселя: стрелками «вчера/завтра» пользуются с телефона чаще
+         всего, а прежние 36 в высоту заставляли целиться. */
+      className="flex size-11 items-center justify-center rounded-lg border text-sm"
       style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
     >
       {label}
