@@ -80,20 +80,27 @@ export default async function HistoryPage() {
         <section className="surface p-4">
           <h2 className="text-sm font-semibold">Файлы, из которых сейчас считается радар</h2>
           <p className="mt-0.5 text-xs muted">
-            Папка выгрузок, {files.length} {plural(files.length, 'файл', 'файла', 'файлов')}. Время —
-            когда файл последний раз менялся.
+            Папка выгрузок, {files.length} {plural(files.length, 'файл', 'файла', 'файлов')}.
           </p>
-          <table className="mt-3 w-full text-sm">
-            <tbody>
-              {files.map((f) => (
-                <tr key={f.name} className="border-t" style={{ borderColor: 'var(--border)' }}>
-                  <td className="py-1.5 pr-3">{f.name}</td>
-                  <td className="py-1.5 pr-3 text-right text-xs tabular-nums muted">{f.size} КБ</td>
-                  <td className="py-1.5 text-right text-xs tabular-nums muted">{stamp(f.mtime)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/*
+            Время у всех файлов сплошь и рядом одинаковое — это отметка не о
+            загрузке, а о последней записи на диск: при выкладке сайта файлы
+            переписываются разом. Без этой оговорки таблица читается как «всё
+            загрузили в одну минуту», и на неё начинают ссылаться как на
+            журнал загрузок, хотя журнал — блок выше.
+          */}
+          <p className="mt-1 text-xs muted">
+            Время — когда файл последний раз записан на диск, а не когда его загрузили:
+            при выкладке сайта все файлы переписываются разом. Кто и когда загружал —
+            в «Загрузках» выше.
+          </p>
+          {files.length === 0 ? (
+            <p className="mt-3 text-sm muted">
+              Папка выгрузок пуста — радар считается по закоммиченному снимку.
+            </p>
+          ) : (
+            <FileList files={files} />
+          )}
         </section>
 
         <section className="surface p-4">
@@ -131,8 +138,14 @@ export default async function HistoryPage() {
         {transitions.length === 0 ? (
           <p className="mt-3 text-sm muted">Смен РМ пока не было.</p>
         ) : (
-          <div className="mt-3 max-h-96 overflow-y-auto">
-            <table className="w-full text-sm">
+          /* Список прокручивается внутри себя, поэтому заголовок обязан
+             липнуть: иначе к середине не понять, где «было», а где «стало» —
+             а перепутать их значит перепутать, кого спрашивать за день. */
+          <div
+            className="mt-3 max-h-96 overflow-y-auto"
+            style={{ overscrollBehavior: 'contain' }}
+          >
+            <table className="norms-table w-full text-sm">
               <thead>
                 <tr className="text-xs muted">
                   <th className="pb-1.5 text-left font-medium">Лавка</th>
@@ -165,7 +178,67 @@ export default async function HistoryPage() {
   );
 }
 
-function readFixtureFiles(): { name: string; size: number; mtime: string }[] {
+interface FixtureFile {
+  name: string;
+  size: number;
+  mtime: string;
+}
+
+/**
+ * Список файлов выгрузок.
+ *
+ * Файлов прибавляется по паре в день и они не удаляются: через полгода их
+ * триста, и «Правки витрин» справа оказываются напротив пустоты, а сама
+ * страница — длиной в экран прокрутки. Показываем свежие, остальные — под
+ * раскрытием: <details> работает без скриптов и с клавиатуры.
+ */
+const FILES_SHOWN = 12;
+
+function FileList({ files }: { files: FixtureFile[] }) {
+  const head = files.slice(0, FILES_SHOWN);
+  const rest = files.slice(FILES_SHOWN);
+
+  return (
+    <>
+      <FileTable files={head} />
+      {rest.length > 0 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs muted">
+            Ещё {rest.length} {plural(rest.length, 'файл', 'файла', 'файлов')} постарше
+          </summary>
+          <FileTable files={rest} />
+        </details>
+      )}
+    </>
+  );
+}
+
+function FileTable({ files }: { files: FixtureFile[] }) {
+  return (
+    <table className="mt-3 w-full text-sm">
+      {/* Раньше подписей не было вовсе: три колонки, и что за число «154» и
+          что за дата рядом — приходилось угадывать. */}
+      <thead>
+        <tr className="text-xs muted">
+          <th className="pb-1.5 pr-3 text-left font-medium">Файл</th>
+          <th className="pb-1.5 pr-3 text-right font-medium">Размер</th>
+          <th className="pb-1.5 text-right font-medium">Записан</th>
+        </tr>
+      </thead>
+      <tbody>
+        {files.map((f) => (
+          <tr key={f.name} className="border-t" style={{ borderColor: 'var(--border)' }}>
+            <td className="py-1.5 pr-3 break-all">{f.name}</td>
+            <td className="py-1.5 pr-3 text-right text-xs tabular-nums muted">{f.size} КБ</td>
+            <td className="py-1.5 text-right text-xs tabular-nums muted">{stamp(f.mtime)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function readFixtureFiles(): FixtureFile[] {
   try {
     const dir = fixturesDir();
     return fs
