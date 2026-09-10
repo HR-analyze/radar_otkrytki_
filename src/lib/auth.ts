@@ -20,23 +20,16 @@
 
 export const COOKIE = 'radar_manage';
 
-/** Вкладки под паролем. Остальной радар открыт. */
-const MANAGED = ['/showcase', '/history', '/api/showcase'];
-
 /**
- * Пути, где под паролем только запись.
+ * Вкладки под паролем. Остальной радар открыт.
  *
- * Нормы лавок правятся со страницы «Пороги». Сама страница открыта — цифры
- * смотрит вся команда, и таблица норм такая же справка, как пороги рядом с
- * ней. А вот правка перекрашивает статусы лавки за все дни, поэтому запись
- * закрыта тем же паролем, что и витрины.
+ * «Пороги» закрыты с 10.09.2026: со вкладки правятся нормативы лавок, а правка
+ * нормы перекрашивает статусы лавки за все дни. Раньше страница была только
+ * для чтения и висела открытой.
  */
-const MANAGED_WRITES = ['/api/norms'];
+const MANAGED = ['/showcase', '/history', '/settings', '/api/showcase', '/api/norms'];
 
-/** Методы, которые ничего не меняют. */
-const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-
-export const MANAGED_TITLE = 'Витрины и История';
+export const MANAGED_TITLE = 'Витрины, История и Пороги';
 
 export function password(): string | undefined {
   return process.env.RADAR_MANAGE_PASSWORD || undefined;
@@ -59,19 +52,9 @@ export function isPublic(pathname: string): boolean {
   );
 }
 
-/**
- * Нужен ли для пути пароль.
- *
- * `method` важен для путей из MANAGED_WRITES: там чтение открыто, а запись нет.
- * Без метода (например, при проверке страницы) правило считается по записи —
- * так безопаснее ошибиться.
- */
-export function isManaged(pathname: string, method = 'POST'): boolean {
-  const matches = (list: readonly string[]): boolean =>
-    list.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-
-  if (matches(MANAGED)) return true;
-  return matches(MANAGED_WRITES) && !READ_METHODS.has(method.toUpperCase());
+/** Нужен ли для пути пароль. */
+export function isManaged(pathname: string): boolean {
+  return MANAGED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 /**
