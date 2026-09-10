@@ -126,6 +126,19 @@ function migrate(db: BetterSqlite3.Database): void {
 
     CREATE INDEX IF NOT EXISTS region_periods_shop ON region_periods (shop_code, from_date);
 
+    -- Нормативы открытия лавки, поправленные руками на вкладке «Пороги».
+    -- Строка тут ПЕРЕКРЫВАЕТ строку сида целиком: справочник «Лавки» можно
+    -- пересобрать заново, и правка не потеряется, а лавка без правки поедет
+    -- по обновлённому справочнику. NULL в driver_at значит «нормы нет» —
+    -- это осознанный выбор человека, а не отсутствие данных.
+    CREATE TABLE IF NOT EXISTS shop_norms (
+      shop_code   TEXT PRIMARY KEY,
+      driver_at   TEXT,
+      -- JSON-массив смен: [{"count":2,"at":"06:20"}].
+      cook_shifts TEXT NOT NULL,
+      updated_at  TEXT NOT NULL
+    );
+
     -- Разовые отметки: например, что сид из репозитория уже залит.
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,

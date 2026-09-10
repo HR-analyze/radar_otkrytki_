@@ -1,5 +1,8 @@
 import { loadConfig, configPath } from '@/lib/config';
-import { isSnapshotStale, isWritable } from '@/lib/snapshot';
+import { NormsEditor } from '@/components/NormsEditor';
+import { yellowStep, normsEnabled } from '@/lib/norms';
+import { areNormsStale, isSnapshotStale, isWritable } from '@/lib/snapshot';
+import { readNorms } from '@/lib/shop-norms-store';
 import { listSchedules, scheduleShift } from '@/lib/status';
 import { CRITERION_ORDER, type ThresholdConfig } from '@/lib/types';
 import { plural } from '@/lib/plural';
@@ -7,8 +10,10 @@ import { plural } from '@/lib/plural';
 export const dynamic = 'force-dynamic';
 
 /**
- * Пороги только для чтения: правятся в config/thresholds.json.
- * Редактор из UI — задача «до конца недели» (см. README).
+ * Сетевые пороги — только для чтения: они правятся в config/thresholds.json.
+ * Правится здесь другое — нормативы конкретных лавок (во сколько ждут водителя
+ * и поваров): справочник «Лавки» отстаёт от жизни, а держать его копию в
+ * конфиге и в Google-таблице одновременно значит расходиться с ней.
  */
 export default async function SettingsPage() {
   const config = loadConfig();
@@ -22,7 +27,12 @@ export default async function SettingsPage() {
   const network = config.rules.opensAt?.network ?? '—';
   const cook = config.criteria.cook;
   const cookGreen = cook.kind === 'time' ? cook.greenUntil : null;
-  const [stale, writable] = [await isSnapshotStale(), isWritable()];
+  const norms = await readNorms();
+  const [stale, writable, normsStale] = [
+    await isSnapshotStale(),
+    isWritable(),
+    await areNormsStale(norms.byCode),
+  ];
 
   return (
     <div className="flex flex-col gap-5">
@@ -94,6 +104,32 @@ export default async function SettingsPage() {
             })}
           </tbody>
         </table>
+      </section>
+
+      <section className="surface p-4">
+        <h2 className="text-sm font-semibold">Нормы лавок</h2>
+        <p className="mt-0.5 max-w-prose text-xs muted">
+          {normsEnabled(config)
+            ? `Пороги выше — сетевые. Там, где у лавки есть своя норма, «водитель» и «повар»
+               считаются от неё: 🟢 до нормы, 🟡 следующие ${yellowStep(config)} мин, дальше 🔴.
+               Смены поваров раздаются по факту прихода: пришедший раньше всех отвечает за
+               самую раннюю смену.`
+            : 'Пер-лавочные нормы выключены в конфиге — все лавки считаются по сетевым порогам выше.'}
+        </p>
+
+        {normsStale && (
+          <div
+            className="mt-3 rounded p-2.5 text-xs"
+            style={{ borderColor: 'var(--yellow)', borderWidth: 1 }}
+          >
+            ⚠️ Нормы правили после того, как собрали снимок: на дашборде ещё старые статусы.
+            Пересобери снимок — <code>npm run snapshot</code>.
+          </div>
+        )}
+
+        <div className="mt-3">
+          <NormsEditor />
+        </div>
       </section>
 
       {schedules.length > 0 && (

@@ -1,0 +1,1274 @@
+{
+  "$comment": "Нормативы открытия по лавкам. Собирается из справочника «Лавки»: npm run norms:build. Правки с сайта сюда не попадают — они живут в data/manual.db (см. shop-norms-store.ts).",
+  "source": "normy-lavok.csv",
+  "builtAt": "2026-09-10",
+  "norms": [
+    {
+      "code": "М1",
+      "name": "Милютинский",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "3 с 6.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М2",
+      "name": "Покровка",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "3 с 6.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М3",
+      "name": "Пресня",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "3 с 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М4",
+      "name": "Спиридоновка",
+      "driverAt": "05:45",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "05:45"
+        }
+      ],
+      "rawDriver": "5.45",
+      "rawCook": "3 с 5:45",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М5",
+      "name": "Щепкина",
+      "driverAt": null,
+      "cookShifts": [],
+      "rawDriver": null,
+      "rawCook": null,
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М6",
+      "name": "Николоямская",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "3 с 6.30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М7",
+      "name": "Тверской бульвар",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "3 с 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М8",
+      "name": "Тимура Фрунзе",
+      "driverAt": "06:40",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:10"
+        }
+      ],
+      "rawDriver": "6:40",
+      "rawCook": "3 с 6:10",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М9",
+      "name": "Солянка",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "05:50"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "1 с 5.50",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М10",
+      "name": "Брестская",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "2 с 6.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М11",
+      "name": "Тверская-Ямская",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "1 с 6.00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М12",
+      "name": "Даниловская мануфактура",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:00"
+        },
+        {
+          "count": 2,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "1 с 6.00/2 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М13",
+      "name": "Ордынка",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "2 с 6.30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М14",
+      "name": "Шмитовский",
+      "driverAt": "06:20",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6.20",
+      "rawCook": "1 с 6.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М15",
+      "name": "Сущевка",
+      "driverAt": null,
+      "cookShifts": [],
+      "rawDriver": null,
+      "rawCook": null,
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М16",
+      "name": "Сити",
+      "driverAt": "06:45",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:15"
+        }
+      ],
+      "rawDriver": "6.45",
+      "rawCook": "2 с 6:15",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М17",
+      "name": "Б.Сухаревский",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 4,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "4 с 6.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М18",
+      "name": "Весковский",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "05:50"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "2 с 5:50",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М19",
+      "name": "Краснопролетарская",
+      "driverAt": "06:20",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:15"
+        }
+      ],
+      "rawDriver": "6.20",
+      "rawCook": "3 с 6.15",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М20",
+      "name": "Спортивная",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "05:40"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "3 с 5:40",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М21",
+      "name": "Гоголевский",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "2 с 6.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М22",
+      "name": "Аптекарский огород",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 4,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "4 с 6.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М23",
+      "name": "Добрынинский",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "2 с 6.30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М24",
+      "name": "Стремянный",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "3 с 6:00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М25",
+      "name": "Мясницкая",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 4,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "4 с 6.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М26",
+      "name": "Левшинский",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:15"
+        }
+      ],
+      "rawDriver": "6:30",
+      "rawCook": "1 с 6:15",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М27",
+      "name": "Неглинная",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6:30",
+      "rawCook": "2 с 6.30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М28",
+      "name": "Татарская",
+      "driverAt": "05:50",
+      "cookShifts": [
+        {
+          "count": 4,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "5.50",
+      "rawCook": "4 с 6.30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М29",
+      "name": "Воздвиженка",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "1 с 06:20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М30",
+      "name": "Мичуринский",
+      "driverAt": "06:10",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6.10",
+      "rawCook": "3 с 6:00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М31",
+      "name": "Черняховского / Аэропорт",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:00"
+        },
+        {
+          "count": 2,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "1 с 6.00 2 с 6:20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М32",
+      "name": "Профсоюзная",
+      "driverAt": "06:10",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6.10",
+      "rawCook": "1 с 6.0",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М33",
+      "name": "Грузинская",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6:30",
+      "rawCook": "1 с 6:20:00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М34",
+      "name": "Балтийская",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6:30",
+      "rawCook": "2 с 6.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М35",
+      "name": "Алексеевская",
+      "driverAt": "05:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "05:30"
+        },
+        {
+          "count": 1,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "5:30",
+      "rawCook": "2 с 5:30 1 с 6:00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М36",
+      "name": "Сокол",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6:30",
+      "rawCook": "2 с 6.00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М37",
+      "name": "Бауманская",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 4,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "4 с 6.30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М38",
+      "name": "Лесная",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "2 с 6.0",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М39",
+      "name": "Шаболовка",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "2 с 6.30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М40",
+      "name": "Дмитровка",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "2 с 6.30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М41",
+      "name": "Спартаковская",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "05:20"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "1 с 5.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М42",
+      "name": "Сокольники",
+      "driverAt": "05:50",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "05:30"
+        }
+      ],
+      "rawDriver": "5.50",
+      "rawCook": "2 с 5.30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М43",
+      "name": "Лазоревый",
+      "driverAt": "05:50",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "05:45"
+        }
+      ],
+      "rawDriver": "5.50",
+      "rawCook": "повар в 5.45",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М44",
+      "name": "Перово",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "05:40"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "3 с 5:40",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М45",
+      "name": "Остоженка",
+      "driverAt": "06:20",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6:20",
+      "rawCook": "2 с 6:20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М46",
+      "name": "Щербаковская",
+      "driverAt": "05:50",
+      "cookShifts": [
+        {
+          "count": 4,
+          "at": "05:30"
+        }
+      ],
+      "rawDriver": "5.50",
+      "rawCook": "4 с 5.30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М47",
+      "name": "Павелецкая",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:00"
+        },
+        {
+          "count": 1,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "2 в 6:00/1 в 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М48",
+      "name": "Университет",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "3 с 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М49",
+      "name": "Депо / Новорязанская",
+      "driverAt": "05:50",
+      "cookShifts": [
+        {
+          "count": 4,
+          "at": "05:40"
+        }
+      ],
+      "rawDriver": "5.50",
+      "rawCook": "4 с 5.40",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М50",
+      "name": "Волгоградка",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 4,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "4 с 6.00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М51",
+      "name": "Авиамоторная",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "05:40"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "3 с 5:40",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М52",
+      "name": "Сусальный",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "2 с 6.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М53",
+      "name": "Б. Полянка",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:00"
+        },
+        {
+          "count": 2,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "1 в 6:00/2 в 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М54",
+      "name": "Ямского Поля",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "05:50"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "2 с 5:50",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М55",
+      "name": "Электродная",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "2 с 6.00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М56",
+      "name": "Сущевская",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "2 с 6.00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М57",
+      "name": "Б. Грузинская",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:10"
+        }
+      ],
+      "rawDriver": "6:30",
+      "rawCook": "2 с 6.10",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М58",
+      "name": "Метрополис",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "05:55"
+        },
+        {
+          "count": 2,
+          "at": "06:10"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "1 с 5.55 2 с 6:10",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М59",
+      "name": "Бутырка",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "3 с 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М60",
+      "name": "Б. Дмитровка",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "2 с 6.30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М61",
+      "name": "Звенигородка",
+      "driverAt": "06:15",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:15"
+        }
+      ],
+      "rawDriver": "6.15",
+      "rawCook": "2 с 6.15",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М62",
+      "name": "Новослободка",
+      "driverAt": "06:15",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6.15",
+      "rawCook": "2 с 6.00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М63",
+      "name": "Серпуховская",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6:30",
+      "rawCook": "3 с 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М64",
+      "name": "Бакунинская",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "05:40"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "3 с 5.40",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М65",
+      "name": "Пятницкая",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "3 с 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М66",
+      "name": "Звездный",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "3 с 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М67",
+      "name": "Коломенская",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:00"
+        },
+        {
+          "count": 2,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "1 с 6:00/2 с 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М68",
+      "name": "Головинское (Водный ст)",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:00"
+        },
+        {
+          "count": 2,
+          "at": "06:10"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "1 с 6.00 2 с 6:10",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М69",
+      "name": "Мытищи",
+      "driverAt": "05:50",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "05:50"
+        }
+      ],
+      "rawDriver": "5.50",
+      "rawCook": "1 с 5.50",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М70",
+      "name": "Ботаника",
+      "driverAt": "06:10",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:10"
+        }
+      ],
+      "rawDriver": "6.10",
+      "rawCook": "повар 6.10",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М71",
+      "name": "Кузьминки",
+      "driverAt": "07:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "07:00"
+        }
+      ],
+      "rawDriver": "7:30",
+      "rawCook": "2 с 7:00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М72",
+      "name": "Ватутинки",
+      "driverAt": "08:00",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "07:00"
+        }
+      ],
+      "rawDriver": "8.00",
+      "rawCook": "2 с 7",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М73",
+      "name": "ЗилАрт",
+      "driverAt": "05:20",
+      "cookShifts": [
+        {
+          "count": 1,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "5.20",
+      "rawCook": "1 в 6:00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М74",
+      "name": "Автозаводская",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "3 в 6:30",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М75",
+      "name": "Жулебино",
+      "driverAt": "06:15",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:10"
+        }
+      ],
+      "rawDriver": "6:15",
+      "rawCook": "3 с 6:10",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М76",
+      "name": "Солнцево",
+      "driverAt": "06:15",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6.15",
+      "rawCook": "2 с 6",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М77",
+      "name": "Новокосино",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "3 с 6.00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М78",
+      "name": "Рассказовка",
+      "driverAt": "06:20",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:45"
+        }
+      ],
+      "rawDriver": "6.20",
+      "rawCook": "3 с 6:45",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М79",
+      "name": "Митино",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:20"
+        }
+      ],
+      "rawDriver": "6:30",
+      "rawCook": "3 с 6.20",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М80",
+      "name": "Новогиреево",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6.00",
+      "rawCook": "3 с 6.00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М81",
+      "name": "Осенний (Крылатское)",
+      "driverAt": "06:00",
+      "cookShifts": [
+        {
+          "count": 3,
+          "at": "06:00"
+        }
+      ],
+      "rawDriver": "6:00",
+      "rawCook": "3 с 6.00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М82",
+      "name": "Бутово",
+      "driverAt": "06:30",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:10"
+        }
+      ],
+      "rawDriver": "6.30",
+      "rawCook": "2 с 6.10",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М83",
+      "name": "Юго западная",
+      "driverAt": "06:45",
+      "cookShifts": [
+        {
+          "count": 2,
+          "at": "06:30"
+        }
+      ],
+      "rawDriver": "6.45",
+      "rawCook": "2 с 6.30",
+      "source": "reference",
+      "warnings": []
+    }
+  ]
+}

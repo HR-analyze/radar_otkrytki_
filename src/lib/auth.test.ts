@@ -75,3 +75,15 @@ test('пароль спрашивается ровно на «Витринах»
     assert.equal(isManaged(p), false, `${p} под паролем быть не должен`);
   }
 });
+
+test('нормы лавок: читать может кто угодно, править — только по паролю', () => {
+  assert.equal(isManaged('/api/norms', 'GET'), false, 'таблица норм — такая же справка, как пороги');
+  assert.equal(isManaged('/api/norms', 'HEAD'), false);
+  assert.equal(isManaged('/api/norms', 'POST'), true);
+  assert.equal(isManaged('/api/norms'), true, 'без метода считаем по записи — так безопаснее');
+});
+
+test('витрины закрыты целиком, любым методом', () => {
+  assert.equal(isManaged('/api/showcase', 'GET'), true);
+  assert.equal(isManaged('/showcase', 'GET'), true);
+});

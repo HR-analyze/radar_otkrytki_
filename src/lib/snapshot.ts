@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig } from './config';
 import type {
+  ShopNorms,
   AttendanceRow,
   CriterionStatusRow,
   RegionPeriod,
@@ -37,6 +38,12 @@ export interface Snapshot {
   configFingerprint: string;
   /** Отпечаток выгрузок, из которых собран снимок (см. fixturesFingerprint). */
   fixturesFingerprint: string;
+  /**
+   * Отпечаток нормативов лавок, по которым посчитаны статусы (см.
+   * normsFingerprint). Нормы правятся на сайте, а статусы считаются при сборке —
+   * без этого поля правка молча расходилась бы с цифрами на дашборде.
+   */
+  normsFingerprint?: string;
   shops: Shop[];
   attendance: AttendanceRow[];
   showcase: ShowcaseRow[];
@@ -75,6 +82,28 @@ export function configFingerprint(): string {
     .update(JSON.stringify({ criteria: c.criteria, rules: c.rules, roleMap: c.roleMap }))
     .digest('hex')
     .slice(0, 12);
+}
+
+/**
+ * Отпечаток нормативов лавок. Считается по тому же набору, что уходит в
+ * расчёт: код лавки, норма водителя, смены поваров.
+ */
+export function normsFingerprint(norms: Readonly<Record<string, ShopNorms>>): string {
+  const stable = Object.keys(norms)
+    .sort()
+    .map((code) => [code, norms[code].driverAt, norms[code].cookShifts]);
+
+  return crypto.createHash('sha1').update(JSON.stringify(stable)).digest('hex').slice(0, 12);
+}
+
+/** Разошлись ли нормы, по которым собран снимок, с нынешними. */
+export async function areNormsStale(
+  norms: Readonly<Record<string, ShopNorms>>,
+): Promise<boolean> {
+  const s = await loadSnapshot();
+  // Снимок собран до появления норм — сравнивать не с чем, и это не «устарел».
+  if (s.normsFingerprint == null) return false;
+  return s.normsFingerprint !== normsFingerprint(norms);
 }
 
 /** Совпадает ли снимок с текущими порогами. */

@@ -1,5 +1,6 @@
 import { findLatestFile, downloadFile } from '../connectors/google-drive';
 import { readShowcaseSheet } from '../connectors/google-sheets';
+import { readNorms } from '../shop-norms-store';
 import { runAttendanceJob, type AttendanceJobResult } from './attendance-job';
 import { runShowcaseJob, type ShowcaseJobResult } from './showcase-job';
 
@@ -26,7 +27,7 @@ export async function syncAttendanceFromDrive(): Promise<AttendanceJobResult> {
     sources.push({ label: `${f.name} (${f.modifiedTime})`, buffer: await downloadFile(f.id) });
   }
 
-  return runAttendanceJob(sources);
+  return runAttendanceJob(sources, { norms: (await readNorms()).byCode });
 }
 
 /** Живой синк наполненности витрин из Google Таблицы. */

@@ -10,7 +10,7 @@ import { COOKIE, isManaged, isPublic, isUnlocked } from './lib/auth';
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  if (isPublic(pathname) || !isManaged(pathname)) return NextResponse.next();
+  if (isPublic(pathname) || !isManaged(pathname, req.method)) return NextResponse.next();
   if (await isUnlocked(req.cookies.get(COOKIE)?.value)) return NextResponse.next();
 
   // Запросам от кода отвечаем кодом, а не редиректом на страницу входа:

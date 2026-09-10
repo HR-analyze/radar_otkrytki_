@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { serviceAccountEmail } from '../src/lib/connectors/google-auth';
+import { readNorms } from '../src/lib/shop-norms-store';
 import { runAttendanceJob } from '../src/lib/etl/attendance-job';
 import { syncAttendanceFromDrive } from '../src/lib/etl/sync';
 
@@ -30,6 +31,7 @@ async function main(): Promise<void> {
   const result = files.length
     ? runAttendanceJob(
         files.map((f) => ({ label: path.basename(f), buffer: fs.readFileSync(f) })),
+        { norms: (await readNorms()).byCode },
       )
     : await syncAttendanceFromDrive();
 
