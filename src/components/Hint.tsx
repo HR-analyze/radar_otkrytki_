@@ -85,7 +85,9 @@ export function Hint({
         className={
           children
             ? 'cursor-help text-left underline decoration-dotted underline-offset-2'
-            : 'tap flex size-4 shrink-0 cursor-help items-center justify-center rounded-full border text-[10px] leading-none muted'
+            : /* relative нужен для расширенной области нажатия (.tap): она
+                 рисуется псевдоэлементом и считается от самого значка. */
+              'tap relative flex size-4 shrink-0 cursor-help items-center justify-center rounded-full border text-[10px] leading-none muted'
         }
         style={children ? undefined : { borderColor: 'var(--border)' }}
       >
