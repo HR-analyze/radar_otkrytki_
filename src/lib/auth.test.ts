@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { isManaged, isPublic, isUnlocked, password, passwordSet, tokenFor } from './auth';
 
 /**
- * Пароль на «Витрины» и «Историю». Главное, что здесь проверяется, —
+ * Пароль на вкладки, где данные правят. Главное, что здесь проверяется, —
  * что «пароль не задан» никогда не притворяется «пароль сошёлся».
  */
 
@@ -66,24 +66,24 @@ test('крон-роуты и страница входа паролем не з�
   }
 });
 
-test('пароль спрашивается ровно на «Витринах» и «Истории»', () => {
-  for (const p of ['/showcase', '/history', '/api/showcase', '/showcase/что-то']) {
+test('пароль спрашивается на вкладках, где данные правят', () => {
+  const managed = [
+    '/showcase',
+    '/history',
+    '/api/showcase',
+    '/showcase/что-то',
+    // «Пороги» закрыты с 10.09.2026: оттуда правятся нормативы лавок, и
+    // правка нормы перекрашивает статусы лавки за все дни.
+    '/settings',
+    '/api/norms',
+  ];
+  for (const p of managed) {
     assert.equal(isManaged(p), true, `${p} должен быть под паролем`);
   }
+
   // Сам радар открыт: цифры смотрит вся команда.
-  for (const p of ['/', '/radar', '/settings', '/shop/М1', '/api/upload', '/showcases']) {
+  // «/showcases» — проверка, что закрывается путь, а не любая строка с ним внутри.
+  for (const p of ['/', '/radar', '/contest', '/shop/М1', '/api/upload', '/showcases']) {
     assert.equal(isManaged(p), false, `${p} под паролем быть не должен`);
   }
-});
-
-test('нормы лавок: читать может кто угодно, править — только по паролю', () => {
-  assert.equal(isManaged('/api/norms', 'GET'), false, 'таблица норм — такая же справка, как пороги');
-  assert.equal(isManaged('/api/norms', 'HEAD'), false);
-  assert.equal(isManaged('/api/norms', 'POST'), true);
-  assert.equal(isManaged('/api/norms'), true, 'без метода считаем по записи — так безопаснее');
-});
-
-test('витрины закрыты целиком, любым методом', () => {
-  assert.equal(isManaged('/api/showcase', 'GET'), true);
-  assert.equal(isManaged('/showcase', 'GET'), true);
 });

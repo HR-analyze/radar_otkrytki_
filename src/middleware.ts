@@ -2,15 +2,16 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { COOKIE, isManaged, isPublic, isUnlocked } from './lib/auth';
 
 /**
- * Пароль на «Витрины» и «Историю». Проверяется здесь, до страницы: иначе
- * каждый роут пришлось бы закрывать вручную, и однажды кто-нибудь забыл бы.
+ * Пароль на вкладки, где данные правят: «Витрины», «История», «Пороги».
+ * Проверяется здесь, до страницы: иначе каждый роут пришлось бы закрывать
+ * вручную, и однажды кто-нибудь забыл бы.
  *
  * Остальной радар открыт — цифры смотрит вся команда (см. auth.ts).
  */
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  if (isPublic(pathname) || !isManaged(pathname, req.method)) return NextResponse.next();
+  if (isPublic(pathname) || !isManaged(pathname)) return NextResponse.next();
   if (await isUnlocked(req.cookies.get(COOKIE)?.value)) return NextResponse.next();
 
   // Запросам от кода отвечаем кодом, а не редиректом на страницу входа:
