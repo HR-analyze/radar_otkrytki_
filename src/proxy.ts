@@ -7,8 +7,11 @@ import { COOKIE, isManaged, isPublic, isUnlocked } from './lib/auth';
  * вручную, и однажды кто-нибудь забыл бы.
  *
  * Остальной радар открыт — цифры смотрит вся команда (см. auth.ts).
+ *
+ * Файл назывался middleware.ts: в Next 16 это соглашение объявлено устаревшим
+ * и переименовано в proxy — сборка предупреждала об этом на каждом запуске.
  */
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
   if (isPublic(pathname) || !isManaged(pathname)) return NextResponse.next();
@@ -38,8 +41,9 @@ export const config = {
   ],
 };
 
-/**
- * Node, а не Edge: в Edge-сборке `process.env` подставляется на этапе сборки,
- * и пароль, заданный на сервере после неё, middleware бы не увидел.
+/*
+ * Раньше здесь стояло `export const runtime = 'nodejs'`: в Edge-сборке
+ * `process.env` подставляется на этапе сборки, и пароль, заданный на сервере
+ * после неё, проверка бы не увидела. Proxy работает на Node по умолчанию, а
+ * сам параметр здесь запрещён — с ним файл падает с ошибкой.
  */
-export const runtime = 'nodejs';
