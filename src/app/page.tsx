@@ -22,6 +22,7 @@ import { StatusBadge, StatusBar, STATUS_FILTER_TITLE } from '@/components/Status
 import { RefreshButton } from '@/components/RefreshButton';
 import { CRITERION_ORDER, DEFAULT_CRITERION, type CriterionKey } from '@/lib/types';
 import { plural } from '@/lib/plural';
+import { Hint } from '@/components/Hint';
 
 export const dynamic = 'force-dynamic';
 
@@ -378,8 +379,9 @@ function ShowcaseTile({
 
   return (
     <div className="surface p-4">
-      <div className="text-xs muted" title={scope}>
-        Среднее наполнение витрины
+      <div className="flex items-center gap-1.5 text-xs muted">
+        <span>Среднее наполнение витрины</span>
+        <Hint text={`Считается ${scope}. В среднее входят только лавки, у которых витрину в этот день заполняли.`} />
       </div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-2xl font-semibold tabular-nums">
@@ -431,8 +433,12 @@ function Tile({
 
   return (
     <div className="surface p-4">
-      <div className="text-xs muted" title={hint}>
-        {title}
+      {/* Пояснение «в среднем за день · критерий такой-то» держалось на
+          атрибуте title — на телефоне он не показывается вовсе, и цифра
+          оставалась без объяснения. */}
+      <div className="flex items-center gap-1.5 text-xs muted">
+        <span>{title}</span>
+        <Hint text={hint} />
       </div>
       <div className="mt-1 flex items-baseline gap-2">
         <span

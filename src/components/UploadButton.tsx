@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { plural } from '@/lib/plural';
+import { useDialog } from '@/lib/use-dialog';
 
 /**
  * Кнопка «Загрузить выгрузки» — способ добавить данные, не заходя в репозиторий.
@@ -71,6 +72,7 @@ export function UploadButton() {
   /** Какой период дашборд отдаёт после загрузки — подтверждение, что данные доехали. */
   const [covered, setCovered] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const alive = useRef(true);
 
   useEffect(() => setMounted(true), []);
@@ -90,6 +92,9 @@ export function UploadButton() {
       .then((s: UploadStatus) => setStatus(s))
       .catch(() => setStatus(null));
   }, [open]);
+
+  /** Tab по кругу внутри окна, фокус внутрь и обратно, фон не прокручивается. */
+  useDialog(open, dialogRef);
 
   useEffect(() => {
     if (!open) return;
@@ -244,15 +249,18 @@ export function UploadButton() {
             onClick={() => setOpen(false)}
           >
             <div
+              ref={dialogRef}
               role="dialog"
               aria-modal="true"
-              aria-label="Загрузка выгрузок"
+              aria-labelledby="upload-title"
               className="surface w-full max-w-2xl p-5"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold tracking-tight">Загрузить выгрузки</h2>
+                  <h2 id="upload-title" className="text-lg font-semibold tracking-tight">
+                    Загрузить выгрузки
+                  </h2>
                   <p className="mt-1 text-xs muted">
                     {status?.hint ?? 'Проверяю, куда можно сохранить файлы…'}
                   </p>
@@ -260,7 +268,7 @@ export function UploadButton() {
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="rounded-md border px-2 py-1 text-sm"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-md border text-sm"
                   style={{ borderColor: 'var(--border)' }}
                   aria-label="Закрыть"
                 >
@@ -271,7 +279,7 @@ export function UploadButton() {
               {status?.mode === 'unavailable' ? (
                 <p
                   className="mt-4 rounded-lg border p-3 text-sm"
-                  style={{ borderColor: 'var(--yellow)' }}
+                  style={{ borderColor: 'var(--yellow-ink)' }}
                 >
                   {status.hint}
                 </p>
@@ -413,6 +421,9 @@ export function UploadButton() {
                     </p>
                   ))}
 
+                  {/* Ход загрузки читает и программа чтения с экрана: без aria-live
+                      смена текста происходила молча, а ждать здесь можно минуту. */}
+                  <div aria-live="polite">
                   {stage === 'waiting' && (
                     <p className="mt-4 text-sm">
                       ⏳ Файлы приняты, дашборд пересобирается. Обычно это минута-полторы — страница
@@ -435,6 +446,7 @@ export function UploadButton() {
                       несколько минут.
                     </p>
                   )}
+                  </div>
                 </>
               )}
             </div>

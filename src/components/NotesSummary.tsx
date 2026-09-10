@@ -101,7 +101,7 @@ function MonthLink({ month, label, title }: { month: string; label: string; titl
       href={`/showcase?month=${month}`}
       title={title}
       aria-label={title}
-      className="rounded-lg border px-2 py-1 text-sm"
+      className="flex size-9 items-center justify-center rounded-lg border text-sm"
       style={{ borderColor: 'var(--border)' }}
       scroll={false}
     >

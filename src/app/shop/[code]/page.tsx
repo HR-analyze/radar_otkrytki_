@@ -16,6 +16,7 @@ import { CRITERION_ORDER, type CriterionKey } from '@/lib/types';
 import { RATING_COMPONENT_TITLE } from '@/lib/rating';
 import { plural } from '@/lib/plural';
 import { ShopSwitcher } from '@/components/ShopFilter';
+import { Hint } from '@/components/Hint';
 
 /**
  * Колонки списка сотрудников. Одна константа на заголовок и на строки —
@@ -114,8 +115,9 @@ export default async function ShopPage({
                 <span className="text-xs muted">Общий результат:</span>
                 <StatusBadge status={day.shopStatus} />
                 {day.shopScore != null && (
-                  <span className="text-xs tabular-nums muted" title={scoreHint(config)}>
+                  <span className="flex items-center gap-1 text-xs tabular-nums muted">
                     балл {formatScore(day.shopScore)}
+                    <Hint text={scoreHint(config)} />
                   </span>
                 )}
               </div>
@@ -147,8 +149,9 @@ export default async function ShopPage({
                       {/* Средний балл — то, из чего получилась зона: заказчик
                           считает так же руками («3+3+1 = 7/3 = 2,33»). */}
                       {item.score != null && (
-                        <span className="text-xs tabular-nums muted" title={scoreHint(config)}>
+                        <span className="flex items-center gap-1 text-xs tabular-nums muted">
                           балл {formatScore(item.score)}
+                          <Hint text={scoreHint(config)} />
                         </span>
                       )}
                     </div>

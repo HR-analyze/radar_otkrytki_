@@ -85,3 +85,18 @@ export function findShops<T extends ShopRef>(shops: readonly T[], query: string)
   const exact = shops.filter((s) => isExactCode(s, q));
   return exact.length > 0 ? exact : shops.filter((s) => matchesShop(s, q));
 }
+
+/**
+ * Порядок лавок «как в справочнике»: М1, М2, М3… , а не по алфавиту, где
+ * М10 встаёт между М1 и М2. Живёт здесь, а не в queries: тот же порядок
+ * нужен таблицам на клиенте, а два правила однажды разъехались бы.
+ */
+export function compareShopNumber(a: ShopRef, b: ShopRef): number {
+  return shopNumber(a.code) - shopNumber(b.code) || a.code.localeCompare(b.code);
+}
+
+/** Число из кода лавки: «М12» → 12. Без цифр — в конец списка. */
+export function shopNumber(code: string): number {
+  const n = Number(code.replace(/\D/g, ''));
+  return Number.isFinite(n) && code.replace(/\D/g, '') !== '' ? n : Number.MAX_SAFE_INTEGER;
+}
