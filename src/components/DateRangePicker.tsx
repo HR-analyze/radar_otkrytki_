@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { periodPresets, shiftDays } from '@/lib/periods';
 import { dateRange, formatDay, isoDate, shortDate } from '@/lib/time';
 
 const MONTHS = [
@@ -15,6 +16,11 @@ const WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
  * Первый клик выбирает один день, второй — расширяет до диапазона,
  * следующий начинает выбор заново. Даты, по которым есть данные, подсвечены,
  * но выбрать можно любые: период не ограничен загруженной историей.
+ *
+ * С клавиатуры календарь работает так же, как системный: стрелки ходят по
+ * дням, PageUp/PageDown листают месяцы, Home и End прыгают на края недели,
+ * Enter выбирает, Escape закрывает. До этого мышь была единственным способом
+ * задать период — самый частый фильтр радара с клавиатуры был недоступен.
  */
 export function DateRangePicker({
   from,
@@ -33,9 +39,38 @@ export function DateRangePicker({
   /** Первый клик незавершённого выбора: показываем предпросмотр диапазона. */
   const [anchor, setAnchor] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
+  /**
+   * День под фокусом клавиатуры. В таблице дней в табуляцию попадает ровно
+   * один день (приём известен как roving tabindex): иначе Tab пришлось бы
+   * нажать тридцать раз, чтобы выйти из календаря.
+   */
+  const [cursor, setCursor] = useState<string>(to);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  /** Фокус переносим на день только после того, как его подвинули с клавиатуры. */
+  const moveFocus = useRef(false);
 
   const withData = useMemo(() => new Set(availableDates), [availableDates]);
+
+  /**
+   * Размонтирование поповера откладывается на следующий тик.
+   *
+   * Если убрать его прямо в обработчике клика, браузер доставляет тот же click
+   * кнопке-триггеру — ячейка, по которой кликнули, к этому моменту удалена
+   * из DOM — и поповер открывается заново. Воспроизводилось и мышью, и тачем.
+   */
+  const close = useCallback((returnFocus = false) => {
+    setAnchor(null);
+    setHover(null);
+    moveFocus.current = false;
+    setTimeout(() => {
+      setOpen(false);
+      // Закрыли с клавиатуры — фокус обязан вернуться на кнопку, иначе он
+      // улетает в начало страницы и человек теряет место.
+      if (returnFocus) triggerRef.current?.focus();
+    }, 0);
+  }, []);
 
   // Закрытие по клику вне и по Escape.
   useEffect(() => {
@@ -45,7 +80,10 @@ export function DateRangePicker({
       if (!rootRef.current?.contains(e.target as Node)) close();
     };
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') close();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close(true);
+      }
     };
 
     document.addEventListener('mousedown', onPointerDown);
@@ -56,20 +94,20 @@ export function DateRangePicker({
       document.removeEventListener('touchstart', onPointerDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, close]);
 
-  /**
-   * Размонтирование поповера откладывается на следующий тик.
-   *
-   * Если убрать его прямо в обработчике клика, браузер доставляет тот же click
-   * кнопке-триггеру — ячейка, по которой кликнули, к этому моменту удалена
-   * из DOM — и поповер открывается заново. Воспроизводилось и мышью, и тачем.
-   */
-  function close(): void {
-    setAnchor(null);
-    setHover(null);
-    setTimeout(() => setOpen(false), 0);
-  }
+  // Курсор клавиатуры уехал в другой месяц — показываем тот месяц.
+  useEffect(() => {
+    if (!open) return;
+    if (cursor.slice(0, 7) !== isoDate(month).slice(0, 7)) setMonth(startOfMonth(cursor));
+  }, [cursor, month, open]);
+
+  // Переносим фокус на день, к которому пришли стрелками.
+  useEffect(() => {
+    if (!open || !moveFocus.current) return;
+    const el = gridRef.current?.querySelector<HTMLButtonElement>(`[data-day="${cursor}"]`);
+    el?.focus();
+  }, [cursor, open, month]);
 
   function pick(date: string): void {
     if (!anchor) {
@@ -83,36 +121,61 @@ export function DateRangePicker({
     onChange(a, b);
   }
 
+  /** Стрелки, Home/End и PageUp/PageDown внутри сетки дней. */
+  function onGridKey(e: React.KeyboardEvent): void {
+    const STEP: Record<string, number> = {
+      ArrowLeft: -1,
+      ArrowRight: 1,
+      ArrowUp: -7,
+      ArrowDown: 7,
+    };
+
+    if (e.key in STEP) {
+      e.preventDefault();
+      moveFocus.current = true;
+      setCursor((c) => shiftDays(c, STEP[e.key]));
+      return;
+    }
+    if (e.key === 'PageUp' || e.key === 'PageDown') {
+      e.preventDefault();
+      moveFocus.current = true;
+      setCursor((c) => isoDate(addMonths(new Date(`${c}T00:00:00`), e.key === 'PageUp' ? -1 : 1)));
+      return;
+    }
+    if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault();
+      moveFocus.current = true;
+      // Понедельник или воскресенье той же недели.
+      const d = new Date(`${cursor}T00:00:00`);
+      const offset = (d.getDay() + 6) % 7;
+      setCursor(shiftDays(cursor, e.key === 'Home' ? -offset : 6 - offset));
+    }
+  }
+
   // Пока диапазон не закрыт, подсвечиваем то, что получится при наведении.
-  const previewFrom = anchor && hover ? (anchor <= hover ? anchor : hover) : from;
-  const previewTo = anchor && hover ? (anchor <= hover ? hover : anchor) : to;
+  const aim = hover ?? (moveFocus.current ? cursor : null);
+  const previewFrom = anchor && aim ? (anchor <= aim ? anchor : aim) : from;
+  const previewTo = anchor && aim ? (anchor <= aim ? aim : anchor) : to;
 
   const label =
     from === to ? formatLong(from) : `${shortDate(from)} — ${shortDate(to)}`;
 
-  const presets = useMemo(() => {
-    const last = availableDates[availableDates.length - 1];
-    const first = availableDates[0];
-    if (!last || !first) return [];
-    return [
-      { label: 'Последний день', from: last, to: last },
-      { label: '7 дней', from: shiftDays(last, -6), to: last },
-      { label: '30 дней', from: shiftDays(last, -29), to: last },
-      { label: 'Все данные', from: first, to: last },
-    ];
-  }, [availableDates]);
+  const presets = useMemo(() => periodPresets(availableDates), [availableDates]);
 
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
           setMonth(startOfMonth(to));
+          setCursor(to);
+          moveFocus.current = false;
           setOpen((v) => !v);
         }}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="date-trigger flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-[0.45rem] text-left text-sm"
+        className="date-trigger flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-[0.55rem] text-left text-sm"
         style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
       >
         <span className="truncate">{label}</span>
@@ -124,29 +187,24 @@ export function DateRangePicker({
       {open && (
         <div
           role="dialog"
+          aria-modal="false"
           aria-label="Выбор периода"
           className="surface absolute left-0 z-40 mt-1 w-[19rem] max-w-[calc(100vw-2rem)] p-3 shadow-lg"
         >
           <div className="mb-2 flex items-center justify-between gap-2">
-            <button
-              type="button"
+            <MonthButton
+              label="‹"
+              title="Предыдущий месяц"
               onClick={() => setMonth(addMonths(month, -1))}
-              aria-label="Предыдущий месяц"
-              className="rounded px-2 py-1 text-sm muted hover:opacity-70"
-            >
-              ‹
-            </button>
-            <span className="text-sm font-medium">
+            />
+            <span className="text-sm font-medium" aria-live="polite">
               {MONTHS[month.getMonth()]} {month.getFullYear()}
             </span>
-            <button
-              type="button"
+            <MonthButton
+              label="›"
+              title="Следующий месяц"
               onClick={() => setMonth(addMonths(month, 1))}
-              aria-label="Следующий месяц"
-              className="rounded px-2 py-1 text-sm muted hover:opacity-70"
-            >
-              ›
-            </button>
+            />
           </div>
 
           <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] muted">
@@ -157,7 +215,7 @@ export function DateRangePicker({
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-0.5">
+          <div ref={gridRef} className="grid grid-cols-7 gap-0.5" onKeyDown={onGridKey}>
             {monthGrid(month).map((cell, i) =>
               cell === null ? (
                 <span key={`empty-${i}`} />
@@ -169,7 +227,12 @@ export function DateRangePicker({
                   selected={cell >= previewFrom && cell <= previewTo}
                   edge={cell === previewFrom || cell === previewTo}
                   hasData={withData.has(cell)}
-                  onPick={pick}
+                  /* В табуляцию попадает один день — тот, на котором курсор. */
+                  focusable={cell === cursor}
+                  onPick={(d) => {
+                    setCursor(d);
+                    pick(d);
+                  }}
                   onHover={setHover}
                 />
               ),
@@ -180,13 +243,13 @@ export function DateRangePicker({
             <p className="text-[11px] muted">
               {anchor
                 ? 'Выбран один день. Кликните вторую дату для периода.'
-                : 'Клик — один день, два клика — период.'}
+                : 'Клик — один день, два клика — период. Стрелки — по дням.'}
             </p>
             {/* На телефоне «клик вне» неочевиден — даём явное завершение выбора. */}
             <button
               type="button"
-              onClick={close}
-              className="shrink-0 rounded-md border px-2 py-1 text-xs"
+              onClick={() => close(true)}
+              className="shrink-0 rounded-md border px-2.5 py-1.5 text-xs"
               style={{ borderColor: 'var(--border)' }}
             >
               Готово
@@ -197,13 +260,13 @@ export function DateRangePicker({
             <div className="mt-2 flex flex-wrap gap-1.5 border-t pt-2" style={{ borderColor: 'var(--border)' }}>
               {presets.map((p) => (
                 <button
-                  key={p.label}
+                  key={p.key}
                   type="button"
                   onClick={() => {
                     close();
                     onChange(p.from, p.to);
                   }}
-                  className="rounded-md border px-2 py-1 text-xs muted hover:opacity-70"
+                  className="rounded-md border px-2.5 py-1.5 text-xs muted hover:opacity-70"
                   style={{ borderColor: 'var(--border)' }}
                 >
                   {p.label}
@@ -217,12 +280,36 @@ export function DateRangePicker({
   );
 }
 
+/** Стрелка листания месяца: 36 пикселей вместо прежних 26 — попасть пальцем. */
+function MonthButton({
+  label,
+  title,
+  onClick,
+}: {
+  label: string;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={title}
+      title={title}
+      className="flex size-9 items-center justify-center rounded text-sm muted hover:opacity-70"
+    >
+      {label}
+    </button>
+  );
+}
+
 function DayCell({
   date,
   inMonth,
   selected,
   edge,
   hasData,
+  focusable,
   onPick,
   onHover,
 }: {
@@ -231,6 +318,7 @@ function DayCell({
   selected: boolean;
   edge: boolean;
   hasData: boolean;
+  focusable: boolean;
   onPick: (d: string) => void;
   onHover: (d: string | null) => void;
 }) {
@@ -239,6 +327,8 @@ function DayCell({
   return (
     <button
       type="button"
+      data-day={date}
+      tabIndex={focusable ? 0 : -1}
       onClick={(e) => {
         // Без этого клик доходит до кнопки-триггера и открывает поповер заново
         // сразу после того, как выбор диапазона его закрыл.
@@ -247,7 +337,7 @@ function DayCell({
       }}
       onMouseEnter={() => onHover(date)}
       onMouseLeave={() => onHover(null)}
-      aria-label={formatLong(date)}
+      aria-label={formatLong(date) + (hasData ? ', есть данные' : '')}
       aria-pressed={selected}
       className="relative flex h-8 items-center justify-center rounded text-xs"
       style={{
@@ -278,12 +368,6 @@ function startOfMonth(iso: string): Date {
 
 function addMonths(d: Date, n: number): Date {
   return new Date(d.getFullYear(), d.getMonth() + n, 1);
-}
-
-function shiftDays(iso: string, n: number): string {
-  const d = new Date(`${iso}T00:00:00`);
-  d.setDate(d.getDate() + n);
-  return isoDate(d);
 }
 
 /** Сетка месяца с добивкой до полных недель, неделя начинается с понедельника. */

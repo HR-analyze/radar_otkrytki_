@@ -8,6 +8,7 @@ import {
   type CriterionKey,
   type ThresholdConfig,
 } from '@/lib/types';
+import { activePreset, periodPresets } from '@/lib/periods';
 import { ClearButton } from './ClearButton';
 import { DateRangePicker } from './DateRangePicker';
 import { ShopSearch, type ShopOption } from './ShopFilter';
@@ -137,10 +138,26 @@ export function Filters({
     go(q);
   }, [go, searchParams]);
 
+  /**
+   * Быстрые периоды: раньше до них можно было добраться только открыв
+   * календарь и долистав его до низа, хотя «последние 7 дней» — самый частый
+   * запрос к радару вообще.
+   */
+  const presets = periodPresets(dates);
+  const currentPreset = activePreset(presets, state.from, state.to);
+
   return (
-    <div className="surface p-3" style={{ cursor: pending ? 'progress' : undefined }}>
+    /*
+     * Пока страница пересобирается, панель гаснет и не ловит клики: единственным
+     * признаком работы был курсор-«часы», а его не видно ни на телефоне, ни
+     * краем глаза — сайт выглядел так, будто фильтр не сработал, и по нему
+     * щёлкали второй раз.
+     */
+    <div className="surface p-3">
+      {pending && <span className="route-progress" aria-hidden />}
       <div
-        className={`grid gap-3 sm:grid-cols-2 ${shops ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
+        aria-busy={pending}
+        className={`${pending ? 'is-busy' : ''} grid gap-3 sm:grid-cols-2 ${shops ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
       >
       {/* Период сбрасывается не в пустоту, а в значение по умолчанию (текущий
           месяц, см. defaultRange): период без границ бессмысленен. Крестик
@@ -201,6 +218,7 @@ export function Filters({
             shops={shops}
             onChange={(shop) => apply({ shop })}
             listId="radar-shops"
+            pending={pending}
           />
         </Field>
       )}
@@ -243,21 +261,52 @@ export function Filters({
       )}
       </div>
 
-      {/* Кнопка появляется только когда есть что сбрасывать: на чистой
-          странице она бы предлагала сбросить ничто. */}
-      {activeCount > 0 && (
+      {(presets.length > 0 || activeCount > 0) && (
         <div
-          className="mt-3 flex justify-end border-t pt-2.5"
+          className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-2.5"
           style={{ borderColor: 'var(--border)' }}
         >
-          <button
-            type="button"
-            onClick={resetAll}
-            className="rounded-md border px-2.5 py-1 text-xs muted hover:opacity-70"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            ✕ Сбросить все фильтры ({activeCount})
-          </button>
+          {/* Выбранный период подсвечен: иначе по четырём одинаковым кнопкам
+              не понять, что сейчас на экране — неделя или весь месяц. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {presets.map((preset) => {
+              const on = currentPreset === preset.key;
+              return (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => apply({ from: preset.from, to: preset.to })}
+                  aria-pressed={on}
+                  className={`rounded-md border px-2.5 py-1 text-xs ${on ? 'font-semibold' : 'muted hover:opacity-70'}`}
+                  style={{
+                    borderColor: on ? 'var(--focus)' : 'var(--border)',
+                    color: on ? 'var(--text)' : undefined,
+                    background: on
+                      ? 'color-mix(in srgb, var(--focus) 10%, transparent)'
+                      : undefined,
+                  }}
+                >
+                  {/* На узком экране подпись короче: четыре кнопки должны
+                      помещаться в одну строку, а не переноситься по одной. */}
+                  <span className="sm:hidden">{preset.short}</span>
+                  <span className="hidden sm:inline">{preset.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Кнопка появляется только когда есть что сбрасывать: на чистой
+              странице она бы предлагала сбросить ничто. */}
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={resetAll}
+              className="ml-auto rounded-md border px-2.5 py-1 text-xs muted hover:opacity-70"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              ✕ Сбросить все фильтры ({activeCount})
+            </button>
+          )}
         </div>
       )}
     </div>
