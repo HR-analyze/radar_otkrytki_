@@ -1,4 +1,3 @@
-import { expandCookShifts } from './parsers/shop-norms';
 import { scheduleShift } from './status';
 import { parseClock } from './time';
 import type { AttendanceRow, ShopNorms, Status, ThresholdConfig } from './types';
@@ -20,7 +19,7 @@ import type { AttendanceRow, ShopNorms, Status, ThresholdConfig } from './types'
  * Лавка без нормы в справочнике считается по сетевым порогам, как раньше.
  *
  * Считается это отдельным проходом, а не внутри парсера, из-за поваров:
- * норма у них не одна («1 с 6:00, 2 с 6:30»), и чтобы понять, кого с какой
+ * норма у них не одна («6:00 и 6:30»), и чтобы понять, кого с какой
  * сравнивать, нужны все повара лавки за день сразу — по одной строке это
  * неразрешимо.
  */
@@ -66,24 +65,23 @@ export function statusByNorm(
 /**
  * Кто из поваров по какой норме оценивается.
  *
- * Смены — это план на лавку целиком: «1 с 6:00, 2 с 6:30» значит, что к 6:00
- * нужен один повар, а к 6:30 — ещё двое. Кто именно из троих придёт первым,
- * справочник не знает и знать не может, поэтому нормы раздаются по факту:
- * пришедший раньше всех отвечает за самую раннюю смену, следующий — за
- * следующую. Так лавка зелёная, когда план выполнен, а не когда конкретный
- * человек угадал свою строчку в справочнике.
+ * Время выхода — это план на лавку целиком: «6:00 и 6:30» значит, что к 6:00
+ * лавка должна быть открыта поваром, а к 6:30 — доукомплектована. Кто именно
+ * придёт первым, справочник не знает и знать не может, поэтому нормы
+ * раздаются по факту: пришедший раньше всех отвечает за самый ранний час,
+ * следующий — за следующий. Так лавка зелёная, когда план выполнен, а не
+ * когда конкретный человек угадал свою строчку в справочнике.
  *
- * Поваров пришло больше, чем смен в плане, — лишние оцениваются по последней
- * смене: раньше неё их никто не ждал.
+ * Поваров пришло больше, чем часов в плане, — лишние оцениваются по
+ * последнему: позже него их никто не ждал.
  *
  * @param arrivals минуты прихода, null — отметки нет.
  * @returns норма («ЧЧ:ММ») для каждого прихода, в том же порядке.
  */
 export function assignCookNorms(
   arrivals: readonly (number | null)[],
-  shifts: readonly { count: number; at: string }[],
+  plan: readonly string[],
 ): (string | null)[] {
-  const plan = expandCookShifts(shifts);
   if (plan.length === 0) return arrivals.map(() => null);
 
   // Без отметки сравнивать нечего — такой повар и так красный, а место в
@@ -129,12 +127,12 @@ export function applyShopNorms(
   });
 
   for (const [, group] of groupCooks(out)) {
-    const shifts = byCode[out[group[0]].shopCode]?.cookShifts ?? [];
-    if (shifts.length === 0) continue;
+    const plan = byCode[out[group[0]].shopCode]?.cookAt ?? [];
+    if (plan.length === 0) continue;
 
     const norms = assignCookNorms(
       group.map((i) => out[i].arrivalMinutes),
-      shifts,
+      plan,
     );
     group.forEach((rowIndex, i) => {
       const normAt = norms[i];

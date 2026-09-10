@@ -44,26 +44,24 @@ test('приход глубоко за пределами утра — «дру�
 });
 
 test('нормы раздаются поварам по факту прихода, а не по именам', () => {
-  const shifts = [
-    { count: 1, at: '06:00' },
-    { count: 2, at: '06:30' },
-  ];
   // Порядок в выгрузке — не порядок прихода: первым пришёл третий по списку.
-  const norms = assignCookNorms([at('06:35'), at('06:28'), at('05:58')], shifts);
+  const norms = assignCookNorms([at('06:35'), at('06:28'), at('05:58')], ['06:00', '06:30']);
   assert.deepEqual(norms, ['06:30', '06:30', '06:00']);
 });
 
-test('поваров больше, чем смен в плане — лишние идут по последней смене', () => {
-  const norms = assignCookNorms([at('06:00'), at('06:10'), at('06:20')], [{ count: 1, at: '06:00' }]);
+test('поваров больше, чем часов в плане — лишние идут по последнему', () => {
+  const norms = assignCookNorms([at('06:00'), at('06:10'), at('06:20')], ['06:00']);
   assert.deepEqual(norms, ['06:00', '06:00', '06:00']);
 });
 
-test('повар без отметки не занимает раннюю смену', () => {
-  const shifts = [
-    { count: 1, at: '06:00' },
-    { count: 1, at: '06:30' },
-  ];
-  const norms = assignCookNorms([null, at('06:05')], shifts);
+test('количество поваров в справочнике на раздачу не влияет', () => {
+  // «3 с 6:20» и «1 с 6:20» дают один и тот же план: важен час, а не число людей.
+  const arrivals = [at('06:15'), at('06:25')];
+  assert.deepEqual(assignCookNorms(arrivals, ['06:20']), ['06:20', '06:20']);
+});
+
+test('повар без отметки не занимает ранний час', () => {
+  const norms = assignCookNorms([null, at('06:05')], ['06:00', '06:30']);
   assert.deepEqual(norms, [null, '06:00'], 'пришедший забирает раннюю норму, а не вторую');
 });
 
@@ -96,7 +94,7 @@ function norms(over: Partial<ShopNorms>): Record<string, ShopNorms> {
     code: 'М1',
     name: 'Милютинский',
     driverAt: '06:30',
-    cookShifts: [{ count: 2, at: '06:20' }],
+    cookAt: ['06:20'],
     rawDriver: null,
     rawCook: null,
     source: 'reference',
@@ -135,15 +133,14 @@ test('выключенные нормы ничего не меняют', () => {
 });
 
 test('повара разных лавок и дней считаются отдельными сменами', () => {
-  const shifts = [{ count: 1, at: '06:00' }];
   const rows = [
     row({ shopCode: 'М1', arrivalMinutes: at('06:05') }),
     row({ shopCode: 'М1', date: '2026-09-02', arrivalMinutes: at('06:05') }),
   ];
-  const out = applyShopNorms(rows, norms({ cookShifts: shifts }), config);
+  const out = applyShopNorms(rows, norms({ cookAt: ['06:00'] }), config);
 
   // Если бы дни смешались, второй повар получил бы «лишнюю» норму 06:00 как
   // второй пришедший — а он первый в своём дне, и результат совпадает лишь
-  // потому, что план из одной смены. Проверяем именно статусы обоих.
+  // потому, что план из одного часа. Проверяем именно статусы обоих.
   assert.deepEqual(out.map((r) => r.status), ['yellow', 'yellow']);
 });

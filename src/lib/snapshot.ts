@@ -86,12 +86,12 @@ export function configFingerprint(): string {
 
 /**
  * Отпечаток нормативов лавок. Считается по тому же набору, что уходит в
- * расчёт: код лавки, норма водителя, смены поваров.
+ * расчёт: код лавки, норма водителя, часы выхода поваров.
  */
 export function normsFingerprint(norms: Readonly<Record<string, ShopNorms>>): string {
   const stable = Object.keys(norms)
     .sort()
-    .map((code) => [code, norms[code].driverAt, norms[code].cookShifts]);
+    .map((code) => [code, norms[code].driverAt, norms[code].cookAt]);
 
   return crypto.createHash('sha1').update(JSON.stringify(stable)).digest('hex').slice(0, 12);
 }

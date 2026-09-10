@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import { parseShop } from '../shops';
 import { formatClock, parseClock } from '../time';
-import type { CookShift, ShopNorms } from '../types';
+import type { ShopNorms } from '../types';
 
 /**
  * Парсер справочника «Лавки»: нормативы открытия по каждой лавке.
@@ -88,8 +88,8 @@ function parseRow(code: string, name: string, row: unknown[], cols: ParsedColumn
   }
 
   const rawCook = text(row[cols.cook]);
-  const cookShifts = parseCookShifts(rawCook);
-  if (rawCook && cookShifts.length === 0) {
+  const cookAt = parseCookTimes(rawCook);
+  if (rawCook && cookAt.length === 0) {
     rowWarnings.push(`не разобрал тайминг поваров «${rawCook}»`);
   }
 
@@ -97,7 +97,7 @@ function parseRow(code: string, name: string, row: unknown[], cols: ParsedColumn
     code,
     name,
     driverAt,
-    cookShifts,
+    cookAt,
     // Исходные строки нужны в редакторе: человек сверяет разобранное время с
     // тем, что написано в справочнике, не открывая саму книгу.
     rawDriver: rawDriver || null,
@@ -158,65 +158,64 @@ export function parseNormTime(value: unknown): string | null {
 /* ------------------------------------------------------------ смены поваров */
 
 /**
- * «3 с 6.20» → [{ count: 3, at: '06:20' }].
+ * Время в паре «сколько человек — к какому часу»: «3 с 6.20», «2 в 6:00».
  *
- * Формы записи: «2 с 5:30 1 с 6:00», «1 с 6.00/2 6:30», «2 в 6:00/1 в 6:30»,
- * «повар в 5.45». Предлог необязателен, разделитель между сменами — пробел
- * или косая черта.
- *
- * Lookbehind обязателен: без него «повар 6.10» разбирается как «1 человек к
- * 0:00» — движок цепляется за «1» внутри «6.10» и добирает «0» как время.
+ * Количество в норму не идёт (см. ShopNorms.cookAt), но распознать его всё
+ * равно нужно: без этого «3» из «3 с 6.20» само сошло бы за время 03:00.
+ * Lookbehind защищает от захода внутрь числа — иначе «повар 6.10» разбирался
+ * бы как «1 человек к 0:00»: движок цепляется за «1» внутри «6.10» и добирает
+ * «0» как время.
  */
 const SHIFT_RE = new RegExp(
-  String.raw`(?<![\d.:])(\d+)\s*(?:с|в)?\s*(${TIME})(?![\d.:])`,
+  String.raw`(?<![\d.:])(\d+)\s*(?:с|в)\s*(${TIME})(?![\d.:])`,
   'g',
 );
 
-export function parseCookShifts(value: unknown): CookShift[] {
+/** Время, написанное само по себе: «6:30». Разделитель обязателен — см. выше. */
+const BARE_TIME_RE = /(?<![\d.:])\d{1,2}[.:]\d{1,2}(?::\d{2})?(?![\d.:])/g;
+
+/**
+ * «3 с 6.20» → ['06:20'], «1 с 6.00/2 6:30» → ['06:00', '06:30'].
+ *
+ * Формы записи в справочнике: «2 с 5:30 1 с 6:00», «1 с 6.00/2 6:30»,
+ * «2 в 6:00/1 в 6:30», «повар в 5.45». Разбирается и то, что человек введёт
+ * в редакторе руками: «6:20», «6:00 / 6:30».
+ *
+ * Из строки берутся только часы: сколько поваров вышло, радар видит из
+ * выгрузки отметок, а норма — это час, к которому лавка укомплектована.
+ */
+export function parseCookTimes(value: unknown): string[] {
   const raw = text(value);
   if (!raw) return [];
 
-  const shifts: CookShift[] = [];
+  const times: string[] = [];
+  // Позиции, уже съеденные парой «N с ЧЧ:ММ»: без них время из пары попало бы
+  // в результат дважды — и как часть пары, и как «время само по себе».
+  const taken: [number, number][] = [];
+
   for (const m of raw.matchAll(SHIFT_RE)) {
     const at = parseNormTime(m[2]);
-    const count = Number(m[1]);
-    if (at && count > 0) shifts.push({ count, at });
+    if (at) times.push(at);
+    taken.push([m.index, m.index + m[0].length]);
   }
 
-  // «повар в 5.45» — количество не написано, потому что повар один.
-  if (shifts.length === 0) {
-    const at = parseNormTime(new RegExp(TIME).exec(raw)?.[0]);
-    if (at) shifts.push({ count: 1, at });
+  for (const m of raw.matchAll(BARE_TIME_RE)) {
+    if (taken.some(([from, to]) => m.index >= from && m.index < to)) continue;
+    const at = parseNormTime(m[0]);
+    if (at) times.push(at);
   }
 
-  return mergeShifts(shifts);
+  return sortTimes(times);
 }
 
-/** Смены по времени, от ранней к поздней; одинаковое время — одна смена. */
-function mergeShifts(shifts: readonly CookShift[]): CookShift[] {
-  const byTime = new Map<string, number>();
-  for (const s of shifts) byTime.set(s.at, (byTime.get(s.at) ?? 0) + s.count);
-
-  return [...byTime.entries()]
-    .map(([at, count]) => ({ count, at }))
-    .sort((a, b) => parseClock(a.at) - parseClock(b.at));
+/** Времена от ранних к поздним, без повторов. */
+export function sortTimes(times: readonly string[]): string[] {
+  return [...new Set(times)].sort((a, b) => parseClock(a) - parseClock(b));
 }
 
-/**
- * Смены → по одному времени на повара: [{2, 05:30}, {1, 06:00}] →
- * ['05:30', '05:30', '06:00']. В этом виде норма сопоставляется с фактическими
- * приходами — см. lib/cook-norms.ts.
- */
-export function expandCookShifts(shifts: readonly CookShift[]): string[] {
-  return shifts
-    .flatMap((s) => Array.from({ length: s.count }, () => s.at))
-    .sort((a, b) => parseClock(a) - parseClock(b));
-}
-
-/** Смены → «3 с 06:20» / «1 с 06:00, 2 с 06:30» для показа человеку. */
-export function formatCookShifts(shifts: readonly CookShift[]): string {
-  if (shifts.length === 0) return '—';
-  return shifts.map((s) => `${s.count} с ${s.at}`).join(', ');
+/** Времена → «06:20» / «06:00 / 06:30» для показа человеку и для поля ввода. */
+export function formatCookTimes(times: readonly string[]): string {
+  return times.length === 0 ? '—' : times.join(' / ');
 }
 
 function text(value: unknown): string {
