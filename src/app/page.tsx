@@ -20,7 +20,7 @@ import { Filters } from '@/components/Filters';
 import { DepartureBlock } from '@/components/DepartureBlock';
 import { StatusBadge, StatusBar, STATUS_FILTER_TITLE } from '@/components/Status';
 import { RefreshButton } from '@/components/RefreshButton';
-import { CRITERION_ORDER, type CriterionKey } from '@/lib/types';
+import { CRITERION_ORDER, DEFAULT_CRITERION, type CriterionKey } from '@/lib/types';
 import { plural } from '@/lib/plural';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +31,12 @@ export default async function DashboardPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const p = await resolveParams(sp);
+  /**
+   * Сводка открывается на критерии по умолчанию, а не на агрегате по всем
+   * критериям: пункт «Все» убран из фильтра 10.09.2026 — см. Filters.
+   * Плитки, топ и анти-топ считаются по выбранному критерию.
+   */
+  const p = await resolveParams(sp, { criterion: DEFAULT_CRITERION });
   const config = loadConfig();
   const singleDay = p.from === p.to;
 
@@ -66,10 +71,7 @@ export default async function DashboardPage({
   const writable = isWritable();
 
   // Что именно сейчас выбрано — словами, а не только видом выпадающих списков.
-  const criterionTitle =
-    p.criterion && p.criterion !== 'all'
-      ? (config.criteria[p.criterion]?.title ?? p.criterion)
-      : null;
+  const criterionTitle = config.criteria[p.criterion]?.title ?? p.criterion;
   const statusTitle = p.status && p.status !== 'all' ? STATUS_FILTER_TITLE[p.status] : null;
 
   // За период счётчики усреднены по дням — подпись должна это говорить.
@@ -79,7 +81,7 @@ export default async function DashboardPage({
 
   // Плитки, топ и анти-топ считаются по выбранному критерию, а не по агрегату
   // лавки — без подписи цифры выглядели бы необъяснимо просевшими.
-  const byCriterion = criterionTitle ? ` · критерий «${criterionTitle}»` : '';
+  const byCriterion = ` · критерий «${criterionTitle}»`;
 
   const unconfirmed = CRITERION_ORDER.filter((c) => config.criteria[c]?.confirmed === false);
 
@@ -94,7 +96,7 @@ export default async function DashboardPage({
               : `Период ${shortDate(p.from)} — ${shortDate(p.to)} · ${totals.days} ${plural(totals.days, 'день', 'дня', 'дней')} с данными`}
             {p.region ? ` · РМ ${p.region}` : ''}
             {p.shop ? ` · поиск «${p.shop}»` : ''}
-            {criterionTitle ? ` · критерий «${criterionTitle}»` : ''}
+            {byCriterion}
             {statusTitle ? ` · ${statusTitle}` : ''}
             {` · ${totals.total} ${plural(totals.total, 'лавка', 'лавки', 'лавок')}`}
           </p>
@@ -126,6 +128,7 @@ export default async function DashboardPage({
         dates={p.dates}
         config={config}
         shops={shops.map((s) => ({ code: s.code, name: s.name }))}
+        criterionDefault={DEFAULT_CRITERION}
       />
 
       {/* Фильтр может не найти ни одной лавки — «0 из 0» на шести плитках
@@ -152,12 +155,10 @@ export default async function DashboardPage({
         {/* Разрез по всем шести критериям сразу — фильтр «Критерий» его не
             сужает, иначе от блока осталась бы одна плитка. Остальные фильтры
             (РМ, лавка, статус) работают. */}
-        {criterionTitle && (
-          <p className="mt-0.5 text-xs muted">
-            Здесь всегда все критерии: фильтр «{criterionTitle}» влияет на плитки выше,
-            топ и анти-топ.
-          </p>
-        )}
+        <p className="mt-0.5 text-xs muted">
+          Здесь всегда все критерии: фильтр «{criterionTitle}» влияет на плитки выше,
+          топ и анти-топ.
+        </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {summary.map((s) => {
             const cfg = config.criteria[s.criterion];
@@ -206,7 +207,7 @@ export default async function DashboardPage({
           <h2 className="text-sm font-semibold">Лучшие локации — топ 🟢</h2>
           <p className="mt-0.5 text-xs muted">
             Доля зелёных ячеек за {shortDate(p.from)} — {shortDate(p.to)}{' '}
-            {criterionTitle ? `по критерию «${criterionTitle}»` : 'по всем критериям'}.
+            по критерию «{criterionTitle}».
           </p>
           {best.length === 0 ? (
             <p className="mt-4 text-sm muted">За период оценённых статусов нет.</p>
@@ -249,7 +250,7 @@ export default async function DashboardPage({
           <h2 className="text-sm font-semibold">Проблемные локации — анти-топ 🔴</h2>
           <p className="mt-0.5 text-xs muted">
             Число красных ячеек за {shortDate(p.from)} — {shortDate(p.to)}{' '}
-            {criterionTitle ? `по критерию «${criterionTitle}»` : 'по всем критериям'}.
+            по критерию «{criterionTitle}».
           </p>
           {top.length === 0 ? (
             <p className="mt-4 text-sm muted">За период красных статусов нет.</p>
@@ -302,8 +303,8 @@ export default async function DashboardPage({
       <section className="surface p-4">
         <h2 className="text-sm font-semibold">Где западает сильнее всего</h2>
         <p className="mt-0.5 text-xs muted">
-          Доля 🔴 среди всех оценённых ячеек критерия за период.
-          {criterionTitle && ' Здесь тоже все критерии — блок про то, какой из них западает.'}
+          Доля 🔴 среди всех оценённых ячеек критерия за период. Здесь тоже все
+          критерии — блок про то, какой из них западает.
         </p>
         {/* В две колонки: шесть полос в одну растягивались бы на всю ширину
             экрана, и сравнивать их длину становилось неудобно. */}
