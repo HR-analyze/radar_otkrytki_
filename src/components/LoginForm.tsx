@@ -63,7 +63,7 @@ export function LoginForm({
         style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
       />
 
-      {error && <p className="text-sm" style={{ color: 'var(--red)' }}>{error}</p>}
+      {error && <p className="text-sm ink-red">{error}</p>}
 
       <button
         type="submit"

@@ -213,7 +213,7 @@ export function NormsEditor() {
       </div>
 
       {error && (
-        <p className="text-sm" style={{ color: 'var(--red)' }}>
+        <p className="text-sm ink-red">
           {error}
         </p>
       )}
@@ -301,7 +301,7 @@ export function NormsEditor() {
                       [s.rawDriver, s.rawCook].filter(Boolean).join(' · ') || '—'
                     )}
                     {s.warnings.map((w) => (
-                      <span key={w} className="block" style={{ color: 'var(--yellow)' }}>
+                      <span key={w} className="block ink-yellow">
                         {w}
                       </span>
                     ))}

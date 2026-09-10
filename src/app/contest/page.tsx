@@ -298,8 +298,8 @@ function Points({ score }: { score: ContestScore }) {
 
 /** Плюс — зелёным, минус — красным: знак читается раньше цифры. */
 function pointsColor(points: number): string | undefined {
-  if (points > 0) return 'var(--green)';
-  if (points < 0) return 'var(--red)';
+  if (points > 0) return 'var(--green-ink)';
+  if (points < 0) return 'var(--red-ink)';
   return undefined;
 }
 

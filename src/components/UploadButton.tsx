@@ -369,7 +369,7 @@ export function UploadButton() {
                               {r.unknownRoles?.length > 0 && (
                                 <div
                                   className="mt-2 rounded-md p-2 text-xs"
-                                  style={{ background: 'var(--yellow-soft)', color: 'var(--yellow)' }}
+                                  style={{ background: 'var(--yellow-soft)', color: 'var(--yellow-ink)' }}
                                 >
                                   <div className="font-medium">
                                     Должности, которых радар не знает — их отметки ни в один
@@ -420,12 +420,12 @@ export function UploadButton() {
                     </p>
                   )}
                   {stage === 'done' && (
-                    <p className="mt-4 text-sm" style={{ color: 'var(--green)' }}>
+                    <p className="mt-4 text-sm ink-green">
                       ✅ Готово. Данные на дашборде{covered ? `: ${covered}` : ''}.
                     </p>
                   )}
                   {error && (
-                    <p className="mt-4 text-sm" style={{ color: 'var(--red)' }}>
+                    <p className="mt-4 text-sm ink-red">
                       {error}
                     </p>
                   )}

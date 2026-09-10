@@ -72,7 +72,7 @@ export default async function ShopPage({
         {/* Без этой строки цифры по такой лавке выглядят необъяснимо: приход
             в 08:20 зелёный, хотя у соседней лавки такой же — красный. */}
         {schedule && (
-          <p className="mt-1 text-sm" style={{ color: 'var(--yellow)' }}>
+          <p className="mt-1 text-sm ink-yellow">
             Лавка открывается с {schedule.opensAt}: пороги для неё сдвинуты на{' '}
             {Math.round(shift / 60)} ч относительно общих.
           </p>

@@ -281,7 +281,7 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
         </p>
       )}
       {error && (
-        <p className="surface p-3 text-sm" style={{ borderColor: 'var(--red)', color: 'var(--red)' }}>
+        <p className="surface p-3 text-sm ink-red" style={{ borderColor: 'var(--red)' }}>
           {error}
         </p>
       )}
