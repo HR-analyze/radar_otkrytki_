@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { manualDbWritable, openManualDb } from './manual-db';
-import { parseClock } from './time';
-import type { CookShift, ShopNorms } from './types';
+import { sortTimes } from './parsers/shop-norms';
+import type { ShopNorms } from './types';
 
 /**
  * Нормативы открытия по лавкам: во сколько должен приехать водитель и к
@@ -37,7 +37,8 @@ export interface ShopNormsEdit {
   shopCode: string;
   /** «06:30»; null — у лавки нет нормы приезда водителя. */
   driverAt: string | null;
-  cookShifts: CookShift[];
+  /** Часы выхода поваров: ['06:20'] или ['06:00', '06:30']. */
+  cookAt: string[];
 }
 
 function seedPath(): string {
@@ -88,7 +89,7 @@ export async function readNorms(): Promise<ShopNormsStore> {
       code: r.shop_code,
       name: base?.name ?? r.shop_code,
       driverAt: r.driver_at,
-      cookShifts: parseShiftsJson(r.cook_shifts),
+      cookAt: parseCookJson(r.cook_shifts),
       rawDriver: base?.rawDriver ?? null,
       rawCook: base?.rawCook ?? null,
       source: 'manual',
@@ -132,14 +133,14 @@ export async function saveNormsEdits(
   const apply = db.transaction((list: readonly ShopNormsEdit[]) => {
     let changed = 0;
     for (const e of list) {
-      const shifts = JSON.stringify(sortShifts(e.cookShifts));
+      const plan = JSON.stringify(sortTimes(e.cookAt));
       const before = current.get(e.shopCode) as
         | { driver_at: string | null; cook_shifts: string }
         | undefined;
 
-      if (before && before.driver_at === e.driverAt && before.cook_shifts === shifts) continue;
+      if (before && before.driver_at === e.driverAt && before.cook_shifts === plan) continue;
 
-      put.run(e.shopCode, e.driverAt, shifts, now);
+      put.run(e.shopCode, e.driverAt, plan, now);
       changed++;
     }
     return changed;
@@ -169,27 +170,33 @@ export async function normsVersion(): Promise<string> {
   return `db|${row.at}|${row.n}`;
 }
 
-function sortShifts(shifts: readonly CookShift[]): CookShift[] {
-  return [...shifts].sort((a, b) => parseClock(a.at) - parseClock(b.at));
-}
-
-function parseShiftsJson(raw: string): CookShift[] {
+/**
+ * Часы плана из базы.
+ *
+ * Понимает и прежний формат `[{"count":2,"at":"06:20"}]`: до того, как
+ * количество поваров убрали из нормы, правки писались так, и база у людей на
+ * своих серверах уже могла их накопить.
+ */
+function parseCookJson(raw: string): string[] {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return sortShifts(
-      parsed.filter(
-        (s): s is CookShift =>
-          typeof s === 'object' &&
-          s !== null &&
-          typeof (s as CookShift).at === 'string' &&
-          Number.isFinite((s as CookShift).count),
-      ),
-    );
+
+    const times = parsed
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        const legacy = item as { at?: unknown };
+        return typeof legacy?.at === 'string' ? legacy.at : null;
+      })
+      .filter((t): t is string => t != null && CLOCK.test(t));
+
+    return sortTimes(times);
   } catch {
     return [];
   }
 }
+
+const CLOCK = /^\d{1,2}:\d{2}$/;
 
 function isShopNorms(value: unknown): value is ShopNorms {
   const n = value as ShopNorms;

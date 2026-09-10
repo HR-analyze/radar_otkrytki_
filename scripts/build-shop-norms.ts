@@ -33,7 +33,7 @@ const seed = {
 fs.writeFileSync(SHOP_NORMS_SEED_PATH, JSON.stringify(seed, null, 2) + '\n', 'utf8');
 
 const noDriver = norms.filter((n) => !n.driverAt).map((n) => n.code);
-const noCook = norms.filter((n) => n.cookShifts.length === 0).map((n) => n.code);
+const noCook = norms.filter((n) => n.cookAt.length === 0).map((n) => n.code);
 const dirty = norms.filter((n) => n.warnings.length > 0);
 
 console.log(`✓ ${norms.length} лавок → ${SHOP_NORMS_SEED_PATH}`);

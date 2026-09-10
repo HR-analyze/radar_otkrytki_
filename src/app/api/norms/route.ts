@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { loadConfig } from '@/lib/config';
 import { yellowStep, normsEnabled } from '@/lib/norms';
-import { parseCookShifts, parseNormTime } from '@/lib/parsers/shop-norms';
+import { parseCookTimes, parseNormTime } from '@/lib/parsers/shop-norms';
 import { listShops } from '@/lib/queries';
 import { invalidateSnapshot } from '@/lib/snapshot';
 import {
@@ -13,7 +13,6 @@ import {
   type ShopNormsEdit,
 } from '@/lib/shop-norms-store';
 import { checkUploadToken } from '@/lib/upload-store';
-import type { CookShift } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -58,7 +57,7 @@ export async function GET() {
           /** Есть ли лавка в выгрузках — у «бумажной» нормы некому опаздывать. */
           inRadar: names.has(code),
           driverAt: n?.driverAt ?? null,
-          cookShifts: n?.cookShifts ?? [],
+          cookAt: n?.cookAt ?? [],
           rawDriver: n?.rawDriver ?? null,
           rawCook: n?.rawCook ?? null,
           source: n?.source ?? 'reference',
@@ -118,15 +117,15 @@ export async function POST(req: Request) {
     saved: edits.value.map((e) => ({
       code: e.shopCode,
       driverAt: e.driverAt,
-      cookShifts: store.byCode[e.shopCode]?.cookShifts ?? [],
+      cookAt: store.byCode[e.shopCode]?.cookAt ?? [],
       source: 'manual' as const,
     })),
   });
 }
 
 const SHOP_CODE = /^[А-ЯA-Z]{1,3}\d{1,4}$/i;
-/** Больше смен в одной лавке не бывает: в справочнике максимум две. */
-const MAX_SHIFTS = 6;
+/** Больше часов выхода в одной лавке не бывает: в справочнике максимум два. */
+const MAX_TIMES = 6;
 
 type ParsedEdits = { ok: true; value: ShopNormsEdit[] } | { ok: false; error: string };
 
@@ -150,24 +149,23 @@ function parseEdits(raw: unknown): ParsedEdits {
       return { ok: false, error: `${shopCode}: не разобрал время «${rawDriver}» — нужно 6:30 или 06:30` };
     }
 
-    // Смены принимаются той же строкой, что и в справочнике («1 с 6:00/2 с 6:30»):
-    // так человек переносит норму как есть, не раскладывая её по полям.
+    // Часы принимаются и голой строкой («6:20», «6:00 / 6:30»), и в том виде,
+    // как написано в справочнике («1 с 6:00/2 с 6:30»): человек переносит
+    // норму как есть, а количество поваров из неё отбрасывается — нормой
+    // является час, к которому лавка укомплектована.
     const rawCook = e.cook == null ? '' : String(e.cook).trim();
-    const cookShifts: CookShift[] = rawCook === '' ? [] : parseCookShifts(rawCook);
-    if (rawCook !== '' && cookShifts.length === 0) {
+    const cookAt = rawCook === '' ? [] : parseCookTimes(rawCook);
+    if (rawCook !== '' && cookAt.length === 0) {
       return {
         ok: false,
-        error: `${shopCode}: не разобрал смены поваров «${rawCook}» — нужно «3 с 6:20» или «1 с 6:00/2 с 6:30»`,
+        error: `${shopCode}: не разобрал время выхода поваров «${rawCook}» — нужно «6:20» или «6:00 / 6:30»`,
       };
     }
-    if (cookShifts.length > MAX_SHIFTS) {
-      return { ok: false, error: `${shopCode}: слишком много смен (${cookShifts.length})` };
-    }
-    if (cookShifts.some((s) => s.count > 50)) {
-      return { ok: false, error: `${shopCode}: столько поваров в смене не бывает` };
+    if (cookAt.length > MAX_TIMES) {
+      return { ok: false, error: `${shopCode}: слишком много часов выхода (${cookAt.length})` };
     }
 
-    value.push({ shopCode, driverAt, cookShifts });
+    value.push({ shopCode, driverAt, cookAt });
   }
 
   return { ok: true, value };

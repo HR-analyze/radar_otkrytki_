@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { plural } from '@/lib/plural';
 import { formatMoment } from '@/lib/time';
-import type { CookShift } from '@/lib/types';
 import { ClearButton } from './ClearButton';
 
 /**
@@ -13,10 +12,10 @@ import { ClearButton } from './ClearButton';
  * водителя ждут в 5:20, в М72 — в 8:00. Эти цифры приезжают из справочника
  * «Лавки», но справочник отстаёт от жизни, поэтому их правят здесь.
  *
- * Смены поваров вводятся одной строкой ровно в том виде, в каком они написаны
- * в справочнике («3 с 6:20», «1 с 6:00/2 с 6:30»): человек переносит норму как
- * есть, не раскладывая её по отдельным полям. Разбирает строку тот же код, что
- * читает справочник, — двух разных пониманий «1 с 6:00/2 с 6:30» быть не должно.
+ * Часы выхода поваров вводятся одной строкой: «6:20», а где лавку
+ * доукомплектовывают позже — «6:00 / 6:30». Строка из справочника («3 с 6:20»)
+ * тоже принимается как есть: разбирает её тот же код, что читает справочник, и
+ * количество поваров он отбрасывает — нормой является час, а не число людей.
  */
 
 interface ShopRow {
@@ -24,7 +23,7 @@ interface ShopRow {
   name: string;
   inRadar: boolean;
   driverAt: string | null;
-  cookShifts: CookShift[];
+  cookAt: string[];
   rawDriver: string | null;
   rawCook: string | null;
   source: 'reference' | 'manual';
@@ -98,7 +97,7 @@ export function NormsEditor() {
         // Правка одного поля не должна стирать соседнее: недостающее берём из
         // текущего состояния лавки, потому что сервер заменяет норму целиком.
         driverAt: patch.driver ?? row?.driverAt ?? '',
-        cook: patch.cook ?? formatShifts(row?.cookShifts ?? []),
+        cook: patch.cook ?? formatPlan(row?.cookAt ?? []),
       };
     });
 
@@ -167,7 +166,7 @@ export function NormsEditor() {
   if (!data) return <p className="text-sm muted">Загружаю нормы…</p>;
 
   const edited = data.shops.filter((s) => s.source === 'manual').length;
-  const missing = data.shops.filter((s) => s.inRadar && !s.driverAt && s.cookShifts.length === 0);
+  const missing = data.shops.filter((s) => s.inRadar && !s.driverAt && s.cookAt.length === 0);
 
   return (
     <div className="flex flex-col gap-3">
@@ -243,7 +242,7 @@ export function NormsEditor() {
             {shops.map((s) => {
               const draft = drafts[s.code] ?? {};
               const driver = draft.driver ?? s.driverAt ?? '';
-              const cook = draft.cook ?? formatShifts(s.cookShifts);
+              const cook = draft.cook ?? formatPlan(s.cookAt);
 
               return (
                 <tr
@@ -277,7 +276,7 @@ export function NormsEditor() {
                       disabled={!data.editable}
                       onChange={(e) => queueEdit(s.code, { cook: e.target.value })}
                       onBlur={() => void flush()}
-                      placeholder="3 с 6:20"
+                      placeholder="6:20"
                       className="w-44 rounded border px-1.5 py-0.5"
                       style={{ borderColor: 'var(--border)' }}
                     />
@@ -317,9 +316,9 @@ export function NormsEditor() {
   );
 }
 
-/** Смены → строка для поля ввода: обратный разбор того, что принимает сервер. */
-function formatShifts(shifts: readonly CookShift[]): string {
-  return shifts.map((s) => `${s.count} с ${s.at}`).join(' / ');
+/** Часы → строка для поля ввода: обратный разбор того, что принимает сервер. */
+function formatPlan(times: readonly string[]): string {
+  return times.join(' / ');
 }
 
 /** «🟢 до 06:30 · 🟡 до 06:45» — как норма превращается в зоны. */

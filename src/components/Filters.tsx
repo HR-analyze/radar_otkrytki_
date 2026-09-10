@@ -31,6 +31,16 @@ export type { ShopOption };
  * Нативный <select> на мобильных открывается системным пикером.
  * Период — календарь произвольного диапазона (см. DateRangePicker).
  */
+/**
+ * Показывать ли «Общий результат» пунктом в фильтре критерия.
+ *
+ * Выключено по просьбе заказчика 10.09.2026: пункт мозолил глаза, а смотрят
+ * в фильтре конкретные критерии. Само значение `criterion=all` никуда не
+ * делось — оно остаётся значением по умолчанию на сводке, работает в ссылках
+ * и возвращается крестиком «сбросить». Вернуть пункт — поменять на `true`.
+ */
+const SHOW_TOTAL_OPTION = false;
+
 export function Filters({
   base,
   state,
@@ -111,11 +121,24 @@ export function Filters({
    * у полей, и счётчик в кнопке «Сбросить всё»: два независимых условия
    * однажды разъехались бы.
    */
+  /** Критерий, который сейчас на экране: из URL либо предвыбор страницы. */
+  const criterion = state.criterion ?? criterionDefault;
+
+  /**
+   * Что показать в поле. Обычно это `criterion`, но «Общий результат» из
+   * списка убран (см. SHOW_TOTAL_OPTION), а <select> со значением, которого
+   * нет среди опций, молча рисует первый пункт — то есть врёт. Страницы, где
+   * критерий по умолчанию «общий», фильтр не показывают вовсе (сводка), так
+   * что сюда попадает только ручная ссылка `?criterion=all` на радар: ей
+   * честнее показать предвыбор страницы.
+   */
+  const selected = criterion === 'all' && !SHOW_TOTAL_OPTION ? criterionDefault : criterion;
+
   const active = {
     period: searchParams.has('from') || searchParams.has('to'),
     region: !!state.region,
     shop: !!state.shop,
-    criterion: showCriterion && (state.criterion ?? criterionDefault) !== criterionDefault,
+    criterion: showCriterion && criterion !== criterionDefault,
     status: showStatus && !!state.status && state.status !== 'all',
   };
   const activeCount = Object.values(active).filter(Boolean).length;
@@ -207,10 +230,10 @@ export function Filters({
           onClear={active.criterion ? () => apply({ criterion: criterionDefault }) : undefined}
         >
           <select
-            value={state.criterion ?? criterionDefault}
+            value={selected}
             onChange={(e) => apply({ criterion: e.target.value as CriterionKey | 'all' })}
           >
-            <option value="all">Общий результат</option>
+            {SHOW_TOTAL_OPTION && <option value="all">Общий результат</option>}
             {CRITERION_ORDER.map((c) => (
               <option key={c} value={c}>
                 {config.criteria[c]?.title ?? c}
