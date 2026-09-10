@@ -1,13 +1,14 @@
 import { listDates } from './queries';
 import { todayIso } from './time';
 import type { CriterionKey, Status } from './types';
-import { CRITERION_ORDER } from './types';
+import { CRITERION_ORDER, DEFAULT_CRITERION } from './types';
 
 export interface ResolvedParams {
   from: string;
   to: string;
   region?: string;
-  criterion?: CriterionKey | 'all';
+  /** Критерий всегда выбран: состояния «все критерии» в фильтре больше нет. */
+  criterion: CriterionKey;
   status?: Status | 'all';
   /** Поиск по лавке: код или часть названия. */
   shop?: string;
@@ -48,22 +49,23 @@ export function defaultRange(dates: readonly string[], today = todayIso()): {
 export interface ParamDefaults {
   /**
    * Критерий, на котором открывается страница, если в URL его нет.
-   * Радар открывается на наполнении витрины — см. `/radar`.
+   * По умолчанию — DEFAULT_CRITERION (наполнение витрины).
    */
-  criterion?: CriterionKey | 'all';
+  criterion?: CriterionKey;
 }
 
 /**
- * Критерий из URL. `criterion=all` — это осознанно снятый фильтр (общий
- * результат по всем критериям), и он важнее предвыбора страницы: иначе с
- * предвыбранной витрины нельзя было бы уйти. Мусор в параметре молча
+ * Критерий из URL. Выбранный руками важнее предвыбора страницы, мусор молча
  * превращается в предвыбор.
+ *
+ * `criterion=all` (общий результат по всем критериям) больше не значение, а
+ * мусор: пункт убран из фильтра 10.09.2026, и старые ссылки с ним открывают
+ * страницу на её обычном критерии, а не на агрегате.
  */
 export function resolveCriterion(
   raw: string | undefined,
-  fallback: CriterionKey | 'all' = 'all',
-): CriterionKey | 'all' {
-  if (raw === 'all') return 'all';
+  fallback: CriterionKey = DEFAULT_CRITERION,
+): CriterionKey {
   return CRITERION_ORDER.includes(raw as CriterionKey) ? (raw as CriterionKey) : fallback;
 }
 

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultRange, resolveCriterion } from './params';
+import { DEFAULT_CRITERION } from './types';
 
 /**
  * Период по умолчанию. Радар открывают каждый день, и почти всегда смотрят
@@ -44,19 +45,25 @@ test('данных нет вовсе — берём сегодняшний де�
 });
 
 /**
- * Критерий по умолчанию. Радар открывается на наполнении витрины — ради него
- * туда и заходят, — но уйти с него должно быть можно.
+ * Критерий выбран всегда: пункта «Все» (агрегат по всем критериям) в фильтре
+ * больше нет, страница открывается на наполнении витрины, но уйти с него
+ * должно быть можно.
  */
 
 test('критерия в URL нет — берётся предвыбор страницы', () => {
-  assert.equal(resolveCriterion(undefined, 'showcase'), 'showcase');
-  assert.equal(resolveCriterion(undefined), 'all', 'без предвыбора — общий результат');
+  assert.equal(resolveCriterion(undefined, 'driver'), 'driver');
+  assert.equal(
+    resolveCriterion(undefined),
+    DEFAULT_CRITERION,
+    'без предвыбора — критерий по умолчанию',
+  );
 });
 
-test('«Общий результат» из URL важнее предвыбора страницы', () => {
-  // Ровно то, ради чего criterion=all пишется в ссылку явно (см. Filters):
-  // иначе с предвыбранной витрины нельзя было бы уйти.
-  assert.equal(resolveCriterion('all', 'showcase'), 'all');
+test('старый criterion=all — уже не значение, а мусор', () => {
+  // Ссылки с «общим результатом» ходят по чатам с прошлых месяцев: пусть
+  // открывают обычный экран, а не пустоту.
+  assert.equal(resolveCriterion('all', 'showcase'), 'showcase');
+  assert.equal(resolveCriterion('all'), DEFAULT_CRITERION);
 });
 
 test('выбранный критерий важнее предвыбора, мусор — молча в предвыбор', () => {

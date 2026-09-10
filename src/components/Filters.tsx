@@ -2,7 +2,12 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useTransition } from 'react';
-import { CRITERION_ORDER, type CriterionKey, type ThresholdConfig } from '@/lib/types';
+import {
+  CRITERION_ORDER,
+  DEFAULT_CRITERION,
+  type CriterionKey,
+  type ThresholdConfig,
+} from '@/lib/types';
 import { ClearButton } from './ClearButton';
 import { DateRangePicker } from './DateRangePicker';
 import { ShopSearch, type ShopOption } from './ShopFilter';
@@ -12,7 +17,7 @@ export interface FilterState {
   from: string;
   to: string;
   region?: string;
-  criterion?: CriterionKey | 'all';
+  criterion?: CriterionKey;
   status?: string;
   shop?: string;
 }
@@ -31,22 +36,6 @@ export type { ShopOption };
  * Нативный <select> на мобильных открывается системным пикером.
  * Период — календарь произвольного диапазона (см. DateRangePicker).
  */
-/**
- * Подпись состояния «критерий не выбран».
- *
- * Сначала пункт назывался «Общий результат», потом стал «Все», а 10.09.2026
- * заказчик попросил убрать его из выпадающего списка вовсе: список должен
- * состоять из критериев. Само состояние никуда не делось — `criterion=all`
- * это «фильтр не задан»: значение по умолчанию на сводке и то, к чему
- * возвращает крестик «сбросить».
- *
- * Поэтому пункт остаётся в разметке, но с `hidden`: в списке его нет, а в
- * самом поле подпись видна. Без пункта <select> на сводке показывал бы
- * первый критерий и врал бы про то, что на экране.
- *
- * «Все» — та же подпись, что у соседних полей «РМ» и «Лавка».
- */
-const ALL_CRITERIA_LABEL = 'Все';
 
 export function Filters({
   base,
@@ -57,7 +46,7 @@ export function Filters({
   shops,
   showCriterion = true,
   showStatus = true,
-  criterionDefault = 'all',
+  criterionDefault = DEFAULT_CRITERION,
 }: {
   base: string;
   state: FilterState;
@@ -69,10 +58,10 @@ export function Filters({
   showCriterion?: boolean;
   showStatus?: boolean;
   /**
-   * Критерий, предвыбранный на странице (радар открывается на витрине).
-   * Нужен здесь, чтобы знать, какое значение в URL не писать, — см. apply.
+   * Критерий, на котором открывается страница. Нужен здесь, чтобы знать,
+   * какое значение в URL не писать, — см. apply.
    */
-  criterionDefault?: CriterionKey | 'all';
+  criterionDefault?: CriterionKey;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -108,11 +97,7 @@ export function Filters({
       for (const [key, value] of Object.entries(patch)) {
         /**
          * В URL держим только то, что отличается от значения по умолчанию —
-         * иначе ссылка обрастает `criterion=all&status=all`.
-         *
-         * Исключение — критерий на странице с предвыбором: «Общий результат»
-         * там приходится писать явно (`criterion=all`), иначе, сняв фильтр,
-         * человек снова получал бы предвыбранную витрину.
+         * иначе ссылка обрастает `criterion=showcase&status=all`.
          */
         const fallback = key === 'criterion' ? criterionDefault : 'all';
         setOrDelete(q, key, value === fallback ? undefined : value);
@@ -129,7 +114,7 @@ export function Filters({
    * однажды разъехались бы.
    */
   /** Критерий, который сейчас на экране: из URL либо предвыбор страницы. */
-  const criterion = state.criterion ?? criterionDefault;
+  const criterion: CriterionKey = state.criterion ?? criterionDefault;
 
 
   const active = {
@@ -223,22 +208,14 @@ export function Filters({
       {showCriterion && (
         <Field
           label="Критерий"
-          /* Сброс возвращает предвыбор страницы, а не «Все»: радар
-             открывается на витрине, туда же и откатываемся. */
+          /* Сброс возвращает не «пусто», а критерий страницы: критерий в
+             фильтре выбран всегда, состояния «все критерии» больше нет. */
           onClear={active.criterion ? () => apply({ criterion: criterionDefault }) : undefined}
         >
           <select
             value={criterion}
-            onChange={(e) => apply({ criterion: e.target.value as CriterionKey | 'all' })}
+            onChange={(e) => apply({ criterion: e.target.value as CriterionKey })}
           >
-            {/* Только когда выбран: пункта нет в списке, но поле подписано.
-                Браузер, игнорирующий hidden у <option>, в худшем случае
-                покажет старое поведение — «Все» первым пунктом. */}
-            {criterion === 'all' && (
-              <option value="all" hidden>
-                {ALL_CRITERIA_LABEL}
-              </option>
-            )}
             {CRITERION_ORDER.map((c) => (
               <option key={c} value={c}>
                 {config.criteria[c]?.title ?? c}

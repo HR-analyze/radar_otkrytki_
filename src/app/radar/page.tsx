@@ -6,24 +6,10 @@ import { shortDate } from '@/lib/time';
 import { Filters } from '@/components/Filters';
 import { plural } from '@/lib/plural';
 import { StatusCell, STATUS_TEXT } from '@/components/Status';
-import type { CriterionKey } from '@/lib/types';
+import { DEFAULT_CRITERION } from '@/lib/types';
 import type { RadarRow } from '@/lib/queries';
 
 export const dynamic = 'force-dynamic';
-
-/**
- * Критерий, на котором радар открывается.
- *
- * Не «Все» (общий результат по всем критериям): радар открывают, чтобы
- * смотреть наполнение витрин — это единственный критерий, который заполняют
- * руками, и единственный, ради которого сюда заходят каждый день.
- *
- * Общий результат по-прежнему считается (`criterion=all`, см. queries), но с
- * 10.09.2026 его нет в списке «Критерий» — пункт убран по просьбе заказчика,
- * см. Filters. На радар он попадает только ссылкой `?criterion=all`; выбранное
- * руками всегда главнее предвыбора.
- */
-const DEFAULT_CRITERION: CriterionKey = 'showcase';
 
 export default async function RadarPage({
   searchParams,
@@ -36,11 +22,8 @@ export default async function RadarPage({
   const [regions, shops] = await Promise.all([listRegions(p.from, p.to), listShops()]);
 
   // Критерий виден в подписи, а не только в фильтре: иначе неочевидно,
-  // почему в ячейках витрина, а не общий результат.
-  const criterionTitle =
-    p.criterion && p.criterion !== 'all'
-      ? (config.criteria[p.criterion]?.title ?? p.criterion)
-      : null;
+  // почему в ячейках именно витрина.
+  const criterionTitle = config.criteria[p.criterion]?.title ?? p.criterion;
 
   /**
    * Порядок строк. По умолчанию — как в справочнике (М1, М2, М3…): так лавку
@@ -68,14 +51,12 @@ export default async function RadarPage({
         <h1 className="text-2xl font-semibold tracking-tight">
           {p.shop || p.region ? 'Радар по лавкам' : 'Радар по всем лавкам'}
         </h1>
-        {(p.shop || p.region || criterionTitle) && (
-          <p className="mt-1 text-sm muted">
-            {rows.length} {plural(rows.length, 'лавка', 'лавки', 'лавок')} под фильтром
-            {criterionTitle && ` · критерий «${criterionTitle}»`}
-            {p.shop && ` · поиск «${p.shop}»`}
-            {p.region && ` · РМ ${p.region}`}
-          </p>
-        )}
+        <p className="mt-1 text-sm muted">
+          {rows.length} {plural(rows.length, 'лавка', 'лавки', 'лавок')} под фильтром
+          {` · критерий «${criterionTitle}»`}
+          {p.shop && ` · поиск «${p.shop}»`}
+          {p.region && ` · РМ ${p.region}`}
+        </p>
       </div>
 
       <Filters
@@ -90,11 +71,11 @@ export default async function RadarPage({
 
       {dates.length === 0 || rows.length === 0 ? (
         <div className="surface p-8 text-center text-sm muted">
+          {/* Критерий выбран всегда, поэтому «ничего не нашлось» — это либо
+              поиск по лавке, либо пустой критерий за период. */}
           {p.shop
             ? `По запросу «${p.shop}» лавок не нашлось. Попробуйте код (М17) или часть названия.`
-            : criterionTitle
-              ? `За период по критерию «${criterionTitle}» оценок нет. Возьми другой критерий или расширь период.`
-              : 'Под фильтры ничего не попало. Попробуй расширить период или снять фильтр по статусу.'}
+            : `За период по критерию «${criterionTitle}» оценок нет. Возьми другой критерий, расширь период или сними фильтр по статусу.`}
         </div>
       ) : (
         <div className="surface radar-scroll">
