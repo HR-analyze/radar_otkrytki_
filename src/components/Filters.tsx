@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import {
   CRITERION_ORDER,
   DEFAULT_CRITERION,
@@ -67,6 +67,12 @@ export function Filters({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
+  /**
+   * Раскрыта ли панель на телефоне. Открываем сразу, если фильтры уже
+   * что-то отбирают: свёрнутая панель над отфильтрованной таблицей означала
+   * бы «восемь лавок вместо восьмидесяти» без единого объяснения почему.
+   */
+  const [openOnPhone, setOpenOnPhone] = useState(false);
 
   /**
    * Переход по фильтру заменяет запись в истории, а не добавляет новую.
@@ -126,6 +132,11 @@ export function Filters({
     status: showStatus && !!state.status && state.status !== 'all',
   };
   const activeCount = Object.values(active).filter(Boolean).length;
+
+  // Появился фильтр (например, по ссылке со сводки) — показываем панель.
+  useEffect(() => {
+    if (activeCount > 0) setOpenOnPhone(true);
+  }, [activeCount]);
 
   /**
    * Сброс всего разом: пять крестиков — это пять кликов и пять переходов.
@@ -264,30 +275,37 @@ export function Filters({
       {/*
         На телефоне пять полей в столбик занимали весь экран: до таблицы,
         ради которой страницу и открыли, нужно было пролистать всю панель.
-        Прячем их за раскрывающийся заголовок — но только на узком экране:
-        на широком места хватает, и лишний клик там был бы вредом.
+        Прячем их за кнопку — но только на узком экране: на широком места
+        хватает, и лишний клик там был бы вредом.
 
-        <details> вместо кнопки с состоянием: работает без скриптов, открывается
-        с клавиатуры и не требует хранить «открыто/закрыто» отдельно.
+        Комплект полей при этом ровно один. Двумя (одним под кнопкой, вторым
+        для широкого экрана) задваивались бы `id` списков подсказок и подписи
+        полей — программа чтения с экрана прочитала бы все фильтры дважды.
       */}
-      <details className="group sm:hidden" open={activeCount > 0}>
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-sm">
-          <span className="font-medium">
-            Фильтры
-            {activeCount > 0 && <span className="muted"> · активно {activeCount}</span>}
-          </span>
-          <span aria-hidden className="muted transition-transform group-open:rotate-180">
-            ⌄
-          </span>
-        </summary>
-        <div className="mt-3">
-          <FilterGrid pending={pending} wide={!!shops}>
-            {fields}
-          </FilterGrid>
-        </div>
-      </details>
+      <button
+        type="button"
+        onClick={() => setOpenOnPhone((v) => !v)}
+        aria-expanded={openOnPhone}
+        aria-controls="filters-grid"
+        className="flex w-full items-center justify-between gap-2 text-sm sm:hidden"
+      >
+        <span className="font-medium">
+          Фильтры
+          {activeCount > 0 && <span className="muted"> · активно {activeCount}</span>}
+        </span>
+        <span
+          aria-hidden
+          className="muted transition-transform"
+          style={{ transform: openOnPhone ? 'rotate(180deg)' : undefined }}
+        >
+          ⌄
+        </span>
+      </button>
 
-      <div className="hidden sm:block">
+      <div
+        id="filters-grid"
+        className={`${openOnPhone ? 'mt-3 block' : 'hidden'} sm:mt-0 sm:block`}
+      >
         <FilterGrid pending={pending} wide={!!shops}>
           {fields}
         </FilterGrid>
