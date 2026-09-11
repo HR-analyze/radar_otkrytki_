@@ -59,7 +59,7 @@ export function isManaged(pathname: string): boolean {
 
 /**
  * Значение куки — SHA-256 от пароля с солью. Считается через Web Crypto:
- * middleware выполняется там, где node:crypto может быть недоступен.
+ * проверка пароля выполняется в proxy — там, где node:crypto может быть недоступен.
  */
 export async function tokenFor(value: string): Promise<string> {
   const data = new TextEncoder().encode(`radar:manage:${value}`);

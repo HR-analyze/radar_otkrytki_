@@ -8,7 +8,7 @@
     "build": "next build",
     "prebuild": "npm run snapshot || echo '! Снимок не пересобран — используется закоммиченный src/generated/snapshot.json'",
     "start": "next start",
-    "lint": "next lint",
+    "check": "npm run typecheck && npm test",
     "typecheck": "tsc --noEmit",
     "snapshot": "tsx scripts/build-snapshot.ts",
     "seed": "tsx scripts/seed.ts",

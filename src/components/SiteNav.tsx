@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 /**
  * Вкладки шапки, которые тащат за собой фильтры.
@@ -33,21 +33,66 @@ export function SiteNav() {
 /**
  * Ссылки без параметров: fallback для Suspense, пока не прочитан адрес.
  * Отдельный компонент, чтобы разметка шапки была одна на оба случая.
+ *
+ * Подсветка текущей вкладки здесь работает: путь читается через usePathname,
+ * а он, в отличие от параметров адреса, доступен сразу и Suspense не требует.
  */
 export function SiteNavFallback() {
   return <NavLinks params={new URLSearchParams()} />;
 }
 
 function NavLinks({ params }: { params: URLSearchParams }) {
+  const pathname = usePathname();
+
   return (
-    <nav className="flex gap-4 text-sm">
-      {TABS.map((tab) => (
-        <Link key={tab.href} href={hrefWith(tab.href, tab.keys, params)} className="hover:underline">
-          {tab.label}
-        </Link>
-      ))}
+    /*
+     * На телефоне шесть вкладок переносились на две-три строки и разъезжали
+     * шапку по высоте. Здесь они складываются в одну ленту с прокруткой вбок:
+     * высота постоянная, а до дальних вкладок можно домотать пальцем.
+     * scrollbar полосу не рисуем — она бы съела и без того тесную высоту.
+     */
+    <nav
+      aria-label="Разделы радара"
+      className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1 text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {TABS.map((tab) => {
+        const active = isActive(pathname, tab.href);
+        return (
+          <Link
+            key={tab.href}
+            href={hrefWith(tab.href, tab.keys, params)}
+            /*
+             * Где я нахожусь — раньше не отвечал ни один пиксель: шесть ссылок
+             * выглядели одинаково на всех шести страницах. Цвет не единственный
+             * признак: у текущей вкладки ещё и подложка, и жирность, и
+             * aria-current для программ чтения с экрана.
+             */
+            aria-current={active ? 'page' : undefined}
+            className={`shrink-0 rounded-lg px-2.5 py-1.5 whitespace-nowrap transition-colors ${
+              active ? 'font-semibold' : 'muted hover:opacity-70'
+            }`}
+            style={
+              active
+                ? { background: 'color-mix(in srgb, var(--focus) 12%, transparent)', color: 'var(--text)' }
+                : undefined
+            }
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
     </nav>
   );
+}
+
+/**
+ * Текущая вкладка. Карточка лавки — это тоже радар: человек попал в неё
+ * из таблицы и продолжает быть «в радаре», подсвечивать нечего другого.
+ */
+function isActive(pathname: string, href: string): boolean {
+  if (href === '/') return pathname === '/';
+  if (href === '/radar') return pathname === '/radar' || pathname.startsWith('/shop/');
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 /**

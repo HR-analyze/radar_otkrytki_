@@ -16,6 +16,7 @@ import { CRITERION_ORDER, type CriterionKey } from '@/lib/types';
 import { RATING_COMPONENT_TITLE } from '@/lib/rating';
 import { plural } from '@/lib/plural';
 import { ShopSwitcher } from '@/components/ShopFilter';
+import { Hint } from '@/components/Hint';
 
 /**
  * Колонки списка сотрудников. Одна константа на заголовок и на строки —
@@ -61,7 +62,10 @@ export default async function ShopPage({
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <Link href={`/radar?from=${p.from}&to=${p.to}`} className="text-sm muted hover:underline">
+        {/* Возврат забирает те же фильтры, с которыми человек сюда пришёл.
+            Раньше ссылка вела на голый радар: РМ, критерий и статус, отобранные
+            до провала в карточку, приходилось выставлять заново. */}
+        <Link href={`/radar?${backQuery(p)}`} className="text-sm muted hover:underline">
           ← к радару
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">{shop.name}</h1>
@@ -72,7 +76,7 @@ export default async function ShopPage({
         {/* Без этой строки цифры по такой лавке выглядят необъяснимо: приход
             в 08:20 зелёный, хотя у соседней лавки такой же — красный. */}
         {schedule && (
-          <p className="mt-1 text-sm" style={{ color: 'var(--yellow)' }}>
+          <p className="mt-1 text-sm ink-yellow">
             Лавка открывается с {schedule.opensAt}: пороги для неё сдвинуты на{' '}
             {Math.round(shift / 60)} ч относительно общих.
           </p>
@@ -111,8 +115,9 @@ export default async function ShopPage({
                 <span className="text-xs muted">Общий результат:</span>
                 <StatusBadge status={day.shopStatus} />
                 {day.shopScore != null && (
-                  <span className="text-xs tabular-nums muted" title={scoreHint(config)}>
+                  <span className="flex items-center gap-1 text-xs tabular-nums muted">
                     балл {formatScore(day.shopScore)}
+                    <Hint text={scoreHint(config)} />
                   </span>
                 )}
               </div>
@@ -144,8 +149,9 @@ export default async function ShopPage({
                       {/* Средний балл — то, из чего получилась зона: заказчик
                           считает так же руками («3+3+1 = 7/3 = 2,33»). */}
                       {item.score != null && (
-                        <span className="text-xs tabular-nums muted" title={scoreHint(config)}>
+                        <span className="flex items-center gap-1 text-xs tabular-nums muted">
                           балл {formatScore(item.score)}
+                          <Hint text={scoreHint(config)} />
                         </span>
                       )}
                     </div>
@@ -368,6 +374,26 @@ function DepartureNote({
       </span>
     </span>
   );
+}
+
+/**
+ * Ссылка обратно в радар: период плюс всё, что человек отобрал до провала
+ * в карточку. Значения по умолчанию в адрес не пишем — см. Filters.
+ */
+function backQuery(p: {
+  from: string;
+  to: string;
+  region?: string;
+  shop?: string;
+  criterion?: CriterionKey;
+  status?: string;
+}): string {
+  const q = new URLSearchParams({ from: p.from, to: p.to });
+  if (p.region) q.set('region', p.region);
+  if (p.shop) q.set('shop', p.shop);
+  if (p.criterion) q.set('criterion', p.criterion);
+  if (p.status && p.status !== 'all') q.set('status', p.status);
+  return q.toString();
 }
 
 /** Сначала по критерию (как на радаре), внутри — по времени прихода. */

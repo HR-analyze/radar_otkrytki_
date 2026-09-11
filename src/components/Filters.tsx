@@ -1,13 +1,14 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import {
   CRITERION_ORDER,
   DEFAULT_CRITERION,
   type CriterionKey,
   type ThresholdConfig,
 } from '@/lib/types';
+import { activePreset, periodPresets } from '@/lib/periods';
 import { ClearButton } from './ClearButton';
 import { DateRangePicker } from './DateRangePicker';
 import { ShopSearch, type ShopOption } from './ShopFilter';
@@ -66,6 +67,12 @@ export function Filters({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
+  /**
+   * Раскрыта ли панель на телефоне. Открываем сразу, если фильтры уже
+   * что-то отбирают: свёрнутая панель над отфильтрованной таблицей означала
+   * бы «восемь лавок вместо восьмидесяти» без единого объяснения почему.
+   */
+  const [openOnPhone, setOpenOnPhone] = useState(false);
 
   /**
    * Переход по фильтру заменяет запись в истории, а не добавляет новую.
@@ -126,6 +133,11 @@ export function Filters({
   };
   const activeCount = Object.values(active).filter(Boolean).length;
 
+  // Появился фильтр (например, по ссылке со сводки) — показываем панель.
+  useEffect(() => {
+    if (activeCount > 0) setOpenOnPhone(true);
+  }, [activeCount]);
+
   /**
    * Сброс всего разом: пять крестиков — это пять кликов и пять переходов.
    * Убираем только ключи фильтров, всё остальное в ссылке (например,
@@ -137,11 +149,16 @@ export function Filters({
     go(q);
   }, [go, searchParams]);
 
-  return (
-    <div className="surface p-3" style={{ cursor: pending ? 'progress' : undefined }}>
-      <div
-        className={`grid gap-3 sm:grid-cols-2 ${shops ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
-      >
+  /**
+   * Быстрые периоды: раньше до них можно было добраться только открыв
+   * календарь и долистав его до низа, хотя «последние 7 дней» — самый частый
+   * запрос к радару вообще.
+   */
+  const presets = periodPresets(dates);
+  const currentPreset = activePreset(presets, state.from, state.to);
+
+  const fields = (
+    <>
       {/* Период сбрасывается не в пустоту, а в значение по умолчанию (текущий
           месяц, см. defaultRange): период без границ бессмысленен. Крестик
           поэтому появляется только когда даты стоят в ссылке явно. */}
@@ -201,6 +218,7 @@ export function Filters({
             shops={shops}
             onChange={(shop) => apply({ shop })}
             listId="radar-shops"
+            pending={pending}
           />
         </Field>
       )}
@@ -241,25 +259,131 @@ export function Filters({
           </select>
         </Field>
       )}
+    </>
+  );
+
+  return (
+    /*
+     * Пока страница пересобирается, панель гаснет и не ловит клики: единственным
+     * признаком работы был курсор-«часы», а его не видно ни на телефоне, ни
+     * краем глаза — сайт выглядел так, будто фильтр не сработал, и по нему
+     * щёлкали второй раз.
+     */
+    <div className="surface p-3">
+      {pending && <span className="route-progress" aria-hidden />}
+
+      {/*
+        На телефоне пять полей в столбик занимали весь экран: до таблицы,
+        ради которой страницу и открыли, нужно было пролистать всю панель.
+        Прячем их за кнопку — но только на узком экране: на широком места
+        хватает, и лишний клик там был бы вредом.
+
+        Комплект полей при этом ровно один. Двумя (одним под кнопкой, вторым
+        для широкого экрана) задваивались бы `id` списков подсказок и подписи
+        полей — программа чтения с экрана прочитала бы все фильтры дважды.
+      */}
+      <button
+        type="button"
+        onClick={() => setOpenOnPhone((v) => !v)}
+        aria-expanded={openOnPhone}
+        aria-controls="filters-grid"
+        className="flex w-full items-center justify-between gap-2 text-sm sm:hidden"
+      >
+        <span className="font-medium">
+          Фильтры
+          {activeCount > 0 && <span className="muted"> · активно {activeCount}</span>}
+        </span>
+        <span
+          aria-hidden
+          className="muted transition-transform"
+          style={{ transform: openOnPhone ? 'rotate(180deg)' : undefined }}
+        >
+          ⌄
+        </span>
+      </button>
+
+      <div
+        id="filters-grid"
+        className={`${openOnPhone ? 'mt-3 block' : 'hidden'} sm:mt-0 sm:block`}
+      >
+        <FilterGrid pending={pending} wide={!!shops}>
+          {fields}
+        </FilterGrid>
       </div>
 
-      {/* Кнопка появляется только когда есть что сбрасывать: на чистой
-          странице она бы предлагала сбросить ничто. */}
-      {activeCount > 0 && (
+      {(presets.length > 0 || activeCount > 0) && (
         <div
-          className="mt-3 flex justify-end border-t pt-2.5"
+          className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-2.5"
           style={{ borderColor: 'var(--border)' }}
         >
-          <button
-            type="button"
-            onClick={resetAll}
-            className="rounded-md border px-2.5 py-1 text-xs muted hover:opacity-70"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            ✕ Сбросить все фильтры ({activeCount})
-          </button>
+          {/* Выбранный период подсвечен: иначе по четырём одинаковым кнопкам
+              не понять, что сейчас на экране — неделя или весь месяц. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {presets.map((preset) => {
+              const on = currentPreset === preset.key;
+              return (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => apply({ from: preset.from, to: preset.to })}
+                  aria-pressed={on}
+                  className={`rounded-md border px-2.5 py-1 text-xs ${on ? 'font-semibold' : 'muted hover:opacity-70'}`}
+                  style={{
+                    borderColor: on ? 'var(--focus)' : 'var(--border)',
+                    color: on ? 'var(--text)' : undefined,
+                    background: on
+                      ? 'color-mix(in srgb, var(--focus) 10%, transparent)'
+                      : undefined,
+                  }}
+                >
+                  {/* На узком экране подпись короче: четыре кнопки должны
+                      помещаться в одну строку, а не переноситься по одной. */}
+                  <span className="sm:hidden">{preset.short}</span>
+                  <span className="hidden sm:inline">{preset.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Кнопка появляется только когда есть что сбрасывать: на чистой
+              странице она бы предлагала сбросить ничто. */}
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={resetAll}
+              className="ml-auto rounded-md border px-2.5 py-1 text-xs muted hover:opacity-70"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              ✕ Сбросить все фильтры ({activeCount})
+            </button>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Сетка полей. Живёт отдельным компонентом, потому что рисуется дважды: под
+ * раскрывающимся заголовком на телефоне и в открытую на широком экране.
+ * Разметка при этом одна — иначе два варианта разъехались бы при первой правке.
+ */
+function FilterGrid({
+  pending,
+  wide,
+  children,
+}: {
+  pending: boolean;
+  /** Есть ли поле «Лавка»: от него зависит, пять колонок или четыре. */
+  wide: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      aria-busy={pending}
+      className={`${pending ? 'is-busy' : ''} grid gap-3 sm:grid-cols-2 ${wide ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
+    >
+      {children}
     </div>
   );
 }

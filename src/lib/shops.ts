@@ -19,6 +19,25 @@ export interface ShopRef {
   name: string;
 }
 
+/**
+ * Похоже ли это вообще на код лавки: одна-три буквы и одна-четыре цифры.
+ *
+ * Нужно до рендера страницы — в proxy. Карточка лавки зовёт `notFound()`
+ * уже во время отрисовки, а к этому моменту ответ начал передаваться со
+ * статусом 200, и поменять его нельзя (так устроен стриминг; Next это
+ * подтверждает в документации и сам вешает на такую страницу noindex).
+ *
+ * Проверяем именно формат, а не существование лавки. Список лавок на
+ * записываемом хостинге живёт в базе, и сверка со снимком означала бы
+ * настоящий 404 у лавки, которую только что завели, — ошибка куда
+ * неприятнее лишнего двухсотого статуса. Формат же безопасен: коды и
+ * извлекаются этой же регуляркой, так что отвергнуть реальный код она
+ * не может.
+ */
+export function looksLikeShopCode(value: string): boolean {
+  return CODE_RE.test(value.trim());
+}
+
 /** «М12 Даниловская мануфактура » → { code: 'М12', name: 'М12 Даниловская мануфактура' } */
 export function parseShop(value: unknown): ShopRef | null {
   const raw = String(value ?? '').replace(/\s+/g, ' ').trim();
@@ -84,4 +103,19 @@ export function findShops<T extends ShopRef>(shops: readonly T[], query: string)
 
   const exact = shops.filter((s) => isExactCode(s, q));
   return exact.length > 0 ? exact : shops.filter((s) => matchesShop(s, q));
+}
+
+/**
+ * Порядок лавок «как в справочнике»: М1, М2, М3… , а не по алфавиту, где
+ * М10 встаёт между М1 и М2. Живёт здесь, а не в queries: тот же порядок
+ * нужен таблицам на клиенте, а два правила однажды разъехались бы.
+ */
+export function compareShopNumber(a: ShopRef, b: ShopRef): number {
+  return shopNumber(a.code) - shopNumber(b.code) || a.code.localeCompare(b.code);
+}
+
+/** Число из кода лавки: «М12» → 12. Без цифр — в конец списка. */
+export function shopNumber(code: string): number {
+  const n = Number(code.replace(/\D/g, ''));
+  return Number.isFinite(n) && code.replace(/\D/g, '') !== '' ? n : Number.MAX_SAFE_INTEGER;
 }

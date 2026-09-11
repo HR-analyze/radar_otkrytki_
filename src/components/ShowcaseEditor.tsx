@@ -49,9 +49,21 @@ interface DayData {
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
+/** Одна отменяемая правка: что было в поле до того, как его тронули. */
+interface UndoStep {
+  shopCode: string;
+  field: 'percent' | 'note';
+  before: string;
+  label: string;
+}
+
 const TOKEN_KEY = 'radar.uploadToken';
 /** Пауза после последнего нажатия клавиши, чтобы не слать запрос на каждую цифру. */
 const SAVE_DEBOUNCE_MS = 500;
+/** Сколько «Сохранено» висит на экране, прежде чем погаснуть. */
+const SAVED_BADGE_MS = 2500;
+/** Глубина отмены: дальше вспомнить, что именно правил, всё равно нельзя. */
+const UNDO_DEPTH = 50;
 /** Столько же, сколько принимает сервер (см. /api/showcase). */
 const MAX_NOTE = 300;
 
@@ -72,12 +84,26 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
   // при смене дня и по кнопке «спрятать заполненные».
   const [emptyLock, setEmptyLock] = useState<Set<string>>(new Set());
   const [token, setToken] = useState('');
+  /**
+   * Стек отмены. Правок по восьмидесяти лавкам не восстановить ничем: значение
+   * уходит на сервер через полсекунды и затирает прежнее, а вернуть его было
+   * неоткуда — только вспоминать по памяти.
+   */
+  const [undo, setUndo] = useState<UndoStep[]>([]);
+  /** Сколько правок ещё не доехало до сервера — видно человеку, а не только коду. */
+  const [queued, setQueued] = useState(0);
 
   // Копим правки по полям: процент и комментарий у одной лавки правят
   // независимо, и отправить нужно ровно то, что человек трогал.
   const pending = useRef<Map<string, { percent?: string; note?: string }>>(new Map());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputs = useRef<Map<string, HTMLInputElement>>(new Map());
+  /** Состояние сохранения для обработчиков, живущих вне рендера (см. beforeunload). */
+  const saveRef = useRef<SaveState>('idle');
+
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
 
   useEffect(() => {
     try {
@@ -94,6 +120,10 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
     setDrafts({});
     setNoteDrafts({});
     setEmptyLock(new Set((body.shops ?? []).filter((s) => s.percent == null).map((s) => s.code)));
+    // Стек отмены привязан к дню: вернуть вчерашнее значение в сегодняшнее
+    // поле — это не отмена, а порча данных.
+    setUndo([]);
+    setQueued(0);
     setSave('idle');
     setError(body.ok ? null : (body.error ?? 'Не удалось загрузить день'));
   }, []);
@@ -102,16 +132,25 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
     void load(date);
   }, [date, load]);
 
-  /** Отправляем накопленные правки одной пачкой. */
-  const flush = useCallback(async () => {
+  /**
+   * Отправляем накопленные правки одной пачкой.
+   *
+   * `leaving` — уходим со страницы. Тогда запрос помечается keepalive: браузер
+   * обязуется доставить его, даже если вкладку уже закрыли. Без этой пометки
+   * обработчик beforeunload запускал обычный fetch и вкладка закрывалась
+   * раньше, чем он уходил, — последние полсекунды ввода пропадали молча.
+   */
+  const flush = useCallback(async (leaving = false) => {
     const batch = [...pending.current.entries()];
     if (batch.length === 0) return;
     pending.current.clear();
+    setQueued(0);
 
     setSave('saving');
     try {
       const res = await fetch('/api/showcase', {
         method: 'POST',
+        keepalive: leaving,
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'x-radar-upload-token': token } : {}),
@@ -152,40 +191,152 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
       setError(null);
       router.refresh();
     } catch (e) {
+      /*
+       * Пачку возвращаем в очередь: она была вычищена перед отправкой, и при
+       * сетевом сбое правки исчезали совсем — человек видел «не удалось
+       * сохранить», нажимал ещё раз и отправлял пустоту.
+       */
+      for (const [code, fields] of batch) {
+        pending.current.set(code, { ...fields, ...pending.current.get(code) });
+      }
+      setQueued(pending.current.size);
       setSave('error');
       setError(e instanceof Error ? e.message : 'Не удалось сохранить');
     }
   }, [date, router, token]);
 
-  // Незаписанное не должно теряться при уходе со страницы.
+  /**
+   * Незаписанное не должно теряться при уходе со страницы.
+   *
+   * beforeunload на телефоне срабатывает не всегда: вкладку не «закрывают», её
+   * сворачивают, и система выгружает без предупреждения. Поэтому слушаем ещё
+   * и visibilitychange — момент, когда страница уходит из виду.
+   *
+   * Предупреждение «уйти со страницы?» показываем только если сохранение
+   * реально сломалось: в обычном случае keepalive-запрос всё довезёт, и
+   * лишний диалог только раздражал бы того, кто заполнил восемьдесят лавок.
+   */
   useEffect(() => {
-    const onLeave = () => {
-      if (pending.current.size > 0) void flush();
+    const leave = () => {
+      if (pending.current.size > 0) void flush(true);
     };
-    window.addEventListener('beforeunload', onLeave);
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') leave();
+    };
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      leave();
+      if (saveRef.current === 'error' && pending.current.size > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', onBeforeUnload);
+    document.addEventListener('visibilitychange', onHide);
     return () => {
-      window.removeEventListener('beforeunload', onLeave);
-      onLeave();
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      document.removeEventListener('visibilitychange', onHide);
+      leave();
     };
   }, [flush]);
 
+  /**
+   * «✅ Сохранено» гасим через пару секунд. Раньше надпись оставалась висеть
+   * навсегда и переставала что-либо значить: она одинаково стояла и через
+   * секунду после правки, и через час.
+   */
+  useEffect(() => {
+    if (save !== 'saved') return;
+    const t = setTimeout(() => setSave('idle'), SAVED_BADGE_MS);
+    return () => clearTimeout(t);
+  }, [save]);
+
   function queue(code: string, patch: { percent?: string; note?: string }) {
     pending.current.set(code, { ...pending.current.get(code), ...patch });
+    setQueued(pending.current.size);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS);
   }
 
+  /**
+   * Кладём в стек отмены прежнее значение поля — но только первую правку
+   * подряд: иначе набранные «9», «95» дали бы два шага отмены на одно
+   * осмысленное действие, и «отменить» пришлось бы жать по букве.
+   */
+  function remember(step: UndoStep) {
+    setUndo((prev) => {
+      const last = prev[prev.length - 1];
+      if (last && last.shopCode === step.shopCode && last.field === step.field) return prev;
+      return [...prev, step].slice(-UNDO_DEPTH);
+    });
+  }
+
   function change(code: string, raw: string) {
     const value = raw.replace(',', '.').replace(/[^\d.]/g, '').slice(0, 5);
+    const shop = shops.find((x) => x.code === code);
+    remember({
+      shopCode: code,
+      field: 'percent',
+      before: shop ? percentOf(shop, drafts) : '',
+      label: `${code}: наполнение`,
+    });
     setDrafts((d) => ({ ...d, [code]: value }));
     queue(code, { percent: value });
   }
 
   function changeNote(code: string, raw: string) {
     const value = raw.slice(0, MAX_NOTE);
+    const shop = shops.find((x) => x.code === code);
+    remember({
+      shopCode: code,
+      field: 'note',
+      before: shop ? noteOf(shop, noteDrafts) : '',
+      label: `${code}: комментарий`,
+    });
     setNoteDrafts((d) => ({ ...d, [code]: value }));
     queue(code, { note: value });
   }
+
+  /** Вернуть последнее изменённое поле к тому, что в нём было. */
+  const undoLast = useCallback(() => {
+    setUndo((prev) => {
+      const step = prev[prev.length - 1];
+      if (!step) return prev;
+
+      if (step.field === 'percent') {
+        setDrafts((d) => ({ ...d, [step.shopCode]: step.before }));
+        pending.current.set(step.shopCode, {
+          ...pending.current.get(step.shopCode),
+          percent: step.before,
+        });
+      } else {
+        setNoteDrafts((d) => ({ ...d, [step.shopCode]: step.before }));
+        pending.current.set(step.shopCode, {
+          ...pending.current.get(step.shopCode),
+          note: step.before,
+        });
+      }
+
+      setQueued(pending.current.size);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS);
+      return prev.slice(0, -1);
+    });
+  }, [flush]);
+
+  // Ctrl+Z — то, что человек жмёт не задумываясь. Внутри полей ввода браузер
+  // отменяет сам, поэтому перехватываем только вне их.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      e.preventDefault();
+      undoLast();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undoLast]);
 
   const shops = data?.shops ?? [];
   const regions = useMemo(
@@ -250,11 +401,38 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
           {plural(shops.length, 'лавки', 'лавок', 'лавок')}
         </span>
 
-        <span className="text-xs muted">
-          {save === 'saving' && 'Сохраняю…'}
-          {save === 'saved' && '✅ Сохранено'}
-          {save === 'idle' && data?.updatedAt && `Последняя правка: ${when(data.updatedAt)}`}
+        {/*
+          Состояние сохранения читает и программа чтения с экрана: aria-live
+          проговаривает изменения, не уводя фокус из поля ввода. Раньше это был
+          немой серый текст, который к тому же не гас.
+        */}
+        <span className="text-xs" aria-live="polite">
+          {save === 'saving' && <span className="muted">Сохраняю…</span>}
+          {save === 'saved' && <span className="ink-green">✅ Сохранено</span>}
+          {save === 'error' && (
+            <span className="ink-red">
+              ⚠ Не сохранено{queued > 0 && `: ${queued} ${plural(queued, 'правка', 'правки', 'правок')} в очереди`}
+            </span>
+          )}
+          {save === 'idle' && queued > 0 && <span className="muted">Правки в очереди: {queued}</span>}
+          {save === 'idle' && queued === 0 && data?.updatedAt && (
+            <span className="muted">Последняя правка: {when(data.updatedAt)}</span>
+          )}
         </span>
+
+        {/* Отмена последнего изменения: без неё стёртый процент по восьмидесяти
+            лавкам восстановить было нечем. */}
+        {undo.length > 0 && !readOnly && (
+          <button
+            type="button"
+            onClick={undoLast}
+            title={`Отменить: ${undo[undo.length - 1].label} (Ctrl+Z)`}
+            className="rounded-lg border px-2.5 py-1.5 text-xs"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+          >
+            ↩ Отменить ({undo.length})
+          </button>
+        )}
 
         {data?.tokenRequired && (
           <input
@@ -281,7 +459,7 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
         </p>
       )}
       {error && (
-        <p className="surface p-3 text-sm" style={{ borderColor: 'var(--red)', color: 'var(--red)' }}>
+        <p className="surface p-3 text-sm ink-red" style={{ borderColor: 'var(--red)' }}>
           {error}
         </p>
       )}
@@ -387,20 +565,17 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
                     {shop.region && <span className="ml-2 text-xs muted">{shop.region}</span>}
                   </span>
 
-                  {/* Комментарий: поле без рамки, пока пустое, — восемьдесят
-                      строк с рамками превратили бы список в решётку. Рамка
-                      появляется, когда в поле что-то есть или на нём фокус. */}
-                  <input
-                    value={noteOf(shop, noteDrafts)}
-                    onChange={(e) => changeNote(shop.code, e.target.value)}
-                    disabled={readOnly}
-                    placeholder="комментарий"
-                    title={noteOf(shop, noteDrafts) || 'Комментарий к лавке за этот день'}
-                    aria-label={`Комментарий, ${shop.code}`}
-                    className="showcase-note min-w-0 flex-1 basis-40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-xs"
-                  />
+                  {/*
+                    Процент стоит в разметке раньше комментария, а на экране
+                    остаётся справа от него (order): так устроен порядок Tab.
 
-                  <div className="flex items-center gap-1.5">
+                    Раньше поля шли в обратном порядке, и Tab из процента уводил
+                    в комментарий СОСЕДНЕЙ лавки — человек, проходящий день по
+                    списку, через раз оказывался не там, где думал. Теперь Tab
+                    остаётся внутри строки: процент → комментарий той же лавки →
+                    процент следующей.
+                  */}
+                  <div className="order-2 flex items-center gap-1.5">
                     <input
                       ref={(el) => {
                         if (el) inputs.current.set(shop.code, el);
@@ -438,6 +613,27 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
                       {label(statusOf(shop, value, data.thresholds))}
                     </span>
                   </div>
+
+                  {/* Комментарий: поле без рамки, пока пустое, — восемьдесят
+                      строк с рамками превратили бы список в решётку. Рамка
+                      появляется, когда в поле что-то есть или на нём фокус. */}
+                  <input
+                    value={noteOf(shop, noteDrafts)}
+                    onChange={(e) => changeNote(shop.code, e.target.value)}
+                    onKeyDown={(e) => {
+                      // Дописал пояснение — Enter продолжает тот же ритм, что
+                      // и в поле процента: вниз, к следующей лавке.
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        focusNext(i);
+                      }
+                    }}
+                    disabled={readOnly}
+                    placeholder="комментарий"
+                    title={noteOf(shop, noteDrafts) || 'Комментарий к лавке за этот день'}
+                    aria-label={`Комментарий, ${shop.code}`}
+                    className="showcase-note order-1 min-w-0 flex-1 basis-40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-xs"
+                  />
                 </li>
               );
             })}
@@ -446,10 +642,12 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
       </div>
 
       <p className="text-xs muted">
-        Значение вводится в процентах. Enter или ↓ — следующая лавка, ↑ — предыдущая. Пустое поле
+        Значение вводится в процентах. Enter или ↓ — следующая лавка, ↑ — предыдущая,
+        Tab — комментарий этой же лавки. Пустое поле
         означает «в этот день не заполняли»: такая лавка в средние значения не входит. Комментарий
         рядом — свободный текст на случай «не привезли ягоды»; на цифры он не влияет. Сохраняется
-        само. Галочка «только незаполненные» фиксирует список: заполненная лавка не
+        само, а последнее изменение отменяется кнопкой «Отменить» или Ctrl+Z. Галочка
+        «только незаполненные» фиксирует список: заполненная лавка не
         выпрыгивает из-под курсора на первой же цифре, а прячется по кнопке рядом с галочкой или
         при смене дня. Метка «🕙 с 10:00» — лавка открывается позже общих 08:00 (М71 Кузьминки, М72
         Ватутинки): раннее наполнение у неё считать не с чего.
@@ -523,7 +721,9 @@ function StepButton({
       onClick={onClick}
       title={title}
       aria-label={title}
-      className="rounded-lg border px-3 py-2 text-sm"
+      /* 44 пикселя: стрелками «вчера/завтра» пользуются с телефона чаще
+         всего, а прежние 36 в высоту заставляли целиться. */
+      className="flex size-11 items-center justify-center rounded-lg border text-sm"
       style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
     >
       {label}

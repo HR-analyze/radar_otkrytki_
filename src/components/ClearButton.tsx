@@ -7,6 +7,9 @@
  * нечего, а мёртвая кнопка в каждой ячейке — шум. Родитель обязан быть
  * `position: relative` и держать справа место под кнопку — иначе она ляжет
  * на текст (см. `.has-clear` в globals.css).
+ *
+ * Сам значок остаётся мелким, а вот область нажатия — 44 пикселя (класс
+ * `.tap`): с телефона в прежние шестнадцать попадали со второго раза.
  */
 export function ClearButton({
   onClick,
@@ -24,7 +27,7 @@ export function ClearButton({
       onClick={onClick}
       title={title}
       aria-label={label}
-      className="absolute top-1/2 right-2 -translate-y-1/2 rounded px-0.5 text-sm leading-none muted hover:opacity-60"
+      className="tap absolute top-1/2 right-2 -translate-y-1/2 rounded px-0.5 text-sm leading-none muted hover:opacity-60"
     >
       ✕
     </button>

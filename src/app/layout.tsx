@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { MANAGED_TITLE, passwordSet } from '@/lib/auth';
 import { UploadButton } from '@/components/UploadButton';
 import { SiteNav, SiteNavFallback } from '@/components/SiteNav';
+import { HeaderMetrics } from '@/components/HeaderMetrics';
+import { ThemeToggle, THEME_BOOT_SCRIPT } from '@/components/ThemeToggle';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -26,7 +28,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <html lang="ru">
+      <head>
+        {/* Выбранную тему ставим до первой отрисовки — иначе тёмная тема
+            начинается со вспышки белого экрана. См. ThemeToggle. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-screen">
+        {/* Первая остановка клавиши Tab: перепрыгнуть шапку и попасть сразу в
+            таблицу. Без неё до данных приходилось шесть раз щёлкать по вкладкам,
+            и так на каждой странице. Видна только когда на ней фокус. */}
+        <a href="#main" className="skip-link">
+          Перейти к содержимому
+        </a>
+        <HeaderMetrics />
         {/* Вкладки без пароля — не мелочь: без этой полосы забытая переменная
             окружения означала бы открытую правку данных, и никто бы об этом
             не узнал. */}
@@ -43,25 +57,41 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           className="sticky top-0 z-50 border-b backdrop-blur"
           style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--surface) 88%, transparent)' }}
         >
-          <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-            <Link href="/" className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          {/*
+            На телефоне шапка разъезжалась на три ряда: логотип, вкладки,
+            кнопки — и съедала треть экрана ещё до заголовка страницы. Здесь
+            вкладки уходят отдельной строкой во всю ширину (order-3 basis-full),
+            а логотип и кнопки делят первый ряд. С sm и выше всё встаёт в строку.
+          */}
+          <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
+            <Link
+              href="/"
+              className="order-1 flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight"
+            >
               {/* Иконка та же, что во вкладке браузера: логотип один. */}
               <Image src="/favicon-32x32.png" alt="" width={22} height={22} priority />
-              Радар витрин
+              {/* На узком экране название прячем: шесть вкладок и кнопка
+                  загрузки нужнее, чем ещё раз прочитать, где мы находимся. */}
+              <span className="hidden sm:inline">Радар витрин</span>
             </Link>
             {/* Вкладки тащат за собой фильтры — см. SiteNav. Suspense нужен
                 из-за чтения адреса: без него страница-404 не собирается. */}
-            <Suspense fallback={<SiteNavFallback />}>
-              <SiteNav />
-            </Suspense>
+            <div className="order-3 min-w-0 basis-full sm:order-2 sm:basis-auto">
+              <Suspense fallback={<SiteNavFallback />}>
+                <SiteNav />
+              </Suspense>
+            </div>
             {/* Загрузка — в шапке: данными занимается вся команда, а не только
                 тот, у кого открыт репозиторий. */}
-            <div className="ml-auto">
+            <div className="order-2 ml-auto flex shrink-0 items-center gap-2 sm:order-3">
+              <ThemeToggle />
               <UploadButton />
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-[1600px] px-4 py-6">{children}</main>
+        <main id="main" className="mx-auto max-w-[1600px] px-4 py-6">
+          {children}
+        </main>
       </body>
     </html>
   );

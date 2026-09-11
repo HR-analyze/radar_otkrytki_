@@ -63,13 +63,17 @@ export function LoginForm({
         style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
       />
 
-      {error && <p className="text-sm" style={{ color: 'var(--red)' }}>{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm ink-red">
+          {error}
+        </p>
+      )}
 
       <button
         type="submit"
         disabled={busy || password.length === 0}
         className="rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
-        style={{ background: 'var(--accent, #2563eb)', color: '#fff' }}
+        style={{ background: 'var(--focus)', color: '#fff' }}
       >
         {busy ? 'Проверяем…' : 'Войти'}
       </button>

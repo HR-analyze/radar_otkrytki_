@@ -22,6 +22,7 @@ import { StatusBadge, StatusBar, STATUS_FILTER_TITLE } from '@/components/Status
 import { RefreshButton } from '@/components/RefreshButton';
 import { CRITERION_ORDER, DEFAULT_CRITERION, type CriterionKey } from '@/lib/types';
 import { plural } from '@/lib/plural';
+import { Hint } from '@/components/Hint';
 
 export const dynamic = 'force-dynamic';
 
@@ -167,11 +168,14 @@ export default async function DashboardPage({
               <Link
                 key={s.criterion}
                 href={`/radar?${radarQuery(p, s.criterion)}`}
-                className="rounded-lg border p-3 transition-colors hover:opacity-90"
+                /* Карточка — ссылка в радар по этому критерию. Раньше об этом
+                   говорил только курсор: добавляем сдвиг рамки под курсором и
+                   подпись, иначе половина людей до радара так и не доходит. */
+                className="group rounded-lg border p-3 transition-colors"
                 style={{ borderColor: 'var(--border)' }}
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm font-medium">
+                  <span className="text-sm font-medium group-hover:underline">
                     {cfg?.title ?? s.criterion}
                     {cfg?.confirmed === false && <span title="Пороги требуют подтверждения"> ⚠</span>}
                   </span>
@@ -375,8 +379,9 @@ function ShowcaseTile({
 
   return (
     <div className="surface p-4">
-      <div className="text-xs muted" title={scope}>
-        Среднее наполнение витрины
+      <div className="flex items-center gap-1.5 text-xs muted">
+        <span>Среднее наполнение витрины</span>
+        <Hint text={`Считается ${scope}. В среднее входят только лавки, у которых витрину в этот день заполняли.`} />
       </div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-2xl font-semibold tabular-nums">
@@ -391,7 +396,7 @@ function ShowcaseTile({
       {fill.filled === 0 ? (
         <p className="mt-1 text-xs muted">За день таблицу ещё не заполняли.</p>
       ) : thin ? (
-        <p className="mt-1 text-xs" style={{ color: 'var(--yellow)' }}>
+        <p className="mt-1 text-xs ink-yellow">
           ⚠ Заполнено меньше половины лавок — это не среднее по сети.
         </p>
       ) : (
@@ -403,6 +408,14 @@ function ShowcaseTile({
   );
 }
 
+/**
+ * Плитка «лавок в 🔴 — 12 из 80».
+ *
+ * Полоса под цифрой рисовалась через StatusBar, и остаток она подавала как
+ * `missing` — «нет данных». На деле остаток — это лавки других цветов, по
+ * которым данные как раз есть, и первый же блок сводки вводил в заблуждение.
+ * Здесь это просто доля: сколько из всех лавок попало в эту зону.
+ */
 function Tile({
   title,
   value,
@@ -416,23 +429,35 @@ function Tile({
   tone: 'red' | 'yellow' | 'green';
   hint: string;
 }) {
+  const share = total > 0 ? value / total : 0;
+
   return (
     <div className="surface p-4">
-      <div className="text-xs muted" title={hint}>
-        {title}
+      {/* Пояснение «в среднем за день · критерий такой-то» держалось на
+          атрибуте title — на телефоне он не показывается вовсе, и цифра
+          оставалась без объяснения. */}
+      <div className="flex items-center gap-1.5 text-xs muted">
+        <span>{title}</span>
+        <Hint text={hint} />
       </div>
       <div className="mt-1 flex items-baseline gap-2">
-        <span className={`text-2xl font-semibold tabular-nums`} style={{ color: `var(--${tone})` }}>
+        <span
+          className="text-2xl font-semibold tabular-nums"
+          style={{ color: `var(--${tone}-ink)` }}
+        >
           {value}
         </span>
         <span className="text-sm muted tabular-nums">из {total}</span>
       </div>
-      <div className="mt-2">
-        <StatusBar
-          green={tone === 'green' ? value : 0}
-          yellow={tone === 'yellow' ? value : 0}
-          red={tone === 'red' ? value : 0}
-          missing={Math.max(0, total - value)}
+      <div
+        className="mt-2 h-2 w-full overflow-hidden rounded-full"
+        style={{ background: 'var(--neutral-soft)' }}
+        role="img"
+        aria-label={`${value} из ${total} — ${Math.round(share * 100)}%`}
+      >
+        <div
+          className={`dot-${tone} h-full`}
+          style={{ width: `${Math.round(share * 100)}%` }}
         />
       </div>
     </div>

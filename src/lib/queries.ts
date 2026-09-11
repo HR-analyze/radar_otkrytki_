@@ -11,7 +11,7 @@ import {
 } from './types';
 import { aggregateStatuses, roundScore, statusFromScore } from './status';
 import { parseClock } from './time';
-import { isExactCode, matchesShop } from './shops';
+import { compareShopNumber, isExactCode, matchesShop, shopNumber } from './shops';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
 import type { DepartureRow } from './parsers/departure';
 import {
@@ -37,13 +37,8 @@ export interface ShopRow {
   region: string | null;
 }
 
-const byShopNumber = (a: ShopRow, b: ShopRow): number =>
-  shopNumber(a.code) - shopNumber(b.code) || a.code.localeCompare(b.code);
-
-function shopNumber(code: string): number {
-  const n = Number(code.replace(/\D/g, ''));
-  return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
-}
+/** Порядок справочника — общее правило, см. shops.ts. */
+const byShopNumber = compareShopNumber;
 
 /**
  * Статусы критериев → статус лавки за день, по правилу из конфига

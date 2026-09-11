@@ -7,25 +7,50 @@
   --color-radar-neutral: #94a3b8;
 }
 
+/*
+ * Три роли у статусного цвета, и путать их нельзя:
+ *   · --green   — заливка: точки, полосы, рамки. Цвет должен быть заметным;
+ *   · --*-ink   — текст: и на белой карточке, и на мягкой подложке. Цвет
+ *                 должен быть читаемым, то есть тёмным;
+ *   · --*-soft  — сама подложка.
+ *
+ * Пока ролей было две, `--yellow` стоял и в точке, и в тексте бейджа: на
+ * `--yellow-soft` он давал контраст 2,74 при норме 4,5 — жёлтый бейдж
+ * читался хуже всех прочих, а именно им помечено самое важное.
+ */
 :root {
   --bg: #f6f7f9;
   --surface: #ffffff;
   --border: #e2e8f0;
   --text: #0f172a;
-  --muted: #64748b;
+  /* 5,95 на фоне и 6,38 на карточке: им набран весь мелкий текст (text-xs
+     и мельче), а прежние 4,44 не дотягивали до нормы. */
+  --muted: #556070;
 
   --green: #16a34a;
+  --green-ink: #15803d;
   --green-soft: #dcfce7;
   --yellow: #ca8a04;
+  --yellow-ink: #854d0e;
   --yellow-soft: #fef9c3;
   --red: #dc2626;
+  --red-ink: #b91c1c;
   --red-soft: #fee2e2;
   --neutral: #94a3b8;
   --neutral-soft: #f1f5f9;
+
+  /* Обводка фокуса — одна на весь сайт, см. :focus-visible ниже. */
+  --focus: #2563eb;
 }
 
+/*
+ * Тема выбирается системой, но человек может переключить её сам —
+ * см. ThemeToggle. Ручной выбор ставит data-theme на <html> и должен
+ * побеждать системный, поэтому у тёмной темы два входа: медиазапрос без
+ * явно выбранной светлой и явно выбранная тёмная.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #0b1120;
     --surface: #111827;
     --border: #1f2937;
@@ -37,9 +62,35 @@
     --red-soft: #450a0a;
     --neutral-soft: #1e293b;
     --green: #4ade80;
+    --green-ink: #4ade80;
     --yellow: #facc15;
+    --yellow-ink: #facc15;
     --red: #f87171;
+    --red-ink: #f87171;
+
+    --focus: #93c5fd;
   }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0b1120;
+  --surface: #111827;
+  --border: #1f2937;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+
+  --green-soft: #052e16;
+  --yellow-soft: #422006;
+  --red-soft: #450a0a;
+  --neutral-soft: #1e293b;
+  --green: #4ade80;
+  --green-ink: #4ade80;
+  --yellow: #facc15;
+  --yellow-ink: #facc15;
+  --red: #f87171;
+  --red-ink: #f87171;
+
+  --focus: #93c5fd;
 }
 
 body {
@@ -57,18 +108,116 @@ body {
 
 .muted { color: var(--muted); }
 
+/* Цветной текст вне статусных плашек: предупреждения, ошибки, знак балла. */
+.ink-green  { color: var(--green-ink);  }
+.ink-yellow { color: var(--yellow-ink); }
+.ink-red    { color: var(--red-ink);    }
+
+/*
+ * Видимый фокус — один на весь сайт.
+ *
+ * Раньше обводка была только у <select>: у крестиков сброса, стрелок
+ * календаря, дней и кнопок-пресетов не было ничего, и пройти сайт с
+ * клавиатуры было нельзя — фокус двигался вслепую. :focus-visible не трогает
+ * клик мышью, так что на вид для мышиного пользователя ничего не меняется.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 0.375rem;
+}
+/* У поля фильтра обводка идёт внутрь: снаружи её съедает соседняя ячейка сетки. */
+select:focus-visible,
+.date-trigger:focus-visible {
+  outline-offset: -1px;
+}
+
+/* Ссылка «к содержимому»: первая по Tab, видна только когда на ней фокус. */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -3rem;
+  z-index: 100;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.875rem;
+  transition: top 0.15s ease;
+}
+.skip-link:focus { top: 0.5rem; }
+
 /* Статусные цвета — единый источник для ячеек, бейджей и легенды. */
-.st-green   { background: var(--green-soft);   color: var(--green);   }
-.st-yellow  { background: var(--yellow-soft);  color: var(--yellow);  }
-.st-red     { background: var(--red-soft);     color: var(--red);     }
+.st-green   { background: var(--green-soft);   color: var(--green-ink);  }
+.st-yellow  { background: var(--yellow-soft);  color: var(--yellow-ink); }
+.st-red     { background: var(--red-soft);     color: var(--red-ink);    }
 .st-other_schedule,
-.st-no_data { background: var(--neutral-soft); color: var(--muted);   }
+.st-no_data { background: var(--neutral-soft); color: var(--muted);      }
 
 .dot-green   { background: var(--green);   }
 .dot-yellow  { background: var(--yellow);  }
 .dot-red     { background: var(--red);     }
 .dot-other_schedule,
 .dot-no_data { background: var(--neutral); }
+
+/*
+ * Пока страница пересобирается на сервере, содержимое гаснет и перестаёт
+ * ловить клики. Раньше единственным признаком работы был курсор-«часы» —
+ * его не видно ни на телефоне, ни краем глаза, и сайт выглядел зависшим.
+ */
+.is-busy {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+/* Заглушка на месте будущего блока — см. components/Skeleton.tsx. */
+.skeleton {
+  background: var(--neutral-soft);
+  border-radius: 0.5rem;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+/* Полоса загрузки под шапкой: тонкая, чтобы не спорить с содержимым. */
+.route-progress {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  z-index: 60;
+  background: var(--focus);
+  transform-origin: 0 50%;
+  animation: route-progress 1.6s ease-out infinite;
+}
+@keyframes route-progress {
+  0%   { transform: scaleX(0);    opacity: 1; }
+  70%  { transform: scaleX(0.85); opacity: 1; }
+  100% { transform: scaleX(1);    opacity: 0; }
+}
+
+/*
+ * Системная настройка «уменьшить анимацию» — не каприз: для части людей
+ * пульсация и бегущие полосы вызывают тошноту. Заглушки остаются видимыми,
+ * просто перестают мигать.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton { opacity: 0.7; }
+  .route-progress { transform: scaleX(1); opacity: 1; animation: none; }
+}
 
 /* Поля фильтров: нативный select, чтобы на телефоне открывался системный пикер. */
 select {
@@ -79,7 +228,9 @@ select {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
-  padding: 0.45rem 2rem 0.45rem 0.6rem;
+  /* 0.55rem по вертикали даёт 40px высоты вместо прежних 36 — ближе к
+     минимуму для пальца и заодно ровняет поле с соседними кнопками. */
+  padding: 0.55rem 2rem 0.55rem 0.6rem;
   font: inherit;
   font-size: 0.875rem;
   line-height: 1.25rem;
@@ -90,10 +241,6 @@ select {
   background-position: right 1.05rem center, right 0.75rem center;
   background-size: 0.3rem 0.3rem, 0.3rem 0.3rem;
   background-repeat: no-repeat;
-}
-select:focus-visible {
-  outline: 2px solid var(--text);
-  outline-offset: -1px;
 }
 
 /* Поле с крестиком сброса (см. ClearButton): освобождаем справа место под
@@ -113,29 +260,40 @@ select:focus-visible {
 /*
  * Шапка с датами прилипает только внутри блока, у которого есть собственный
  * вертикальный скролл: `position: sticky` считается от ближайшего предка со
- * скроллом, а `.radar-scroll` до этого прокручивался лишь вбок — заголовок
- * уезжал вместе со страницей, и на восьмидесяти лавках было не понять, какой
- * столбец какое число.
+ * скроллом. И такой предок у таблицы есть всегда — им её делает сам
+ * `overflow-x: auto`: по спецификации, стоит одной оси перестать быть
+ * `visible`, как вторая тоже становится скроллящейся. Пока у блока не было
+ * заданной высоты, прокручиваться по вертикали внутри него было нечему —
+ * заголовок уезжал вместе со страницей, и на восьмидесяти лавках было не
+ * понять, какой столбец какое число.
  *
- * Поэтому на широком экране радар занимает окно целиком: заголовок и фильтры
- * стоят, прокручивается одна таблица. На телефоне так не делаем — там на
- * таблицу осталось бы полторы строки, а дат в кадре всё равно три-четыре.
+ * Поэтому радар занимает окно целиком: заголовок и фильтры стоят,
+ * прокручивается одна таблица. Раньше так было только на широком экране —
+ * на телефоне заголовок с числами всё равно уезжал, а именно там он нужнее
+ * всего: в кадр помещается три-четыре дня, и без подписи они безымянны.
+ * Место под таблицу на телефоне нашлось, когда фильтры уехали под
+ * раскрывающийся заголовок (см. Filters).
  */
-@media (min-width: 640px) {
-  .radar-shell {
-    /* Шапка сайта (~3.75rem) + вертикальные поля main (3rem) + запас. */
-    height: calc(100dvh - 7.5rem);
-  }
-  .radar-shell > .radar-scroll {
-    /* Сжимается до свободного места, но не растягивается: у пяти строк под
-       фильтром не должно быть полупустой рамки во весь экран. */
-    flex: 0 1 auto;
-    min-height: 12rem;
-    overflow: auto;
-    /* Долистав таблицу до низа, не утаскиваем за собой страницу. */
-    overscroll-behavior: contain;
-  }
+.radar-shell {
+  /*
+   * Высоту шапки меряет она сама (см. layout.tsx: --header-h ставится
+   * из ResizeObserver), а не константа: раньше здесь стояло «минус 7.5rem»,
+   * и стоило шапке перенестись на две строки или появиться жёлтой плашке
+   * «вкладки без пароля» — таблица уезжала за нижний край экрана.
+   */
+  height: calc(100dvh - var(--header-h, 3.75rem) - 3rem);
 }
+.radar-shell > .radar-scroll {
+  /* Сжимается до свободного места, но не растягивается: у пяти строк под
+     фильтром не должно быть полупустой рамки во весь экран. Нижняя граница —
+     примерно шесть строк: меньше, и таблица перестаёт быть таблицей. */
+  flex: 0 1 auto;
+  min-height: 18rem;
+  overflow: auto;
+  /* Долистав таблицу до низа, не утаскиваем за собой страницу. */
+  overscroll-behavior: contain;
+}
+
 .radar-table { border-collapse: separate; border-spacing: 0; }
 .radar-table th, .radar-table td { border-bottom: 1px solid var(--border); }
 .radar-sticky {
@@ -147,6 +305,29 @@ select:focus-visible {
 }
 .radar-table thead th { position: sticky; top: 0; z-index: 3; background: var(--surface); }
 .radar-table thead th.radar-sticky { z-index: 4; }
+
+/*
+ * Подсветка строки под курсором.
+ *
+ * Восемьдесят лавок на тридцать дат — глаз теряет строку на полпути, и
+ * статус читается не у той лавки. Подсветка обязана доставать и до
+ * закреплённой первой колонки: у неё собственный фон, иначе название
+ * осталось бы белым островом посреди подсвеченной строки.
+ */
+.radar-table tbody tr:hover td,
+.radar-table tbody tr:focus-within td {
+  background: color-mix(in srgb, var(--focus) 7%, var(--surface));
+}
+.radar-table tbody tr:hover td.radar-sticky,
+.radar-table tbody tr:focus-within td.radar-sticky {
+  background: color-mix(in srgb, var(--focus) 10%, var(--surface));
+}
+/* Статусная ячейка свой цвет не отдаёт — иначе подсветка съедала бы данные. */
+.radar-table tbody tr:hover td [class^='st-'],
+.radar-table tbody tr:focus-within td [class^='st-'] {
+  outline: 1px solid color-mix(in srgb, var(--text) 25%, transparent);
+  outline-offset: -1px;
+}
 
 /* На телефоне длинное название лавки съедало всю ширину, и в кадр не попадало
    ни одного дня. Обрезаем его многоточием — полное имя остаётся в title. */
@@ -172,7 +353,7 @@ select:focus-visible {
   color: var(--text);
 }
 .showcase-note::placeholder {
-  color: color-mix(in srgb, var(--text) 35%, transparent);
+  color: color-mix(in srgb, var(--text) 45%, transparent);
 }
 .showcase-note:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--border) 60%, transparent);
@@ -182,4 +363,43 @@ select:focus-visible {
   border-color: var(--border);
   background: var(--surface);
   outline: none;
+}
+.showcase-note:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+
+/*
+ * Минимальный размер того, во что целятся пальцем.
+ *
+ * Крестик сброса был около 16 пикселей при рекомендованных 44: попасть в него
+ * с телефона можно было только со второго раза. Увеличиваем область нажатия,
+ * не увеличивая сам значок.
+ *
+ * `position` здесь НЕ задаётся намеренно. Обычный класс живёт вне каскадных
+ * слоёв, а утилиты Tailwind — внутри слоя `utilities`, и правило вне слоёв
+ * побеждает независимо от специфичности. Стоило написать здесь
+ * `position: relative`, как оно перебило `absolute` у крестика сброса — и тот
+ * встал не в углу поля, а рядом с полем, во всех фильтрах сразу.
+ *
+ * Поэтому позицию задаёт сам элемент: крестик уже `absolute`, значку
+ * подсказки проставлен `relative` в разметке.
+ */
+.tap::after {
+  content: '';
+  position: absolute;
+  inset: 50% 50% 50% 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+
+/* Таблица норм лавок: тот же приём, что у радара, — заголовок держится,
+   пока прокручиваешь восемьдесят строк внутри блока. */
+.norms-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
