@@ -565,20 +565,17 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
                     {shop.region && <span className="ml-2 text-xs muted">{shop.region}</span>}
                   </span>
 
-                  {/* Комментарий: поле без рамки, пока пустое, — восемьдесят
-                      строк с рамками превратили бы список в решётку. Рамка
-                      появляется, когда в поле что-то есть или на нём фокус. */}
-                  <input
-                    value={noteOf(shop, noteDrafts)}
-                    onChange={(e) => changeNote(shop.code, e.target.value)}
-                    disabled={readOnly}
-                    placeholder="комментарий"
-                    title={noteOf(shop, noteDrafts) || 'Комментарий к лавке за этот день'}
-                    aria-label={`Комментарий, ${shop.code}`}
-                    className="showcase-note min-w-0 flex-1 basis-40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-xs"
-                  />
+                  {/*
+                    Процент стоит в разметке раньше комментария, а на экране
+                    остаётся справа от него (order): так устроен порядок Tab.
 
-                  <div className="flex items-center gap-1.5">
+                    Раньше поля шли в обратном порядке, и Tab из процента уводил
+                    в комментарий СОСЕДНЕЙ лавки — человек, проходящий день по
+                    списку, через раз оказывался не там, где думал. Теперь Tab
+                    остаётся внутри строки: процент → комментарий той же лавки →
+                    процент следующей.
+                  */}
+                  <div className="order-2 flex items-center gap-1.5">
                     <input
                       ref={(el) => {
                         if (el) inputs.current.set(shop.code, el);
@@ -616,6 +613,27 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
                       {label(statusOf(shop, value, data.thresholds))}
                     </span>
                   </div>
+
+                  {/* Комментарий: поле без рамки, пока пустое, — восемьдесят
+                      строк с рамками превратили бы список в решётку. Рамка
+                      появляется, когда в поле что-то есть или на нём фокус. */}
+                  <input
+                    value={noteOf(shop, noteDrafts)}
+                    onChange={(e) => changeNote(shop.code, e.target.value)}
+                    onKeyDown={(e) => {
+                      // Дописал пояснение — Enter продолжает тот же ритм, что
+                      // и в поле процента: вниз, к следующей лавке.
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        focusNext(i);
+                      }
+                    }}
+                    disabled={readOnly}
+                    placeholder="комментарий"
+                    title={noteOf(shop, noteDrafts) || 'Комментарий к лавке за этот день'}
+                    aria-label={`Комментарий, ${shop.code}`}
+                    className="showcase-note order-1 min-w-0 flex-1 basis-40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-xs"
+                  />
                 </li>
               );
             })}
@@ -624,7 +642,8 @@ export function ShowcaseEditor({ initialDate }: { initialDate: string }) {
       </div>
 
       <p className="text-xs muted">
-        Значение вводится в процентах. Enter или ↓ — следующая лавка, ↑ — предыдущая. Пустое поле
+        Значение вводится в процентах. Enter или ↓ — следующая лавка, ↑ — предыдущая,
+        Tab — комментарий этой же лавки. Пустое поле
         означает «в этот день не заполняли»: такая лавка в средние значения не входит. Комментарий
         рядом — свободный текст на случай «не привезли ягоды»; на цифры он не влияет. Сохраняется
         само, а последнее изменение отменяется кнопкой «Отменить» или Ctrl+Z. Галочка

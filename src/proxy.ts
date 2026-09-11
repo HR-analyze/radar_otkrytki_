@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { COOKIE, isManaged, isPublic, isUnlocked } from './lib/auth';
+import { looksLikeShopCode } from './lib/shops';
 
 /**
  * Пароль на вкладки, где данные правят: «Витрины», «История», «Пороги».
@@ -13,6 +14,19 @@ import { COOKIE, isManaged, isPublic, isUnlocked } from './lib/auth';
  */
 export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
+
+  /*
+   * Мусорный адрес лавки отсекаем здесь, до рендера: страница зовёт
+   * `notFound()` уже во время отрисовки, когда ответ начал передаваться со
+   * статусом 200 и поменять его нельзя. Человек и раньше видел «такой
+   * страницы нет», но мониторинг и поисковики получали «всё хорошо».
+   *
+   * Отсекаем только по формату кода — почему именно так, см. looksLikeShopCode.
+   */
+  const shop = /^\/shop\/([^/]+)\/?$/.exec(pathname);
+  if (shop && !looksLikeShopCode(safeDecode(shop[1]))) {
+    return NextResponse.rewrite(new URL('/not-found', req.url), { status: 404 });
+  }
 
   if (isPublic(pathname) || !isManaged(pathname)) return NextResponse.next();
   if (await isUnlocked(req.cookies.get(COOKIE)?.value)) return NextResponse.next();
@@ -47,3 +61,12 @@ export const config = {
  * после неё, проверка бы не увидела. Proxy работает на Node по умолчанию, а
  * сам параметр здесь запрещён — с ним файл падает с ошибкой.
  */
+
+/** Кривая кодировка в адресе — не повод падать: считаем такой код негодным. */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}

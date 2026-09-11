@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { compareShopNumber, shopNumber } from './shops';
+import { compareShopNumber, looksLikeShopCode, shopNumber } from './shops';
 
 /**
  * Порядок «как в справочнике» — не алфавитный, и именно в этом смысл:
@@ -36,4 +36,21 @@ test('число из кода лавки: ведущий ноль не меша
 test('код без цифр не превращается в ноль', () => {
   // Number('') даёт 0 — с ним лавка «РЦ» уехала бы в самое начало списка.
   assert.equal(shopNumber('РЦ'), Number.MAX_SAFE_INTEGER);
+});
+
+/**
+ * Проверка формата нужна в proxy — до того, как страница начала отвечать.
+ * Отвергнуть настоящий код она не должна ни при каких обстоятельствах:
+ * коды и извлекаются этой же регуляркой.
+ */
+test('коды лавок узнаются, в том числе из чужой раскладки и с нулём', () => {
+  for (const code of ['М1', 'М12', 'М09', 'M1', 'м 12', 'РЦ12', 'М1 Милютинский']) {
+    assert.equal(looksLikeShopCode(code), true, code);
+  }
+});
+
+test('мусор в адресе кодом не считается', () => {
+  for (const junk of ['НЕТ-ТАКОЙ', '', '   ', 'справочник', '12', '..', 'М']) {
+    assert.equal(looksLikeShopCode(junk), false, JSON.stringify(junk));
+  }
 });
