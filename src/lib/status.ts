@@ -4,6 +4,7 @@ import type {
   CriterionConfig,
   CriterionKey,
   RoleMapEntry,
+  ShopClosure,
   ShopSchedule,
   Status,
   ThresholdConfig,
@@ -255,6 +256,39 @@ export function listSchedules(config: ThresholdConfig): { code: string; schedule
   return Object.keys(config.shopSchedules ?? {})
     .map((code) => ({ code, schedule: scheduleFor(config, code) }))
     .filter((x): x is { code: string; schedule: ShopSchedule } => x.schedule !== undefined)
+    .sort((a, b) => a.code.localeCompare(b.code, 'ru'));
+}
+
+/**
+ * Закрытие лавки — см. ThresholdConfig.shopClosures.
+ *
+ * Ключи на `$` — комментарии конфига, как и в shopSchedules: без этой проверки
+ * `$comment` считался бы лавкой с невнятной датой закрытия.
+ */
+export function closureOf(config: ThresholdConfig, shopCode?: string): ShopClosure | undefined {
+  if (!shopCode || shopCode.startsWith('$')) return undefined;
+
+  const closure = config.shopClosures?.[shopCode];
+  return closure && typeof closure.closedFrom === 'string' ? closure : undefined;
+}
+
+/**
+ * Работала ли лавка в этот день.
+ *
+ * `closedFrom` — первый день, когда лавки уже нет: 14.09 закрыта, 13.09 ещё
+ * работала. Дата закрытия названа днём закрытия, а не последним рабочим днём,
+ * потому что так её и сообщают: «с 14.09 больше не работает».
+ */
+export function isOpenOn(config: ThresholdConfig, shopCode: string, date: string): boolean {
+  const closure = closureOf(config, shopCode);
+  return !closure || date < closure.closedFrom;
+}
+
+/** Все закрытые лавки: код и закрытие, без служебных ключей конфига. */
+export function listClosures(config: ThresholdConfig): { code: string; closure: ShopClosure }[] {
+  return Object.keys(config.shopClosures ?? {})
+    .map((code) => ({ code, closure: closureOf(config, code) }))
+    .filter((x): x is { code: string; closure: ShopClosure } => x.closure !== undefined)
     .sort((a, b) => a.code.localeCompare(b.code, 'ru'));
 }
 

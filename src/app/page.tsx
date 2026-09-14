@@ -59,7 +59,8 @@ export default async function DashboardPage({
   const [regions, shops, summary, totals, top, best, weak, fill, runAttendance, runShowcase] =
     await Promise.all([
       listRegions(p.from, p.to),
-      listShops(),
+      // Лавки выбранного периода: закрытая до него в фильтр не попадает.
+      listShops(p.from),
       summaryByCriterion(filters),
       shopTotals(filters),
       antiTop(filters),

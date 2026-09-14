@@ -3,7 +3,7 @@ import { NormsEditor } from '@/components/NormsEditor';
 import { yellowStep, normsEnabled } from '@/lib/norms';
 import { areNormsStale, isSnapshotStale, isWritable } from '@/lib/snapshot';
 import { readNorms } from '@/lib/shop-norms-store';
-import { listSchedules, scheduleShift } from '@/lib/status';
+import { listClosures, listSchedules, scheduleShift } from '@/lib/status';
 import { CRITERION_ORDER, type ThresholdConfig } from '@/lib/types';
 import { plural } from '@/lib/plural';
 
@@ -24,6 +24,9 @@ export default async function SettingsPage() {
     ...x,
     shift: scheduleShift(config, x.code),
   }));
+  // Закрытые лавки: правило рядом с порогами, иначе пропавшая из списков
+  // лавка выглядит потерей данных, а не решением.
+  const closures = listClosures(config);
   const network = config.rules.opensAt?.network ?? '—';
   const cook = config.criteria.cook;
   const cookGreen = cook.kind === 'time' ? cook.greenUntil : null;
@@ -169,6 +172,36 @@ export default async function SettingsPage() {
         </section>
       )}
 
+      {closures.length > 0 && (
+        <section className="surface p-4">
+          <h2 className="text-sm font-semibold">Закрытые лавки</h2>
+          <p className="mt-0.5 text-xs muted">
+            С указанного дня лавка не попадает в списки, фильтры и счётчики. Дни до него остаются
+            в радаре целиком: закрытие не стирает историю, иначе сравнить «до» и «после» было бы
+            не с чем.
+          </p>
+          <table className="mt-3 w-full text-sm">
+            <thead>
+              <tr className="text-xs muted">
+                <th className="pb-1.5 pr-3 text-left font-medium">Лавка</th>
+                <th className="pb-1.5 pr-3 text-left font-medium">Не работает с</th>
+                <th className="pb-1.5 text-left font-medium">Последний день в радаре</th>
+              </tr>
+            </thead>
+            <tbody>
+              {closures.map(({ code, closure }) => (
+                <tr key={code} className="border-t" style={{ borderColor: 'var(--border)' }}>
+                  <td className="py-1.5 pr-3 font-medium">{code}</td>
+                  <td className="py-1.5 pr-3 tabular-nums">{closure.closedFrom}</td>
+                  <td className="py-1.5 tabular-nums muted">{dayBefore(closure.closedFrom)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-2 text-xs muted">{closures[0].closure.note}</p>
+        </section>
+      )}
+
       <section className="surface p-4">
         <h2 className="text-sm font-semibold">Правила расчёта</h2>
         <dl className="mt-3 flex flex-col gap-3 text-sm">
@@ -297,6 +330,13 @@ function departureLine(
     `${plural(zones.green, 'балл', 'балла', 'баллов')} · ` +
     `🟡 до ${rule.yellowUntil} — ${zones.yellow} · 🔴 позже — ${zones.red}`
   );
+}
+
+/** «2026-09-14» → «2026-09-13»: последний день, когда лавка ещё работала. */
+function dayBefore(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function zonesLine(z: ThresholdConfig['rules']['scoreZones']): string {

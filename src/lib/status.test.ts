@@ -6,6 +6,9 @@ import {
   averageScore,
   mapRole,
   resolveArrival,
+  closureOf,
+  isOpenOn,
+  listClosures,
   listSchedules,
   scheduleFor,
   scheduleShift,
@@ -422,4 +425,26 @@ test('служебные ключи конфига не принимаются �
     'в списке графиков не должно быть служебных ключей',
   );
   assert.deepEqual(listSchedules(config).map((x) => x.code), ['М71', 'М72']);
+
+  // То же самое у закрытий: ключ на $ — комментарий, а не лавка.
+  assert.equal(closureOf(config, '$comment'), undefined);
+  assert.ok(
+    listClosures(config).every((x) => !x.code.startsWith('$')),
+    'в списке закрытых лавок не должно быть служебных ключей',
+  );
+});
+
+test('закрытая лавка исчезает с даты закрытия, а прошлые дни остаются', () => {
+  const config = loadConfig();
+  const closure = closureOf(config, 'М15');
+  assert.ok(closure, 'М15 закрыта с 14.09.2026 — правило должно лежать в конфиге');
+
+  // Граница включительная в ту сторону, как о ней говорят: «не работает с 14-го».
+  assert.equal(isOpenOn(config, 'М15', '2026-09-13'), true, '13-го ещё работала');
+  assert.equal(isOpenOn(config, 'М15', '2026-09-14'), false, '14-го уже нет');
+  assert.equal(isOpenOn(config, 'М15', '2026-09-15'), false);
+  assert.equal(isOpenOn(config, 'М15', '2026-08-25'), true, 'август трогать нельзя');
+
+  // Остальные лавки закрытие не задевает.
+  assert.equal(isOpenOn(config, 'М1', '2026-09-14'), true);
 });

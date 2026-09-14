@@ -139,6 +139,13 @@ export interface ShopSchedule {
   note: string;
 }
 
+/** Закрытая лавка — см. ThresholdConfig.shopClosures. */
+export interface ShopClosure {
+  /** Первый день, когда лавки уже нет: «2026-09-14». */
+  closedFrom: string;
+  note: string;
+}
+
 export interface ThresholdConfig {
   version: number;
   updatedAt: string;
@@ -160,6 +167,16 @@ export interface ThresholdConfig {
    * иначе она была бы вечно красной за то, что работает по своему расписанию.
    */
   shopSchedules?: Record<string, ShopSchedule>;
+  /**
+   * Закрытые лавки. Ключ — код лавки (М15), значение — день, с которого она
+   * больше не работает.
+   *
+   * Именно закрытие с даты, а не удаление: лавка исчезает из списков и
+   * счётчиков, начиная с этого дня, но её прошлые дни остаются в радаре
+   * целиком. Иначе закрытие одной лавки задним числом переписало бы август у
+   * всей сети — и сравнить «до» и «после» стало бы не с чем.
+   */
+  shopClosures?: Record<string, ShopClosure>;
   rules: {
     /** Обычное время открытия лавки — база, от которой считается сдвиг порогов. */
     opensAt?: { network: string; note: string };

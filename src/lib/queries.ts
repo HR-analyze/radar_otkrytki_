@@ -9,7 +9,7 @@ import {
   type Status,
   type ThresholdConfig,
 } from './types';
-import { aggregateStatuses, roundScore, statusFromScore } from './status';
+import { aggregateStatuses, isOpenOn, roundScore, statusFromScore } from './status';
 import { parseClock } from './time';
 import { compareShopNumber, isExactCode, matchesShop, shopNumber } from './shops';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
@@ -116,9 +116,22 @@ async function showcaseIndex(): Promise<Map<string, Status>> {
 
 /* ------------------------------- справочники ----------------------------- */
 
-export async function listShops(): Promise<ShopRow[]> {
+/**
+ * Справочник лавок.
+ *
+ * `since` — первый день периода, который смотрят. Лавка, закрытая до него,
+ * в список не попадает: она уже не работает, и предлагать её в фильтрах и
+ * формах незачем. Без `since` возвращаются все лавки, что когда-либо были, —
+ * так справочник и должен выглядеть там, где период ни при чём.
+ *
+ * Закрытую лавку нельзя просто выкинуть из снимка: её прошлые дни остаются
+ * в радаре, и период, задевающий их, обязан её показать (см. shopClosures).
+ */
+export async function listShops(since?: string): Promise<ShopRow[]> {
   const s = await loadSnapshot();
-  return [...s.shops].sort(byShopNumber);
+  const config = loadConfig();
+  const shops = since ? s.shops.filter((x) => isOpenOn(config, x.code, since)) : s.shops;
+  return [...shops].sort(byShopNumber);
 }
 
 export interface RegionOptions {
@@ -303,7 +316,7 @@ async function shopsIn(
   from: string,
   to: string,
 ): Promise<ShopRow[]> {
-  const shops = await listShops();
+  const shops = await listShops(from);
   let byRegion = shops;
 
   if (region) {

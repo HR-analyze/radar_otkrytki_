@@ -32,7 +32,9 @@ export async function GET(req: Request) {
   const store = await readShowcase();
   const values = store.days[date] ?? {};
   const notes = store.notes[date] ?? {};
-  const shops = await listShops();
+  // Лавки на этот день: закрытая в список заполнения не попадает, но её
+  // прошлые дни открываются как прежде (см. shopClosures).
+  const shops = await listShops(date);
 
   return NextResponse.json({
     ok: true,

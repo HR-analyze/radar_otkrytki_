@@ -11,7 +11,7 @@ import {
 } from '@/lib/queries';
 import { formatClock, formatDay, formatDuration, shortDate } from '@/lib/time';
 import { StatusBadge, STATUS_TEXT } from '@/components/Status';
-import { scheduleFor, scheduleShift } from '@/lib/status';
+import { closureOf, scheduleFor, scheduleShift } from '@/lib/status';
 import { CRITERION_ORDER, type CriterionKey } from '@/lib/types';
 import { RATING_COMPONENT_TITLE } from '@/lib/rating';
 import { plural } from '@/lib/plural';
@@ -54,10 +54,11 @@ export default async function ShopPage({
 
   const [history, shops] = await Promise.all([
     shopHistory(shop.code, p.from, p.to),
-    listShops(),
+    listShops(p.from),
   ]);
   const schedule = scheduleFor(config, shop.code);
   const shift = scheduleShift(config, shop.code);
+  const closure = closureOf(config, shop.code);
 
   return (
     <div className="flex flex-col gap-5">
@@ -79,6 +80,15 @@ export default async function ShopPage({
           <p className="mt-1 text-sm ink-yellow">
             Лавка открывается с {schedule.opensAt}: пороги для неё сдвинуты на{' '}
             {Math.round(shift / 60)} ч относительно общих.
+          </p>
+        )}
+        {/* Карточка закрытой лавки открывается как прежде: её прошлые дни
+            никуда не делись, и смотреть их — законное дело. Но без подписи
+            пустой сентябрь выглядел бы поломкой радара. */}
+        {closure && (
+          <p className="mt-1 text-sm ink-yellow">
+            Лавка не работает с {shortDate(closure.closedFrom)}. Дни до этой даты остаются в
+            радаре, после — данных не будет.
           </p>
         )}
       </div>

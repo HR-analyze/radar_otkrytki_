@@ -4,6 +4,7 @@ import { yellowStep, normsEnabled } from '@/lib/norms';
 import { parseCookTimes, parseNormTime } from '@/lib/parsers/shop-norms';
 import { listShops } from '@/lib/queries';
 import { invalidateSnapshot } from '@/lib/snapshot';
+import { todayIso } from '@/lib/time';
 import {
   canEditNorms,
   normsEditHint,
@@ -33,7 +34,8 @@ export async function GET() {
   // Лавки радара — те, что есть в выгрузках. Справочник шире: в нём попадаются
   // лавки, которых в отметках ещё нет. Показываем и те, и другие, но лавку
   // радара — с именем из выгрузки: оно свежее справочника.
-  const shops = await listShops();
+  // Нормы нужны действующим лавкам: закрытой их больше не задают.
+  const shops = await listShops(todayIso());
   const names = new Map(shops.map((s) => [s.code, s.name]));
 
   const codes = [...new Set([...shops.map((s) => s.code), ...Object.keys(store.byCode)])];

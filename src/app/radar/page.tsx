@@ -17,7 +17,10 @@ export default async function RadarPage({
   const sp = await searchParams;
   const p = await resolveParams(sp, { criterion: DEFAULT_CRITERION });
   const config = loadConfig();
-  const [regions, shops] = await Promise.all([listRegions(p.from, p.to), listShops()]);
+  const [regions, shops] = await Promise.all([
+    listRegions(p.from, p.to),
+    listShops(p.from),
+  ]);
 
   // Критерий виден в подписи, а не только в фильтре: иначе неочевидно,
   // почему в ячейках именно витрина.
