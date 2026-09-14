@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { contest } from '@/lib/queries';
+import { CONTEST_START } from '@/lib/contest';
 import { contestReportFilename, renderContestReport } from '@/lib/contest-pdf';
 import { resolveParams } from '@/lib/params';
 
@@ -15,7 +16,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(req: Request) {
   const sp = Object.fromEntries(new URL(req.url).searchParams);
-  const p = await resolveParams(sp);
+  // Та же нижняя граница, что и на вкладке, — иначе PDF по ссылке с
+  // `from=2026-09-01` посчитал бы дни до старта конкурса.
+  const p = await resolveParams(sp, { minDate: CONTEST_START });
 
   const { dates, rows, regions, total } = await contest({
     from: p.from,

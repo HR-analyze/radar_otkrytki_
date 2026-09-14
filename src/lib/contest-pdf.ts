@@ -159,8 +159,10 @@ function kpiRow(
   shops: number,
   days: number,
 ): Content {
-  const tiles: [string, string, string][] = [
-    ['Баллов у сети', formatPoints(total.points), `за ${total.rated} оценённых дней`],
+  // У суммы баллов подписи нет намеренно: как и на вкладке, «за N оценённых
+  // дней» под цифрой читалось как «столько баллов за день».
+  const tiles: [string, string, string?][] = [
+    ['Баллов у сети', formatPoints(total.points)],
     ['Средний балл за день', mean == null ? '—' : formatPoints(mean), 'сумма ÷ оценённые дни'],
     ['Лавок в конкурсе', String(shops), `дней с витриной: ${days}`],
   ];
@@ -180,7 +182,7 @@ function kpiRow(
               stack: [
                 { text: title, fontSize: 7, color: MUTED },
                 { text: value, fontSize: 15, bold: true, margin: [0, 2, 0, 1] },
-                { text: hint, fontSize: 6.5, color: MUTED },
+                { text: hint ?? '', fontSize: 6.5, color: MUTED },
               ],
             },
           ],

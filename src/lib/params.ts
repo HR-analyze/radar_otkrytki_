@@ -52,6 +52,12 @@ export interface ParamDefaults {
    * По умолчанию — DEFAULT_CRITERION (наполнение витрины).
    */
   criterion?: CriterionKey;
+  /**
+   * День, раньше которого страница не смотрит вовсе (ISO). Нужен конкурсу:
+   * он идёт с 14.09.2026, и дни до старта не должны попадать ни в календарь,
+   * ни в баллы — в том числе по ссылке с `from=2026-09-01`, набранной руками.
+   */
+  minDate?: string;
 }
 
 /**
@@ -78,7 +84,10 @@ export async function resolveParams(
   sp: Record<string, string | string[] | undefined>,
   defaults: ParamDefaults = {},
 ): Promise<ResolvedParams> {
-  const dates = await listDates();
+  const min = defaults.minDate;
+  // Дни до старта отрезаем сразу: дальше из этого списка берутся и период по
+  // умолчанию, и подсветка календаря, и быстрые периоды.
+  const dates = (await listDates()).filter((d) => !min || d >= min);
   const { from: fallbackFrom, to: fallbackTo } = defaultRange(dates);
 
   const one = (k: string): string | undefined => {
@@ -91,6 +100,13 @@ export async function resolveParams(
   let from = isDate(one('from')) ? (one('from') as string) : fallbackFrom;
   let to = isDate(one('to')) ? (one('to') as string) : fallbackTo;
   if (from > to) [from, to] = [to, from];
+
+  // Ссылка из чужой вкладки или руками набранный `from` не должны утащить
+  // конкурс к дням до старта: подтягиваем обе границы к нижнему пределу.
+  if (min) {
+    if (from < min) from = min;
+    if (to < min) to = min;
+  }
 
   const criterion = resolveCriterion(one('criterion'), defaults.criterion);
 

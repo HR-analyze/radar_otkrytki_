@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { loadConfig } from '@/lib/config';
 import { resolveParams } from '@/lib/params';
 import { contest, listRegions, listShops } from '@/lib/queries';
-import { averagePoints, formatPoints } from '@/lib/contest';
+import { CONTEST_START, averagePoints, formatPoints } from '@/lib/contest';
 import { shortDate } from '@/lib/time';
 import { Filters } from '@/components/Filters';
 import { plural } from '@/lib/plural';
@@ -29,7 +29,8 @@ export default async function ContestPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const p = await resolveParams(sp);
+  // Конкурс идёт с 14.09.2026: дни до старта не показываем и не считаем.
+  const p = await resolveParams(sp, { minDate: CONTEST_START });
   const config = loadConfig();
   const [regions, shops] = await Promise.all([listRegions(p.from, p.to), listShops()]);
 
@@ -89,7 +90,11 @@ export default async function ContestPage({
         <div className="surface p-8 text-center text-sm muted">
           {p.shop
             ? `По запросу «${p.shop}» витрин за период не нашлось. Попробуйте код (М17) или часть названия.`
-            : 'За выбранный период витрины не заполняли. Расширь период или сними фильтр по РМ.'}
+            : /* Расширять период вниз некуда: до старта конкурса дней нет — и
+                 совет «расширь период» сбивал бы с толку именно в первые дни. */
+              p.dates.length === 0
+              ? `Конкурс идёт с ${shortDate(CONTEST_START)}. Данных за конкурсные дни ещё нет — дождись ближайшей выгрузки.`
+              : 'За выбранный период витрины не заполняли. Возьми другой период или сними фильтр по РМ.'}
         </div>
       ) : (
         <>
@@ -97,7 +102,8 @@ export default async function ContestPage({
             <Tile
               title="Баллов у сети"
               value={formatPoints(total.points)}
-              hint={`за ${total.rated} ${plural(total.rated, 'оценённый день', 'оценённых дня', 'оценённых дней')}`}
+              /* Без подписи: «за N оценённых дней» под суммой читалось как
+                 «баллы за день» и путало — само число есть в подсказке. */
               explain="Сумма баллов всех лавок за все дни периода: зелёный день даёт +1, жёлтый 0, красный −1. Дни без заполненной витрины не считаются вовсе."
             />
             <Tile
@@ -211,7 +217,8 @@ function Tile({
 }: {
   title: string;
   value: string;
-  hint: string;
+  /** Подпись под цифрой. Не передана — плитка обходится без неё. */
+  hint?: string;
   /** Как получилась цифра — если из подписи это не очевидно. */
   explain?: string;
 }) {
@@ -222,7 +229,7 @@ function Tile({
         {explain && <Hint text={explain} />}
       </div>
       <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
-      <div className="mt-0.5 text-xs muted">{hint}</div>
+      {hint && <div className="mt-0.5 text-xs muted">{hint}</div>}
     </div>
   );
 }
