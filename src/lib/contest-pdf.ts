@@ -163,7 +163,7 @@ function kpiRow(
   // дней» под цифрой читалось как «столько баллов за день».
   const tiles: [string, string, string?][] = [
     ['Баллов у сети', formatPoints(total.points)],
-    ['Средний балл за день', mean == null ? '—' : formatPoints(mean), 'сумма ÷ оценённые дни'],
+    ['Средний балл за день', mean == null ? '—' : formatPoints(mean), 'сумма ÷ оценённые лавко-дни'],
     ['Лавок в конкурсе', String(shops), `дней с витриной: ${days}`],
   ];
 
@@ -307,7 +307,6 @@ function regionsTable(regions: ContestRegionRow[]): Content {
     { text: 'РМ', style: 'th' },
     { text: 'Лавок', style: 'th', alignment: 'right' },
     { text: 'кр / жл / зл', style: 'th', alignment: 'right' },
-    { text: 'Дней с оценкой', style: 'th', alignment: 'right' },
     { text: 'Витрина', style: 'th', alignment: 'right' },
     { text: 'Ср. балл', style: 'th', alignment: 'right' },
     { text: 'Баллы', style: 'th', alignment: 'right' },
@@ -323,7 +322,6 @@ function regionsTable(regions: ContestRegionRow[]): Content {
         alignment: 'right',
         color: MUTED,
       },
-      { text: String(r.score.rated), alignment: 'right', color: MUTED },
       {
         text: r.avgFill == null ? '—' : `${Math.round(r.avgFill * 100)}%`,
         alignment: 'right',
@@ -344,7 +342,7 @@ function regionsTable(regions: ContestRegionRow[]): Content {
       headerRows: 1,
       // Имя РМ — звёздочкой: считать остаток вручную нельзя, к ширинам
       // прибавляются отступы ячеек, и последняя колонка уезжала за край листа.
-      widths: ['*', 40, 70, 74, 50, 50, 44],
+      widths: ['*', 40, 70, 50, 50, 44],
       body: [head, ...body],
     },
     layout: rowsLayout(),

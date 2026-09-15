@@ -109,7 +109,9 @@ export default async function ContestPage({
             <Tile
               title="Средний балл за день"
               value={avg == null ? '—' : formatPoints(avg)}
-              hint="сумма баллов ÷ оценённые дни"
+              /* Не «÷ дни»: знаменатель — лавко-дни, сумма по всем лавкам.
+                 Одиннадцать лавок за два дня дают 22, а не 2. */
+              hint="сумма баллов ÷ оценённые лавко-дни"
               explain="Сравнивать сети и РМ между собой можно только по этой цифре: сумма баллов у того, кто ведёт двенадцать лавок, больше просто потому, что лавок больше."
             />
             <Tile
@@ -152,7 +154,7 @@ export default async function ContestPage({
                       <th className="px-2 py-2 text-right text-xs font-medium muted">
                         <span className="inline-flex items-center gap-1">
                           Ср. балл
-                          <Hint text="Сумма баллов ÷ оценённые дни. Именно по нему таблица и отсортирована: сумма у РМ с двенадцатью лавками больше просто потому, что лавок больше." />
+                          <Hint text="Сумма баллов ÷ оценённые лавко-дни: средний балл одной лавки за один день. Именно по нему таблица и отсортирована — сумма у РМ с двенадцатью лавками больше просто потому, что лавок больше." />
                         </span>
                       </th>
                       <th className="px-2 py-2 text-right text-xs font-medium muted">Баллы</th>
@@ -183,7 +185,7 @@ export default async function ContestPage({
                           </td>
                           <td
                             className="px-2 py-1.5 text-right text-sm font-semibold tabular-nums"
-                            title={`${r.score.rated} ${plural(r.score.rated, 'оценённый день', 'оценённых дня', 'оценённых дней')}`}
+                            title={`${r.score.rated} ${plural(r.score.rated, 'оценённый лавко-день', 'оценённых лавко-дня', 'оценённых лавко-дней')}`}
                           >
                             {formatPoints(r.score.points)}
                           </td>

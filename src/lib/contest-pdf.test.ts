@@ -114,3 +114,26 @@ test('PDF собирается и открывается как PDF', async () =
   assert.equal(pdf.subarray(0, 5).toString('latin1'), '%PDF-', 'это не PDF');
   assert.match(pdf.subarray(-1024).toString('latin1'), /%%EOF/, 'файл оборван');
 });
+
+test('в таблице РМ столько же ширин, сколько колонок', () => {
+  // Колонку «Дней с оценкой» убрали (у РМ это была сумма по его лавкам, а не
+  // дни). Ширины задаются отдельным массивом, и рассинхрон с колонками ломает
+  // вёрстку таблицы молча — поэтому проверяем их вместе.
+  const doc = contestReportDefinition(input());
+  const tables = (doc.content as { table?: { body?: unknown[][]; widths?: unknown[] } }[]).filter(
+    (c) => Array.isArray(c.table?.body),
+  );
+  // Именно по первой ячейке: в таблице лавок «РМ» тоже есть, но колонкой в
+  // середине — поиск по всей строке нашёл бы не ту таблицу и ничего не проверил.
+  const first = (c: { table?: { body?: unknown[][] } }) =>
+    (c.table?.body?.[0]?.[0] as { text?: string } | undefined)?.text;
+  const regions = tables.find((c) => first(c) === 'РМ');
+
+  assert.ok(regions, 'таблица РМ пропала из отчёта');
+  assert.equal(
+    regions.table!.widths!.length,
+    regions.table!.body![0].length,
+    'ширины разошлись с колонками',
+  );
+  assert.doesNotMatch(JSON.stringify(regions.table!.body![0]), /Дней с оценкой/);
+});
