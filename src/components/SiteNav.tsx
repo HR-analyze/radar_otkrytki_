@@ -21,7 +21,7 @@ const TABS: { href: string; label: string; keys: readonly string[] }[] = [
   { href: '/radar', label: 'Радар по лавкам', keys: [...SHARED, 'criterion', 'status'] },
   { href: '/showcase', label: 'Витрины', keys: [] },
   { href: '/contest', label: 'Конкурс', keys: SHARED },
-  { href: '/driver-cook', label: 'Сверка отметок', keys: SHARED },
+  { href: '/violations', label: 'Нарушения', keys: SHARED },
   { href: '/history', label: 'История', keys: [] },
   { href: '/settings', label: 'Пороги', keys: [] },
 ];
