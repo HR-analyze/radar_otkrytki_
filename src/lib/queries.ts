@@ -14,10 +14,13 @@ import { parseClock } from './time';
 import { compareShopNumber, isExactCode, matchesShop, shopNumber } from './shops';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
 import {
-  analyzeDriverCook,
-  type DriverCookOptions,
-  type DriverCookReport,
-} from './driver-cook';
+  analyzeDepartures,
+  analyzeViolations,
+  type DeparturesReport,
+  type ViolationsOptions,
+  type ViolationsReport,
+} from './violations';
+import { readNorms } from './shop-norms-store';
 import type { DepartureRow } from './parsers/departure';
 import {
   addStatus,
@@ -522,9 +525,9 @@ export async function radar(
   return { dates, rows };
 }
 
-/* --------------------- сверка «водитель ↔ первый повар» ------------------- */
+/* ------------------------- нарушения открытия ----------------------------- */
 
-export interface DriverCookFilters {
+export interface ViolationsFilters {
   from: string;
   to: string;
   region?: string;
@@ -532,30 +535,41 @@ export interface DriverCookFilters {
   shop?: string;
 }
 
+export interface ViolationsResult {
+  report: ViolationsReport;
+  departures: DeparturesReport;
+}
+
 /**
- * Пары «отметка водителя ↔ отметка первого повара» под фильтрами страницы.
+ * Нарушения открытия под фильтрами страницы.
  *
- * Фильтры те же, что у радара, и считаются тем же способом: РМ — по истории
- * (лавка, перешедшая в сентябре, в августе остаётся за прежним), поиск лавки —
- * по коду или части названия. Иначе «сверка по Осину» и «радар по Осину»
- * показывали бы разные наборы лавок.
+ * Фильтры те же, что у радара, и считаются его же способом: РМ — по истории,
+ * поиск лавки — по коду или части названия. Иначе «нарушения по Осину» и
+ * «радар по Осину» показывали бы разные наборы лавок.
  *
- * Разбор пар живёт в `driver-cook.ts` — здесь только выборка.
+ * Нормы берутся из хранилища, а не из снимка: правку на «Порогах» видно сразу,
+ * без пересборки. Выезд с РЦ фильтрами лавок не режется — связать выезд с
+ * лавкой не по чему (см. `rules.driverDeparture`), это сетевой список.
  */
-export async function driverCook(
-  filters: DriverCookFilters,
-  options: DriverCookOptions = {},
-): Promise<DriverCookReport> {
+export async function violations(
+  filters: ViolationsFilters,
+  options: ViolationsOptions = {},
+): Promise<ViolationsResult> {
   const snap = await loadSnapshot();
+  const config = loadConfig();
   const shops = await shopsMatching(filters.region, filters.shop, filters.from, filters.to);
   const allowed = new Set(shops.map((s) => s.code));
   const inRegion = await regionDayMatcher(filters.region);
+  const norms = (await readNorms()).byCode;
 
   const rows = snap.attendance.filter(
     (a) => allowed.has(a.shopCode) && inRegion(a.shopCode, a.date),
   );
 
-  return analyzeDriverCook(rows, filters.from, filters.to, options);
+  return {
+    report: analyzeViolations(rows, norms, config, filters.from, filters.to, options),
+    departures: analyzeDepartures(snap.departures, config, filters.from, filters.to),
+  };
 }
 
 /* ------------------------------- конкурс --------------------------------- */

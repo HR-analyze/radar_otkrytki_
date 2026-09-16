@@ -17,7 +17,7 @@
     "showcase:export": "tsx scripts/showcase-export.ts",
     "test": "tsx --test src/lib/*.test.ts src/lib/parsers/*.test.ts",
     "norms:build": "tsx scripts/build-shop-norms.ts",
-    "analyze:driver-cook": "tsx scripts/driver-cook.ts"
+    "analyze:violations": "tsx scripts/violations.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.10.0",
