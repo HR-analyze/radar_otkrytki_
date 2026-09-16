@@ -56,16 +56,26 @@ export default async function DriverCookPage({
           </p>
         </div>
         {s.pairs > 0 && (
-          /* Обычная ссылка, а не кнопка с JS: файл собирается на сервере и
-             должен скачиваться, даже если скрипты не загрузились. */
-          <a
-            href={`/api/driver-cook/report?${query.toString()}`}
-            className="rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap hover:opacity-90"
-            style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
-            title="Все пары за период с теми же фильтрами — таблицей для Excel"
-          >
-            ⬇ Скачать CSV
-          </a>
+          /* Обычные ссылки, а не кнопки с JS: файлы собираются на сервере и
+             должны скачиваться, даже если скрипты не загрузились. */
+          <div className="flex gap-2">
+            <a
+              href={`/api/driver-cook/report?${query.toString()}`}
+              className="rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap hover:opacity-90"
+              style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+              title="Отчёт за период с теми же фильтрами: итоги, динамика по дням, лавки, водители и список совпавших дней"
+            >
+              ⬇ Скачать PDF
+            </a>
+            <a
+              href={`/api/driver-cook/csv?${query.toString()}`}
+              className="rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap hover:opacity-90"
+              style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+              title="Все пары за период с теми же фильтрами — таблицей для Excel"
+            >
+              ⬇ CSV
+            </a>
+          </div>
         )}
       </div>
 

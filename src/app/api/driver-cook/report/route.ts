@@ -1,18 +1,17 @@
 import { NextResponse } from 'next/server';
 import { driverCook } from '@/lib/queries';
-import { toCsv } from '@/lib/driver-cook';
+import { driverCookReportFilename, renderDriverCookReport } from '@/lib/driver-cook-pdf';
 import { resolveParams } from '@/lib/params';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Все пары «водитель ↔ первый повар» за период — таблицей для Excel.
+ * PDF-отчёт по сверке отметок за выбранный период.
  *
  * Параметры те же, что у вкладки (from, to, region, shop) и разбираются тем же
- * resolveParams: иначе выгрузка по ссылке однажды показала бы не то, что на
- * экране. В файл идут все пары, а не только совпавшие, — чтобы в Excel можно
- * было отфильтровать по-своему и увидеть знаменатель.
+ * resolveParams — иначе отчёт по ссылке однажды показал бы не то, что на
+ * экране. Считается на сервере: см. driver-cook-pdf.ts.
  */
 export async function GET(req: Request) {
   const sp = Object.fromEntries(new URL(req.url).searchParams);
@@ -20,23 +19,25 @@ export async function GET(req: Request) {
 
   const report = await driverCook({ from: p.from, to: p.to, region: p.region, shop: p.shop });
 
-  if (report.pairs.length === 0) {
+  if (report.summary.pairs === 0) {
     return NextResponse.json(
       {
         ok: false,
         error:
-          'За этот период нет дней, где face id есть и у водителя, и у повара, — файл был бы пустым.',
+          'За этот период нет дней, где face id есть и у водителя, и у повара, — отчёт был бы пустым.',
       },
       { status: 404 },
     );
   }
 
-  const csv = toCsv(report.pairs);
+  const pdf = await renderDriverCookReport({ report, region: p.region, shop: p.shop });
 
-  return new NextResponse(csv, {
+  return new NextResponse(new Uint8Array(pdf), {
     headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="sverka-otmetok-${p.from}_${p.to}.csv"`,
+      'Content-Type': 'application/pdf',
+      // inline не ставим: кнопка называется «скачать» — файл и должен скачаться.
+      'Content-Disposition': `attachment; filename="${driverCookReportFilename(p.from, p.to)}"`,
+      'Content-Length': String(pdf.length),
       'Cache-Control': 'no-store',
     },
   });
