@@ -85,12 +85,11 @@ export function violationsReportDefinition(input: ViolationsReportInput): TDocum
     content: [
       header(scope, generatedAt),
       kpiRow(report, departures),
-      verdict(report, departures),
 
       section('1. Выезд с РЦ позже установленного времени', [
-        `Норматив — до ${departures.greenUntil}; до ${departures.yellowUntil} жёлтая зона, позже красная. ` +
-          'Строка — один выезд водителя с РЦ. По лавкам этот пункт не разносится: связать ' +
-          'выезд с конкретной лавкой не по чему.',
+        'Норматив выезда свой у каждой лавки («Выезд с РЦ» в справочнике) и берётся по первой ' +
+          'лавке маршрута водителя за этот день. Где связать не вышло, применяется сетевое ' +
+          `правило — до ${departures.greenUntil}. Строка — один выезд водителя с РЦ.`,
       ]),
       departuresTable(departures),
 
@@ -193,7 +192,7 @@ function kpiRow(report: ViolationsReport, departures: DeparturesReport): Content
         '1. Выезд с РЦ позже нормы',
         departures.hasData ? String(departures.yellow + departures.red) : '—',
         departures.hasData
-          ? `из ${departures.checked} · красных: ${departures.red}`
+          ? `из ${departures.checked} · красных: ${departures.red} · по норме лавки: ${departures.byShopNorm}`
           : 'выгрузки по РЦ нет',
         departures.red > 0 ? COLOR.red : undefined,
       ),
@@ -216,98 +215,6 @@ function kpiRow(report: ViolationsReport, departures: DeparturesReport): Content
         s.lateCooks > 0 ? COLOR.red : undefined,
       ),
     ],
-  };
-}
-
-/**
- * Вывод словами — единственное место, где отчёт что-то утверждает.
- *
- * Собран из тех же цифр, что и таблицы: пересланный файл читают без автора, и
- * «что тут главное» должно быть написано, а не выведено из четырёх таблиц.
- */
-function verdict(report: ViolationsReport, departures: DeparturesReport): Content {
-  const s = report.summary;
-  const lines: string[] = [];
-
-  if (s.checked === 0) {
-    lines.push(
-      'За период нет ни одного лавко-дня с живой отметкой водителя — проверять нечего. ' +
-        'Обычно это значит, что загружены не обе выгрузки: нужны и «выходы», и «водители».',
-    );
-  } else {
-    const total =
-      s.byKind.driver_on_time_no_staff +
-      s.byKind.no_staff_driver_late +
-      s.byKind.driver_late +
-      s.byKind.cook_late;
-
-    lines.push(
-      total === 0
-        ? `Проверено ${s.checked} ${plural(s.checked, 'лавко-день', 'лавко-дня', 'лавко-дней')} — нарушений по пунктам 2–4 не нашлось.`
-        : `Проверено ${s.checked} ${plural(s.checked, 'лавко-день', 'лавко-дня', 'лавко-дней')}. ` +
-          `Водитель опоздал в ${s.byKind.driver_late} (в красной зоне ${s.driverLateRed}); ` +
-          `сотрудника фактически не было в ` +
-          `${s.byKind.driver_on_time_no_staff + s.byKind.no_staff_driver_late}; ` +
-          `поваров с опозданием — ${s.lateCooks}.`,
-    );
-
-    if (departures.hasData) {
-      lines.push(
-        `Выезд с РЦ: ${departures.yellow + departures.red} из ${departures.checked} позже ` +
-          `${departures.greenUntil}, из них красных ${departures.red}.`,
-      );
-    } else {
-      lines.push(
-        'Выезд с РЦ за период не считался: выгрузки по распределительному центру нет.',
-      );
-    }
-
-    const shop = report.byShop.find((g) => g.total > 0);
-    const driver = report.byDriver.find((g) => g.total > 0);
-    if (shop || driver) {
-      lines.push(
-        'Чаще других: ' +
-          [
-            shop ? `${shop.title} — ${shop.total} за ${shop.days} ${plural(shop.days, 'день', 'дня', 'дней')}` : null,
-            driver ? `${driver.title} — ${driver.total}` : null,
-          ]
-            .filter(Boolean)
-            .join('; ') +
-          '. Повторяемость у одной лавки или одного человека — то, с чего стоит начать разбор.',
-      );
-    }
-  }
-
-  return {
-    margin: [0, 12, 0, 0],
-    table: {
-      widths: ['*'],
-      body: [
-        [
-          {
-            border: [false, false, false, false],
-            fillColor: '#fef2f2',
-            margin: [10, 8, 10, 8],
-            stack: [
-              { text: 'Коротко', fontSize: 7, bold: true, color: MUTED },
-              ...lines.map((text, i) => ({
-                text,
-                fontSize: 8.5,
-                margin: [0, i === 0 ? 3 : 2, 0, 0] as [number, number, number, number],
-              })),
-            ],
-          },
-        ],
-      ],
-    },
-    layout: {
-      hLineWidth: () => 0,
-      vLineWidth: () => 0,
-      paddingTop: () => 0,
-      paddingBottom: () => 0,
-      paddingLeft: () => 0,
-      paddingRight: () => 0,
-    },
   };
 }
 
@@ -347,6 +254,8 @@ function departuresTable(departures: DeparturesReport): Content {
   const head: TableCell[] = [
     { text: 'Дата', style: 'th' },
     { text: 'Водитель', style: 'th' },
+    { text: 'Первая лавка', style: 'th' },
+    { text: 'Норма', style: 'th', alignment: 'right' },
     { text: 'Выехал', style: 'th', alignment: 'right' },
     { text: 'Позже нормы', style: 'th', alignment: 'right' },
     { text: 'Зона', style: 'th', alignment: 'right' },
@@ -354,7 +263,15 @@ function departuresTable(departures: DeparturesReport): Content {
 
   const body: TableCell[][] = departures.late.map((l) => [
     { text: shortDate(l.date), color: MUTED },
-    { text: l.employeeName },
+    { text: l.employeeName, fontSize: 7 },
+    // Сетевой норматив подписан прямо в строке: иначе непонятно, почему у
+    // одного водителя норма 03:50, а у другого 04:59.
+    { text: l.shop ?? 'не определена', fontSize: 7, color: l.shop ? INK : MUTED },
+    {
+      text: l.normSource === 'shop' ? l.norm : `${l.norm} (сеть)`,
+      alignment: 'right',
+      color: MUTED,
+    },
     { text: l.time, alignment: 'right' },
     {
       text: formatLate(l.lateBy),
@@ -366,7 +283,7 @@ function departuresTable(departures: DeparturesReport): Content {
   ]);
 
   return {
-    table: { headerRows: 1, widths: [34, '*', 44, 60, 46], body: [head, ...body] },
+    table: { headerRows: 1, widths: [34, '*', 96, 48, 40, 54, 42], body: [head, ...body] },
     layout: rowsLayout(),
   };
 }
@@ -486,6 +403,9 @@ function method(report: ViolationsReport, noDriverMark: number): Content {
   const items = [
     'Единица счёта в пунктах 2–4 — лавко-день: одна лавка за один день. В пункте 1 — выезд ' +
       'водителя с РЦ, а в пункте 4 — человек: два опоздавших повара в одной лавке дают две строки.',
+    'Норматив выезда с РЦ свой у каждой лавки и берётся по первой лавке маршрута водителя за ' +
+      'этот день: в выгрузке по РЦ лавки нет, и связать её больше не по чему. Где водитель в ' +
+      'лавках не отмечался, применяется сетевое правило, и в таблице это подписано «(сеть)».',
     'Нормы берутся из справочника лавок и видны на вкладке «Пороги»: у каждой лавки свой час ' +
       'приезда водителя и свои смены поваров. Лавка без нормы считается по сетевому порогу.',
     'Считаются только живые отметки face id. Время из журнала отгрузок и досчёт «уход − 30 ' +

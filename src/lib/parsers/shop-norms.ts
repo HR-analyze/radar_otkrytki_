@@ -19,11 +19,15 @@ import type { ShopNorms } from '../types';
  */
 
 /** Заголовки колонок листа → поля. Сопоставляем по подстроке: заголовки правят. */
-const COLUMNS: { key: keyof ParsedColumns; match: RegExp }[] = [
+const COLUMNS: { key: keyof ParsedColumns; match: RegExp; optional?: boolean }[] = [
   { key: 'code', match: /^№/ },
   { key: 'name', match: /назван/i },
   { key: 'driver', match: /водител/i },
   { key: 'cook', match: /повар/i },
+  // Выезд с РЦ у каждой лавки свой: у М1 это 3:50, у М6 — 5:40. В старых
+  // выгрузках колонка называлась «погрузка на рц», в новых — «Выезд с РЦ».
+  // Необязательная: справочник без неё разбирается как раньше.
+  { key: 'departure', match: /выезд|погрузка/i, optional: true },
 ];
 
 interface ParsedColumns {
@@ -31,6 +35,8 @@ interface ParsedColumns {
   name: number;
   driver: number;
   cook: number;
+  /** Колонки может не быть — тогда норматив выезда берётся сетевой. */
+  departure?: number;
 }
 
 export interface ShopNormsParseResult {
@@ -81,16 +87,28 @@ export function parseShopNorms(buffer: Buffer, sheetName?: string): ShopNormsPar
 function parseRow(code: string, name: string, row: unknown[], cols: ParsedColumns): ShopNorms {
   const rowWarnings: string[] = [];
 
-  const rawDriver = text(row[cols.driver]);
-  const driverAt = parseNormTime(rawDriver);
+  const rawDriver = rawText(row[cols.driver]);
+  const driverAt = parseNormTime(row[cols.driver]);
   if (rawDriver && !driverAt) {
     rowWarnings.push(`не разобрал время приезда водителя «${rawDriver}»`);
   }
+  if (driverAt && excelDateAsClock(row[cols.driver]) != null) {
+    rowWarnings.push(
+      `приезд водителя «${driverAt}» восстановлен из даты: в справочнике ячейка сохранена ` +
+        'как дата, а не как текст — стоит поправить формат',
+    );
+  }
 
-  const rawCook = text(row[cols.cook]);
+  const rawCook = rawText(row[cols.cook]);
   const cookAt = parseCookTimes(rawCook);
   if (rawCook && cookAt.length === 0) {
     rowWarnings.push(`не разобрал тайминг поваров «${rawCook}»`);
+  }
+
+  const rawDeparture = cols.departure == null ? '' : rawText(row[cols.departure]);
+  const departureAt = cols.departure == null ? null : parseNormTime(row[cols.departure]);
+  if (rawDeparture && !departureAt) {
+    rowWarnings.push(`не разобрал время выезда с РЦ «${rawDeparture}»`);
   }
 
   return {
@@ -98,10 +116,12 @@ function parseRow(code: string, name: string, row: unknown[], cols: ParsedColumn
     name,
     driverAt,
     cookAt,
+    departureAt,
     // Исходные строки нужны в редакторе: человек сверяет разобранное время с
     // тем, что написано в справочнике, не открывая саму книгу.
     rawDriver: rawDriver || null,
     rawCook: rawCook || null,
+    rawDeparture: rawDeparture || null,
     source: 'reference',
     warnings: rowWarnings,
   };
@@ -114,7 +134,14 @@ function mapColumns(header: unknown[]): ParsedColumns {
     if (idx >= 0) found[key] = idx;
   }
 
-  const missing = COLUMNS.filter(({ key }) => found[key] === undefined).map(({ key }) => key);
+  // Колонку с кодом лавки в справочнике иногда не подписывают вовсе: в выгрузке
+  // от 16.09.2026 первая ячейка шапки пуста, а под ней идут «М01», «М02». Пустой
+  // заголовок первой колонки — это и есть код: искать его по имени бессмысленно.
+  if (found.code === undefined && text(header[0]) === '') found.code = 0;
+
+  const missing = COLUMNS.filter(
+    ({ key, optional }) => !optional && found[key] === undefined,
+  ).map(({ key }) => key);
   if (missing.length > 0) {
     throw new Error(`В заголовке листа не нашлись колонки: ${missing.join(', ')}`);
   }
@@ -135,6 +162,15 @@ const TIME = String.raw`\d{1,2}(?:[.:]\d{1,2})?(?::\d{2})?`;
  * что видно по соседним лавкам, где та же смена записана как «5:50».
  */
 export function parseNormTime(value: unknown): string | null {
+  // Excel хранит время долей суток: 3:50 приезжает числом 0.159722…, и в .xlsx
+  // так приходит часть колонок, а часть — строками («6.30»). Разбирать обе
+  // формы обязан парсер: иначе половина справочника молча остаётся без нормы.
+  const fraction = excelDayFraction(value);
+  if (fraction != null) return formatClock(fraction);
+
+  const fromDate = excelDateAsClock(value);
+  if (fromDate != null) return formatClock(fromDate);
+
   const raw = text(value);
   if (!raw) return null;
 
@@ -216,6 +252,49 @@ export function sortTimes(times: readonly string[]): string[] {
 /** Времена → «06:20» / «06:00 / 06:30» для показа человеку и для поля ввода. */
 export function formatCookTimes(times: readonly string[]): string {
   return times.length === 0 ? '—' : times.join(' / ');
+}
+
+/**
+ * Время из ячейки Excel, записанной долей суток → минуты от полуночи.
+ *
+ * Только для значений строго внутри суток: целое «6» — это шесть часов,
+ * записанных числом, и его разбирает обычное правило, а не это.
+ */
+function excelDayFraction(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  if (value <= 0 || value >= 1) return null;
+  return Math.round(value * 24 * 60);
+}
+
+/**
+ * «5.10» в справочнике, которое Excel принял за дату 5 октября.
+ *
+ * Такие ячейки приходят целым числом (46300) или объектом Date, и норма из них
+ * теряется целиком: у М28 и М70 в выгрузке от 16.09.2026 именно это. День и
+ * месяц восстанавливают исходную запись один в один — «5.10» это 5:10, — но
+ * догадка остаётся догадкой, поэтому строка получает предупреждение и видна
+ * в редакторе норм.
+ */
+function excelDateAsClock(value: unknown): number | null {
+  const date =
+    value instanceof Date
+      ? value
+      : typeof value === 'number' && Number.isInteger(value) && value > 1 && value < 100000
+        ? new Date(Date.UTC(1899, 11, 30) + value * 86400000)
+        : null;
+  if (!date || Number.isNaN(date.getTime())) return null;
+
+  const hours = date.getUTCDate();
+  const minutes = date.getUTCMonth() + 1;
+  if (hours > 23 || minutes > 59) return null;
+  // «5.1» человек пишет как 5:10, а не 5:01 — минуты в справочнике двузначные.
+  return hours * 60 + (minutes < 10 ? minutes * 10 : minutes);
+}
+
+/** Как значение показать человеку в редакторе норм: доля суток — временем. */
+function rawText(value: unknown): string {
+  const fraction = excelDayFraction(value) ?? excelDateAsClock(value);
+  return fraction == null ? text(value) : formatClock(fraction);
 }
 
 function text(value: unknown): string {

@@ -73,7 +73,14 @@ async function main(): Promise<void> {
   const report = analyzeViolations(snapshot.attendance, norms, config, from, to, {
     staffGapSeconds: args.gap,
   });
-  const departures = analyzeDepartures(snapshot.departures, config, from, to);
+  const departures = analyzeDepartures(
+    snapshot.departures,
+    snapshot.attendance,
+    norms,
+    config,
+    from,
+    to,
+  );
 
   const covered = dates.filter((d) => d >= from && d <= to);
   console.log(`Источник: ${storageMode() === 'sqlite' ? 'SQLite' : 'снимок'}`);

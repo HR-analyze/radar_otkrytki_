@@ -90,8 +90,12 @@ export async function readNorms(): Promise<ShopNormsStore> {
       name: base?.name ?? r.shop_code,
       driverAt: r.driver_at,
       cookAt: parseCookJson(r.cook_shifts),
+      // Выезд с РЦ на сайте пока не правят: он приходит только справочником,
+      // и правка часа приезда не должна его обнулять.
+      departureAt: base?.departureAt ?? null,
       rawDriver: base?.rawDriver ?? null,
       rawCook: base?.rawCook ?? null,
+      rawDeparture: base?.rawDeparture ?? null,
       source: 'manual',
       // Предупреждения относятся к разбору справочника. Строку поправили
       // руками — значит на неё уже посмотрели, и жалобы разбора неактуальны.

@@ -568,7 +568,7 @@ export async function violations(
 
   return {
     report: analyzeViolations(rows, norms, config, filters.from, filters.to, options),
-    departures: analyzeDepartures(snap.departures, config, filters.from, filters.to),
+    departures: analyzeDepartures(snap.departures, rows, norms, config, filters.from, filters.to),
   };
 }
 
