@@ -162,11 +162,12 @@ function text(r: DriverCookReport, all: boolean): string {
 
   lines.push('');
   lines.push('Лавки с повторяющимся совпадением:');
-  lines.push(groupTable(r.byShop.filter((g) => g.alone > 0), 'Лавка'));
+  lines.push(groupTable(r.byShop.filter((g) => g.alone > 0), 'Лавка', 'дней'));
 
   lines.push('');
   lines.push('Водители с повторяющимся совпадением:');
-  lines.push(groupTable(r.byDriver.filter((g) => g.alone > 0), 'Водитель'));
+  // У водителя это лавко-дни: за смену он объезжает несколько лавок.
+  lines.push(groupTable(r.byDriver.filter((g) => g.alone > 0), 'Водитель', 'лавко-дней'));
 
   lines.push('');
   const shown = all ? r.pairs : suspicious;
@@ -176,7 +177,7 @@ function text(r: DriverCookReport, all: boolean): string {
   return lines.join('\n');
 }
 
-function groupTable(groups: readonly DriverCookGroup[], head: string): string {
+function groupTable(groups: readonly DriverCookGroup[], head: string, unit: string): string {
   if (groups.length === 0) return '  — нет';
   const rows = groups.map((g) => [
     g.title,
@@ -186,7 +187,7 @@ function groupTable(groups: readonly DriverCookGroup[], head: string): string {
     String(g.cookBeforeClose),
     String(g.alone),
   ]);
-  return table([head, 'дней', 'вод. раньше', 'одноврем.', 'рядом', 'совпало'], rows);
+  return table([head, unit, 'вод. раньше', 'одноврем.', 'рядом', 'совпало'], rows);
 }
 
 function pairTable(pairs: readonly DriverCookPair[]): string {
@@ -258,7 +259,7 @@ function markdown(r: DriverCookReport): string {
   out.push('');
   out.push('## Водители');
   out.push('');
-  out.push('| Водитель | Дней | Водитель раньше | Одновременно | Рядом | Совпало |');
+  out.push('| Водитель | Лавко-дней | Водитель раньше | Одновременно | Рядом | Совпало |');
   out.push('| --- | ---: | ---: | ---: | ---: | ---: |');
   for (const g of r.byDriver.filter((x) => x.alone > 0)) {
     out.push(
@@ -266,7 +267,7 @@ function markdown(r: DriverCookReport): string {
     );
   }
   out.push('');
-  out.push('## Совпавшие пары');
+  out.push('## Совпавшие лавко-дни');
   out.push('');
   out.push('| Дата | Лавка | Водитель | Повар | Разрыв | Кто за рулём | Кто на кухне |');
   out.push('| --- | --- | --- | --- | ---: | --- | --- |');

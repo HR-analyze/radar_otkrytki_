@@ -134,7 +134,7 @@ export function driverCookReportDefinition(input: DriverCookReportInput): TDocum
         color: MUTED,
         margin: [0, 0, 0, 6],
       },
-      groupTable(shops, 'Лавка', 'Совпадений по лавкам за период нет.'),
+      groupTable(shops, 'Лавка', 'Дней', 'Совпадений по лавкам за период нет.'),
       { text: 'Водители', style: 'h2', pageBreak: 'before', margin: [0, 0, 0, 2] },
       {
         text:
@@ -144,12 +144,12 @@ export function driverCookReportDefinition(input: DriverCookReportInput): TDocum
         color: MUTED,
         margin: [0, 0, 0, 6],
       },
-      groupTable(drivers, 'Водитель', 'Совпадений по водителям за период нет.'),
-      { text: 'Совпавшие дни', style: 'h2', margin: [0, 16, 0, 2] },
+      groupTable(drivers, 'Водитель', 'Лавко-дней', 'Совпадений по водителям за период нет.'),
+      { text: 'Совпавшие лавко-дни', style: 'h2', margin: [0, 16, 0, 2] },
       {
         text:
-          'Отметки сошлись, и до этой пары в лавке не отмечался никто. Разрыв со знаком ' +
-          '«+» — водитель отметился раньше повара, «−» — позже.',
+          'Строка — одна лавка за один день: отметки сошлись, и до этой пары в лавке не ' +
+          'отмечался никто. Разрыв со знаком «+» — водитель отметился раньше повара, «−» — позже.',
         fontSize: 7,
         color: MUTED,
         margin: [0, 0, 0, 6],
@@ -221,7 +221,7 @@ function kpiRow(report: DriverCookReport, suspicious: number): Content {
       tile(
         'Совпало на пустой лавке',
         String(suspicious),
-        `${share(suspicious, s.pairs)} от всех дней`,
+        `${share(suspicious, s.pairs)} от лавко-дней сверки`,
         BUCKET_COLOR.simultaneous,
       ),
     ],
@@ -258,7 +258,7 @@ function verdict(
     lines.push(
       `Отметки сошлись на пустой лавке в ${suspicious.length} ` +
         `${plural(suspicious.length, 'лавко-дне', 'лавко-днях', 'лавко-днях')} — ` +
-        `${share(suspicious.length, s.pairs)} всех дней сверки. Из них ` +
+        `${share(suspicious.length, s.pairs)} всех лавко-дней сверки. Из них ` +
         `${s.aloneByBucket.simultaneous} ${plural(s.aloneByBucket.simultaneous, 'день', 'дня', 'дней')} ` +
         `с разрывом меньше ${report.options.simultaneousSeconds} секунд: ` +
         'два человека у одного терминала так не попадают.',
@@ -374,7 +374,11 @@ function bucketTable(report: DriverCookReport): Content {
   const head: TableCell[] = [
     { text: '', style: 'th' },
     { text: 'Случай', style: 'th' },
-    { text: 'Дней', style: 'th', alignment: 'right' },
+    // Не «Дней»: строка считает пары «лавка + день», и 1451 здесь — это не
+    // тысяча четыреста дней, а лавко-дни. Та же ловушка, что у суммы баллов
+    // в конкурсе (см. contest.ts): подписать лавко-дни днями — соврать в
+    // единице измерения, и спор на планёрке будет ровно об этом.
+    { text: 'Лавко-дней', style: 'th', alignment: 'right' },
     { text: 'Доля', style: 'th', alignment: 'right' },
     { text: 'До пары никого', style: 'th', alignment: 'right' },
   ];
@@ -518,6 +522,12 @@ function dayAxis(days: readonly string[]): Column[] {
 function groupTable(
   groups: readonly DriverCookGroup[],
   head: string,
+  /**
+   * Подпись счётчика пар. У лавки это её дни, у водителя — лавко-дни: он за
+   * смену объезжает несколько лавок, и «7» у него — это семь посещений, а не
+   * семь дней.
+   */
+  unit: string,
   empty: string,
 ): Content {
   if (groups.length === 0) return { text: empty, fontSize: 8, color: MUTED };
@@ -527,7 +537,7 @@ function groupTable(
   const headRow: TableCell[] = [
     { text: '#', style: 'th', alignment: 'right' },
     { text: head, style: 'th' },
-    { text: 'Дней', style: 'th', alignment: 'right' },
+    { text: unit, style: 'th', alignment: 'right' },
     { text: 'Одновр.', style: 'th', alignment: 'right' },
     { text: 'Рядом', style: 'th', alignment: 'right' },
     { text: 'Совпало', style: 'th', alignment: 'right' },
@@ -606,6 +616,9 @@ function pairsTable(pairs: readonly DriverCookPair[]): Content {
 function method(report: DriverCookReport): Content {
   const o = report.options;
   const items = [
+    'Единица счёта — лавко-день: одна лавка за один день. «1451» в таблице случаев — это ' +
+      'пары «лавка + день», а не календарные дни: за две недели их столько же, сколько лавок, ' +
+      'умноженных на дни с выгрузкой.',
     'Пара за день — первая отметка водителя и первая отметка повара в одной лавке. ' +
       'Второй и третий повар смены в сверку не входят.',
     'Считаются только живые отметки face id. Время из журнала отгрузок и досчёт ' +

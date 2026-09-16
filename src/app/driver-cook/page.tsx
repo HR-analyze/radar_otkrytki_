@@ -134,7 +134,7 @@ export default async function DriverCookPage({
             <Tile
               title="Совпало на пустой лавке"
               value={String(suspicious.length)}
-              hint={`${share(suspicious.length, s.pairs)} от всех дней`}
+              hint={`${share(suspicious.length, s.pairs)} от лавко-дней сверки`}
               explain={
                 `Отметки сошлись в пределах ${report.options.closeMinutes} минут, и до этой пары ` +
                 'в лавке не отмечался никто — ни кассир, ни бариста, ни уборщик. Это и есть ' +
@@ -155,7 +155,14 @@ export default async function DriverCookPage({
                 <thead>
                   <tr>
                     <th className="px-2 py-2 text-left text-xs font-medium muted">Случай</th>
-                    <th className="px-2 py-2 text-right text-xs font-medium muted">Дней</th>
+                    {/* Не «Дней»: строка считает пары «лавка + день». Подписать
+                        лавко-дни днями — соврать в единице измерения. */}
+                    <th className="px-2 py-2 text-right text-xs font-medium muted">
+                      <span className="inline-flex items-center gap-1">
+                        Лавко-дней
+                        <Hint text="Лавко-день — одна лавка за один день. Восемьдесят лавок за две недели дают больше тысячи лавко-дней; календарных дней в периоде при этом четырнадцать." />
+                      </span>
+                    </th>
                     <th className="px-2 py-2 text-right text-xs font-medium muted">Доля</th>
                     <th className="px-2 py-2 text-right text-xs font-medium muted">
                       <span className="inline-flex items-center gap-1">
@@ -202,6 +209,7 @@ export default async function DriverCookPage({
               groups={report.byShop.filter((g) => g.alone > 0)}
               empty="Совпадений по лавкам за период нет."
               head="Лавка"
+              unit="Дней"
               linkOf={(g) => `/driver-cook?${withKey(query, 'shop', g.key)}`}
             />
             <GroupSection
@@ -210,17 +218,18 @@ export default async function DriverCookPage({
               groups={report.byDriver.filter((g) => g.alone > 0)}
               empty="Совпадений по водителям за период нет."
               head="Водитель"
+              unit="Лавко-дней"
             />
           </div>
 
           <section className="surface p-4">
             <h2 className="text-sm font-semibold">
-              Совпавшие пары: {suspicious.length}{' '}
-              {plural(suspicious.length, 'день', 'дня', 'дней')}
+              Совпавшие лавко-дни: {suspicious.length}{' '}
+              {plural(suspicious.length, 'лавко-день', 'лавко-дня', 'лавко-дней')}
             </h2>
             <p className="mt-0.5 text-xs muted">
-              Разрыв со знаком «+» — водитель отметился раньше повара, «−» — позже. Клик по лавке
-              открывает её карточку за этот день.
+              Строка — одна лавка за один день. Разрыв со знаком «+» — водитель отметился раньше
+              повара, «−» — позже. Клик по лавке открывает её карточку за этот день.
             </p>
             {suspicious.length === 0 ? (
               <p className="mt-4 text-sm muted">
@@ -327,6 +336,7 @@ function GroupSection({
   groups,
   empty,
   head,
+  unit,
   linkOf,
 }: {
   title: string;
@@ -334,6 +344,12 @@ function GroupSection({
   groups: readonly DriverCookGroup[];
   empty: string;
   head: string;
+  /**
+   * Подпись счётчика пар. У лавки это её дни, у водителя — лавко-дни: он за
+   * смену объезжает несколько лавок, и «7» у него — семь посещений, а не
+   * семь дней.
+   */
+  unit: string;
   /** Ссылка с строки — только там, где по ней есть куда отфильтровать. */
   linkOf?: (g: DriverCookGroup) => string;
 }) {
@@ -349,7 +365,7 @@ function GroupSection({
             <thead>
               <tr>
                 <th className="px-2 py-2 text-left text-xs font-medium muted">{head}</th>
-                <th className="px-2 py-2 text-right text-xs font-medium muted">Дней</th>
+                <th className="px-2 py-2 text-right text-xs font-medium muted">{unit}</th>
                 <th className="px-2 py-2 text-right text-xs font-medium muted">Одновр.</th>
                 <th className="px-2 py-2 text-right text-xs font-medium muted">Рядом</th>
                 <th className="px-2 py-2 text-right text-xs font-medium muted">Совпало</th>
