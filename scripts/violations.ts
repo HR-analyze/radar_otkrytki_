@@ -117,7 +117,7 @@ function text(report: ViolationsReport, departures: DeparturesReport): string {
         : 'выгрузки по РЦ за период нет'),
   );
   lines.push(
-    `2. Водитель вовремя, сотрудника не было: ${s.byKind.driver_on_time_no_staff} ` +
+    `2. Водитель вовремя, встретить его было некому: ${s.byKind.driver_on_time_no_staff} ` +
       `(и ещё ${s.byKind.no_staff_driver_late}, где водитель при этом опоздал)`,
   );
   lines.push(
@@ -145,7 +145,7 @@ function text(report: ViolationsReport, departures: DeparturesReport): string {
     return k.includes('driver_on_time_no_staff') || k.includes('no_staff_driver_late');
   });
   lines.push('');
-  lines.push('Сотрудника не было (отметка легла на отметку водителя):');
+  lines.push('Встретить водителя было некому (первый сотрудник отметился позже него):');
   lines.push(dayTable(noStaff));
 
   const driverLate = report.days
@@ -199,7 +199,11 @@ function dayTable(days: readonly ShopDay[]): string {
       d.driver?.time ?? '—',
       d.driverLateBy != null && d.driverLateBy > 0 ? formatLate(d.driverLateBy) : 'в норме',
       d.staff ? `${d.staff.role} ${d.staff.time}` : '—',
-      d.staffGapSeconds == null ? '—' : `${d.staffGapSeconds} с`,
+      d.staffGapSeconds == null
+        ? '—'
+        : d.staffMarkedTogether
+          ? `вместе ${Math.abs(d.staffGapSeconds)} с`
+          : formatLate(Math.round(d.staffGapSeconds / 60)),
     ]),
   );
 }

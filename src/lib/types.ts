@@ -221,6 +221,21 @@ export interface ThresholdConfig {
       confirmed: boolean;
       note: string;
     };
+    /** Настройки вкладки «Нарушения» — см. violations.ts. */
+    violations?: {
+      /**
+       * Разрыв, внутри которого отметка сотрудника считается поставленной
+       * заодно с отметкой водителя: фактически человека в лавке не было.
+       */
+      staffGapSeconds?: number;
+      /**
+       * Должности, которые не считаются «сотрудником, встречающим водителя».
+       * Уборщик приходит к своей уборке и товар не принимает — его ранняя
+       * отметка не значит, что лавку было кому открыть.
+       */
+      openingRolesExclude?: string[];
+      note?: string;
+    };
     derivedArrival: {
       enabled: boolean;
       minutesBeforeDeparture: number;

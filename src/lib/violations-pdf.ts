@@ -93,9 +93,12 @@ export function violationsReportDefinition(input: ViolationsReportInput): TDocum
       ]),
       departuresTable(departures),
 
-      section('2. Водитель приехал вовремя, а сотрудника не было', [
-        `Отметка первого сотрудника легла на отметку водителя — разрыв меньше ${report.options.staffGapSeconds} секунд. ` +
-          'Два человека у одного терминала так не попадают.',
+      section('2. Водитель приехал вовремя, а встретить его было некому', [
+        'Водитель уложился в норму своей лавки, а первый сотрудник отметился уже после него: ' +
+          'в колонке «Разрыв» видно, на сколько позже. Уборщик встречающим не считается — он ' +
+          'приходит к своей уборке и товар не принимает.',
+        `Пометка «вместе» — отметки разошлись меньше чем на ${report.options.staffGapSeconds} секунд: ` +
+          'два человека у одного терминала так не попадают.',
       ]),
       dayTable(noStaff, 'За период таких дней нет.'),
       ...(noStaffLate.length > 0
@@ -311,9 +314,9 @@ function dayTable(days: readonly ShopDay[], empty: string): Content {
       : { text: 'в норме', alignment: 'right', color: MUTED },
     { text: d.staff ? `${d.staff.role}: ${d.staff.time}` : '—', fontSize: 7 },
     {
-      text: d.staffGapSeconds == null ? '—' : `${d.staffGapSeconds} сек`,
+      text: formatGap(d),
       alignment: 'right',
-      color: MUTED,
+      color: d.staffMarkedTogether ? COLOR.red : MUTED,
     },
   ]);
 
@@ -321,6 +324,17 @@ function dayTable(days: readonly ShopDay[], empty: string): Content {
     table: { headerRows: 1, widths: [34, 96, 34, 44, 50, '*', 38], body: [head, ...body] },
     layout: rowsLayout(),
   };
+}
+
+/**
+ * Разрыв человеку: «+17 мин» — сотрудник отметился настолько позже водителя,
+ * «вместе» — отметки легли друг на друга, «−9 мин» — смена уже была на месте.
+ */
+function formatGap(day: ShopDay): string {
+  if (day.staffGapSeconds == null) return '—';
+  if (day.staffMarkedTogether) return `вместе · ${Math.abs(day.staffGapSeconds)} сек`;
+  const minutes = Math.round(day.staffGapSeconds / 60);
+  return formatLate(minutes);
 }
 
 function cooksTable(
@@ -410,8 +424,10 @@ function method(report: ViolationsReport, noDriverMark: number): Content {
       'приезда водителя и свои смены поваров. Лавка без нормы считается по сетевому порогу.',
     'Считаются только живые отметки face id. Время из журнала отгрузок и досчёт «уход − 30 ' +
       'минут» пропущены: они восстановлены, а не отмечены.',
-    `«Сотрудника не было» — отметка первого сотрудника лавки (повара, кассира, директора — ` +
-      `кого угодно) отстоит от отметки водителя меньше чем на ${report.options.staffGapSeconds} секунд.`,
+    'Встретить водителя было некому — первая отметка сотрудника лавки (повара, кассира, ' +
+      'директора) позже отметки водителя. Уборщик встречающим не считается: он приходит к ' +
+      'своей уборке и товар не принимает. Список исключённых должностей — в конфиге ' +
+      '(rules.violations.openingRolesExclude).',
     'Дни «другого графика» — вторая смена, а не опоздание: в счёт не идут. Лавко-дней без ' +
       `отметки водителя за период: ${noDriverMark}.`,
     'Отчёт не меняет ни статусы лавок, ни итог радара и не выносит вердикт: он показывает, что ' +

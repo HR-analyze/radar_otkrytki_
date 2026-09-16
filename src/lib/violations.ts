@@ -35,16 +35,27 @@ import type { DepartureRow } from './parsers/departure';
 
 export interface ViolationsOptions {
   /**
-   * Разрыв, внутри которого отметка сотрудника считается отметкой «за
-   * компанию» с водителем: фактически в лавке его не было. По умолчанию
-   * 60 секунд — «совпадают или разница меньше минуты».
+   * Разрыв, внутри которого отметка сотрудника считается поставленной заодно
+   * с отметкой водителя. По умолчанию 60 секунд — «совпали или разошлись
+   * меньше чем на минуту».
    */
   staffGapSeconds?: number;
+  /**
+   * Должности, которые не считаются встречающим сотрудником. По умолчанию
+   * берутся из конфига (`rules.violations.openingRolesExclude`).
+   */
+  openingRolesExclude?: readonly string[];
 }
 
 export const DEFAULT_VIOLATIONS_OPTIONS: Required<ViolationsOptions> = {
   staffGapSeconds: 60,
+  openingRolesExclude: [],
 };
+
+/** «Повар-стажер» и «Повар - стажёр» — одна и та же должность. */
+function roleKey(role: string): string {
+  return role.toLowerCase().replace(/ё/g, 'е').replace(/[\s\-–—]+/g, '');
+}
 
 /** Отметка человека, приведённая к тому, что нужно в отчёте. */
 export interface PersonMark {
@@ -90,13 +101,24 @@ export interface ShopDay {
    * и «опоздал на час» не лежали в отчёте одной кучей.
    */
   driverStatus: Status | null;
-  /** Разрыв между отметками водителя и первого сотрудника, секунды. */
+  /**
+   * Разрыв между отметками водителя и первого сотрудника, секунды.
+   * Положительный — сотрудник отметился позже водителя.
+   */
   staffGapSeconds: number | null;
   /**
-   * Сотрудника фактически не было: его отметка легла на отметку водителя.
-   * null — сравнивать не с чем (нет одной из отметок).
+   * Водителя в лавке никто не встретил: первая отметка сотрудника — позже
+   * его собственной. null — сравнивать не с чем (нет одной из отметок).
+   *
+   * Отметка «секунда в секунду» — тот же случай: два человека у одного
+   * терминала так не попадают, значит сотрудник отметился заодно с водителем.
    */
   staffMissing: boolean | null;
+  /**
+   * Отметки водителя и сотрудника легли друг на друга (разрыв меньше порога).
+   * Частный и самый заметный случай «никто не встретил».
+   */
+  staffMarkedTogether: boolean | null;
   /** Повара, нарушившие свою норму, от худшего к лучшему. */
   lateCooks: LateMark[];
   /** У лавки другой график или смена не первая — день из счёта исключён. */
@@ -185,8 +207,14 @@ export function analyzeViolations(
   options: ViolationsOptions = {},
 ): ViolationsReport {
   const opts: Required<ViolationsOptions> = {
-    staffGapSeconds: options.staffGapSeconds ?? DEFAULT_VIOLATIONS_OPTIONS.staffGapSeconds,
+    staffGapSeconds:
+      options.staffGapSeconds ??
+      config.rules.violations?.staffGapSeconds ??
+      DEFAULT_VIOLATIONS_OPTIONS.staffGapSeconds,
+    openingRolesExclude:
+      options.openingRolesExclude ?? config.rules.violations?.openingRolesExclude ?? [],
   };
+  const excluded = new Set(opts.openingRolesExclude.map(roleKey));
 
   const byShopDay = new Map<string, Mark[]>();
   for (const row of rows) {
@@ -208,9 +236,13 @@ export function analyzeViolations(
     const norm = norms[first.shopCode] ?? null;
 
     const driverMark = earliest(marks.filter((m) => m.row.criterion === 'driver'));
-    // Сотрудник — кто угодно, кроме водителя: раньше повара к терминалу
-    // подходят и кассир, и директор, и лавку открывает тот, кто пришёл первым.
-    const staffMark = earliest(marks.filter((m) => m.row.criterion !== 'driver'));
+    // Сотрудник — кто угодно, кроме водителя и должностей из исключений:
+    // раньше повара к терминалу подходят и кассир, и директор, и лавку
+    // открывает тот, кто пришёл первым. Уборщик в этот список не входит: он
+    // приходит к своей уборке и товар не принимает (см. rules.violations).
+    const staffMark = earliest(
+      marks.filter((m) => m.row.criterion !== 'driver' && !excluded.has(roleKey(m.row.role))),
+    );
 
     const driverStatus = driverMark
       ? statusOf(driverMark.row, 'driver', norm?.driverAt ?? null, config)
@@ -224,8 +256,9 @@ export function analyzeViolations(
           (parseClock(driverBoundary) + shiftOf(config, first.shopCode))
         : null;
 
-    const gap =
-      driverMark && staffMark ? Math.abs(staffMark.seconds - driverMark.seconds) : null;
+    // Знак важен: «сотрудник отметился на 17 минут позже водителя» и «на 17
+    // минут раньше» — это разные дни, и раньше знак терялся в модуле.
+    const gap = driverMark && staffMark ? staffMark.seconds - driverMark.seconds : null;
 
     days.push({
       date: first.date,
@@ -238,7 +271,10 @@ export function analyzeViolations(
       driverLateBy,
       driverStatus,
       staffGapSeconds: gap,
-      staffMissing: gap == null ? null : gap < opts.staffGapSeconds,
+      // Водителя никто не встретил: сотрудник отметился позже него — или
+      // одновременно, что значит «отметился заодно», а не «был на месте».
+      staffMissing: gap == null ? null : gap > -opts.staffGapSeconds,
+      staffMarkedTogether: gap == null ? null : Math.abs(gap) < opts.staffGapSeconds,
       lateCooks: lateCooksOf(marks, norm, config),
       // «Другой график» — не нарушение: это вторая смена, а не опоздание.
       skipped: driverStatus === 'other_schedule' || driverMark == null,
@@ -615,7 +651,7 @@ export function toCsv(report: ViolationsReport, departures: DeparturesReport): s
     'Норма',
     'Отметка',
     'Опоздание, мин',
-    'Разрыв с водителем, сек',
+    'Сотрудник позже водителя, сек',
   ];
 
   const rows: string[][] = [];
