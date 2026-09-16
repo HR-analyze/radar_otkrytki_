@@ -117,10 +117,10 @@ export default async function ViolationsPage({
         />
         <Tile
           n="2"
-          title="Водитель вовремя, сотрудника не было"
+          title="Водитель вовремя, встретить некому"
           value={String(s.byKind.driver_on_time_no_staff)}
           hint={`ещё ${s.byKind.no_staff_driver_late} — и водитель опоздал`}
-          explain={`Водитель приехал в норму, а отметка первого сотрудника легла на его собственную: разрыв меньше ${report.options.staffGapSeconds} секунд. Два человека у одного терминала так не попадают — значит, сотрудника в этот момент в лавке не было.`}
+          explain={`Водитель уложился в норму своей лавки, а первый сотрудник отметился уже после него — встречать товар было некому. Уборщик встречающим не считается: он приходит к своей уборке. Разрыв меньше ${report.options.staffGapSeconds} секунд показан как «вместе»: два человека у одного терминала так не попадают.`}
           accent={s.byKind.driver_on_time_no_staff > 0}
         />
         <Tile
@@ -182,11 +182,12 @@ export default async function ViolationsPage({
       {/* --- 2. Сотрудника не было --- */}
       <section className="surface p-4">
         <h2 className="text-sm font-semibold">
-          2. Водитель приехал вовремя, а сотрудника не было
+          2. Водитель приехал вовремя, а встретить его было некому
         </h2>
         <p className="mt-0.5 text-xs muted">
-          Отметка сотрудника легла на отметку водителя — разрыв меньше {report.options.staffGapSeconds}{' '}
-          секунд. Клик по лавке открывает её карточку за этот день.
+          Первый сотрудник отметился позже водителя — в колонке «Разрыв» видно, на сколько.
+          Уборщик встречающим не считается. «Вместе» — отметки разошлись меньше чем на{' '}
+          {report.options.staffGapSeconds} секунд. Клик по лавке открывает её карточку за этот день.
         </p>
         {noStaff.length === 0 ? (
           <p className="mt-4 text-sm muted">За период таких дней нет.</p>
@@ -307,11 +308,18 @@ function DayTable({ days }: { days: readonly ShopDay[] }) {
         d.driver?.time ?? '—',
         d.driverLateBy != null && d.driverLateBy > 0 ? formatLate(d.driverLateBy) : 'в норме',
         d.staff ? `${d.staff.role}: ${d.staff.time}` : '—',
-        d.staffGapSeconds == null ? '—' : `${d.staffGapSeconds} сек`,
+        formatGap(d),
       ])}
       more={days.length - LIMIT}
     />
   );
+}
+
+/** «+17 мин» — сотрудник настолько позже водителя; «вместе» — отметки слиплись. */
+function formatGap(day: ShopDay): string {
+  if (day.staffGapSeconds == null) return '—';
+  if (day.staffMarkedTogether) return `вместе · ${Math.abs(day.staffGapSeconds)} сек`;
+  return formatLate(Math.round(day.staffGapSeconds / 60));
 }
 
 function GroupSection({
