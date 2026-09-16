@@ -2,6 +2,7 @@
  * Сверка отметок водителя и первого повара за период.
  *
  *   npm run analyze:driver-cook -- --from 2026-09-01 --to 2026-09-16
+ *   npm run analyze:driver-cook -- --from 2026-09-01 --to 2026-09-16 --pdf отчёт.pdf
  *   npm run analyze:driver-cook -- --from 2026-09-01 --to 2026-09-16 --md отчёт.md --csv пары.csv
  *
  * Без `--from`/`--to` берётся весь период, который есть в данных. Источник —
@@ -22,6 +23,7 @@ import {
   type DriverCookPair,
   type DriverCookReport,
 } from '../src/lib/driver-cook';
+import { renderDriverCookReport } from '../src/lib/driver-cook-pdf';
 import { loadSnapshot, storageMode } from '../src/lib/snapshot';
 
 interface Args {
@@ -29,6 +31,7 @@ interface Args {
   to?: string;
   md?: string;
   csv?: string;
+  pdf?: string;
   simultaneous?: number;
   close?: number;
   all: boolean;
@@ -48,6 +51,7 @@ function parseArgs(argv: readonly string[]): Args {
     else if (a === '--to') args.to = next();
     else if (a === '--md') args.md = next();
     else if (a === '--csv') args.csv = next();
+    else if (a === '--pdf') args.pdf = next();
     else if (a === '--simultaneous-seconds') args.simultaneous = Number(next());
     else if (a === '--close-minutes') args.close = Number(next());
     else if (a === '--all') args.all = true;
@@ -109,6 +113,10 @@ async function main(): Promise<void> {
   if (args.csv) {
     fs.writeFileSync(path.resolve(args.csv), toCsv(report.pairs), 'utf8');
     console.log(`Таблица пар: ${args.csv}`);
+  }
+  if (args.pdf) {
+    fs.writeFileSync(path.resolve(args.pdf), await renderDriverCookReport({ report }));
+    console.log(`PDF-отчёт: ${args.pdf}`);
   }
 }
 
