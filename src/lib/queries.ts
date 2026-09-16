@@ -13,6 +13,11 @@ import { aggregateStatuses, isOpenOn, roundScore, statusFromScore } from './stat
 import { parseClock } from './time';
 import { compareShopNumber, isExactCode, matchesShop, shopNumber } from './shops';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
+import {
+  analyzeDriverCook,
+  type DriverCookOptions,
+  type DriverCookReport,
+} from './driver-cook';
 import type { DepartureRow } from './parsers/departure';
 import {
   addStatus,
@@ -515,6 +520,42 @@ export async function radar(
   }
 
   return { dates, rows };
+}
+
+/* --------------------- сверка «водитель ↔ первый повар» ------------------- */
+
+export interface DriverCookFilters {
+  from: string;
+  to: string;
+  region?: string;
+  /** Код или часть названия лавки — тот же поиск, что в радаре. */
+  shop?: string;
+}
+
+/**
+ * Пары «отметка водителя ↔ отметка первого повара» под фильтрами страницы.
+ *
+ * Фильтры те же, что у радара, и считаются тем же способом: РМ — по истории
+ * (лавка, перешедшая в сентябре, в августе остаётся за прежним), поиск лавки —
+ * по коду или части названия. Иначе «сверка по Осину» и «радар по Осину»
+ * показывали бы разные наборы лавок.
+ *
+ * Разбор пар живёт в `driver-cook.ts` — здесь только выборка.
+ */
+export async function driverCook(
+  filters: DriverCookFilters,
+  options: DriverCookOptions = {},
+): Promise<DriverCookReport> {
+  const snap = await loadSnapshot();
+  const shops = await shopsMatching(filters.region, filters.shop, filters.from, filters.to);
+  const allowed = new Set(shops.map((s) => s.code));
+  const inRegion = await regionDayMatcher(filters.region);
+
+  const rows = snap.attendance.filter(
+    (a) => allowed.has(a.shopCode) && inRegion(a.shopCode, a.date),
+  );
+
+  return analyzeDriverCook(rows, filters.from, filters.to, options);
 }
 
 /* ------------------------------- конкурс --------------------------------- */

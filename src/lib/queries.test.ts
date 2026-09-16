@@ -474,3 +474,45 @@ test('закрытая лавка уходит из списков, но не и
   const history = await q.shopHistory('М15', ALL.from, ALL.to);
   assert.ok(history.length > 0, 'дни М15 пропали из карточки — закрытие стёрло историю');
 });
+
+test('сверка отметок: фильтры те же, что у радара', async () => {
+  const all = await q.driverCook(ALL);
+  assert.ok(all.summary.pairs > 0, 'в снимке нет ни одной пары «водитель + повар»');
+
+  // Сумма по корзинам — это и есть все пары, иначе доли на вкладке не сойдутся.
+  const b = all.summary.byBucket;
+  assert.equal(
+    b.driver_before + b.simultaneous + b.cook_before_close + b.cook_before,
+    all.summary.pairs,
+  );
+
+  // Фильтр по лавке сужает выборку и не приносит чужих лавок.
+  const one = await q.driverCook({ ...ALL, shop: 'М24' });
+  assert.ok(one.summary.pairs > 0 && one.summary.pairs < all.summary.pairs);
+  assert.deepEqual([...new Set(one.pairs.map((p) => p.shopCode))], ['М24']);
+
+  // Фильтр по РМ отбирает ровно те лавки, что и радар. Сверять с текущим
+  // справочником нельзя: РМ считается по истории, и лавка, перешедшая позже,
+  // за август остаётся за прежним — у радара это уже так, и разъехаться
+  // два ответа не должны.
+  const region = (await q.listRegions(ALL.from, ALL.to)).current[0];
+  const byRegion = await q.driverCook({ ...ALL, region });
+  const onRadar = new Set(
+    (await q.radar({ ...ALL, region, criterion: 'driver' })).rows.map((r) => r.shop.code),
+  );
+  assert.ok(byRegion.summary.pairs > 0, `у РМ ${region} нет ни одной пары`);
+  assert.ok(byRegion.summary.pairs < all.summary.pairs, 'фильтр по РМ ничего не сузил');
+  for (const p of byRegion.pairs) {
+    assert.ok(onRadar.has(p.shopCode), `${p.shopCode} есть в сверке, но не в радаре по РМ ${region}`);
+  }
+});
+
+test('сверка отметок: период сужает выборку, а не сдвигает её', async () => {
+  const day = '2026-08-25';
+  const one = await q.driverCook({ from: day, to: day });
+  assert.ok(one.summary.pairs > 0);
+  assert.deepEqual([...new Set(one.pairs.map((p) => p.date))], [day]);
+
+  const all = await q.driverCook(ALL);
+  assert.ok(one.summary.pairs < all.summary.pairs, 'день дал столько же пар, сколько весь период');
+});

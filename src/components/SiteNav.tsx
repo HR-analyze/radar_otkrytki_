@@ -21,6 +21,7 @@ const TABS: { href: string; label: string; keys: readonly string[] }[] = [
   { href: '/radar', label: 'Радар по лавкам', keys: [...SHARED, 'criterion', 'status'] },
   { href: '/showcase', label: 'Витрины', keys: [] },
   { href: '/contest', label: 'Конкурс', keys: SHARED },
+  { href: '/driver-cook', label: 'Сверка отметок', keys: SHARED },
   { href: '/history', label: 'История', keys: [] },
   { href: '/settings', label: 'Пороги', keys: [] },
 ];
@@ -46,7 +47,7 @@ function NavLinks({ params }: { params: URLSearchParams }) {
 
   return (
     /*
-     * На телефоне шесть вкладок переносились на две-три строки и разъезжали
+     * На телефоне вкладки переносились на две-три строки и разъезжали
      * шапку по высоте. Здесь они складываются в одну ленту с прокруткой вбок:
      * высота постоянная, а до дальних вкладок можно домотать пальцем.
      * scrollbar полосу не рисуем — она бы съела и без того тесную высоту.
@@ -62,8 +63,8 @@ function NavLinks({ params }: { params: URLSearchParams }) {
             key={tab.href}
             href={hrefWith(tab.href, tab.keys, params)}
             /*
-             * Где я нахожусь — раньше не отвечал ни один пиксель: шесть ссылок
-             * выглядели одинаково на всех шести страницах. Цвет не единственный
+             * Где я нахожусь — раньше не отвечал ни один пиксель: все ссылки
+             * выглядели одинаково на всех страницах. Цвет не единственный
              * признак: у текущей вкладки ещё и подложка, и жирность, и
              * aria-current для программ чтения с экрана.
              */
