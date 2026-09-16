@@ -112,7 +112,7 @@ export default async function ViolationsPage({
               ? `из ${departures.checked} ${plural(departures.checked, 'выезда', 'выездов', 'выездов')} · 🔴 ${departures.red}`
               : 'выгрузки по РЦ за период нет'
           }
-          explain={`Норматив выезда с РЦ — до ${departures.greenUntil}. Позже — нарушение: до ${departures.yellowUntil} жёлтая зона, дальше красная. Единица здесь — выезд водителя, а не лавко-день: связать выезд с конкретной лавкой не по чему.`}
+          explain={`Норматив выезда свой у каждой лавки («Выезд с РЦ» в справочнике) и берётся по первой лавке маршрута водителя за этот день. Где связать не вышло, применяется сетевое правило — до ${departures.greenUntil}. Единица здесь — выезд водителя, а не лавко-день.`}
           accent={departures.red > 0}
         />
         <Tile
@@ -145,8 +145,11 @@ export default async function ViolationsPage({
       <section className="surface p-4">
         <h2 className="text-sm font-semibold">1. Выезд с РЦ позже установленного времени</h2>
         <p className="mt-0.5 text-xs muted">
-          Норматив — до {departures.greenUntil}; до {departures.yellowUntil} жёлтая зона, позже
-          красная. Строка — один выезд водителя с РЦ.
+          Норматив выезда свой у каждой лавки и берётся по первой лавке маршрута водителя за этот
+          день; где связать не вышло — сетевое правило «до {departures.greenUntil}», в таблице оно
+          подписано «(сеть)». Строка — один выезд водителя с РЦ.
+          {departures.byShopNorm > 0 &&
+            ` По норме лавки посчитано ${departures.byShopNorm} из ${departures.checked}.`}
         </p>
         {!departures.hasData ? (
           <p className="mt-4 text-sm muted">
@@ -160,11 +163,13 @@ export default async function ViolationsPage({
           </p>
         ) : (
           <Table
-            head={['Дата', 'Водитель', 'Выехал', 'Позже нормы', 'Зона']}
-            align={['left', 'left', 'right', 'right', 'right']}
+            head={['Дата', 'Водитель', 'Первая лавка', 'Норма', 'Выехал', 'Позже нормы', 'Зона']}
+            align={['left', 'left', 'left', 'right', 'right', 'right', 'right']}
             rows={departures.late.slice(0, LIMIT).map((l) => [
               shortDate(l.date),
               l.employeeName,
+              l.shop ?? 'не определена',
+              l.normSource === 'shop' ? l.norm : `${l.norm} (сеть)`,
               l.time,
               formatLate(l.lateBy),
               l.status === 'red' ? '🔴' : '🟡',

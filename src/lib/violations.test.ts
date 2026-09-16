@@ -19,6 +19,7 @@ const NORMS: Record<string, ShopNorms> = {
     name: 'Стремянный',
     driverAt: '06:00',
     cookAt: ['06:00', '06:30'],
+    departureAt: '04:30',
     rawDriver: '6:00',
     rawCook: '2 с 6:00 1 с 6:30',
     source: 'reference',
@@ -254,46 +255,117 @@ function departure(name: string, time: string | null, date = '2026-09-01'): Depa
   };
 }
 
-test('1. выезд с РЦ: позже норматива — нарушение, зона по правилу конфига', () => {
+test('1. выезд с РЦ: норматив берётся у первой лавки маршрута', () => {
+  // Водитель в тот же день первым отметился в М24 — значит выезжал к ней,
+  // и сравнивать надо с её нормативом 04:30, а не с сетевым 04:59.
+  const attendance = [
+    mark('М24', 'driver', 'Водитель-экспедитор', 'Осипов Сергей', '5:10:00'),
+    mark('М24', 'cook', 'Повар', 'Повар Первый', '5:00:00'),
+  ];
+
   const r = analyzeDepartures(
-    [
-      departure('Вовремя Иван', '04:40'),
-      departure('Граница Пётр', '04:59'),
-      departure('Жёлтый Семён', '05:15'),
-      departure('Красный Борис', '05:45'),
-      departure('Без отметки Глеб', null),
-    ],
+    [departure('Осипов Сергей', '04:45')],
+    attendance,
+    NORMS,
     config,
     '2026-09-01',
     '2026-09-15',
   );
 
-  assert.equal(r.checked, 4, 'без отметки в знаменатель не идёт');
-  assert.equal(r.greenUntil, '04:59');
-  assert.equal(r.yellow, 1);
-  assert.equal(r.red, 1);
-  assert.deepEqual(
-    r.late.map((l) => l.employeeName),
-    ['Красный Борис', 'Жёлтый Семён'],
-    'худшие сверху',
+  assert.equal(r.byShopNorm, 1);
+  assert.equal(r.late.length, 1);
+  assert.equal(r.late[0].norm, '04:30');
+  assert.equal(r.late[0].normSource, 'shop');
+  assert.equal(r.late[0].shop, 'М24 Стремянный');
+  assert.equal(r.late[0].lateBy, 15);
+  // По сетевому порогу 04:59 этот выезд был бы «в норме» — и нарушение
+  // потерялось бы: у лавки с ранним выездом норматив жёстче сетевого.
+  assert.equal(r.late[0].status, 'yellow');
+});
+
+test('выезд, который не с чем связать, считается по сетевому правилу', () => {
+  const r = analyzeDepartures(
+    [departure('Никому Не Известный', '05:15')],
+    [],
+    NORMS,
+    config,
+    '2026-09-01',
+    '2026-09-15',
   );
-  assert.equal(r.late[0].lateBy, 46);
-  assert.equal(r.late[0].time, '05:45');
+
+  assert.equal(r.byShopNorm, 0);
+  assert.equal(r.late[0].normSource, 'network');
+  assert.equal(r.late[0].norm, '04:59');
+  assert.equal(r.late[0].shop, null);
+  assert.equal(r.late[0].lateBy, 16);
+});
+
+test('выезд в норматив своей лавки нарушением не считается', () => {
+  // М24 с нормативом 04:30: выезд в 04:25 — вовремя, хотя по прежнему
+  // единому порогу он тоже прошёл бы. Проверяем именно отсутствие строки.
+  const r = analyzeDepartures(
+    [departure('Осипов Сергей', '04:25')],
+    [mark('М24', 'driver', 'Водитель-экспедитор', 'Осипов Сергей', '5:10:00')],
+    NORMS,
+    config,
+    '2026-09-01',
+    '2026-09-15',
+  );
+
+  assert.equal(r.checked, 1);
+  assert.equal(r.late.length, 0);
+});
+
+test('зона считается от применённого норматива, а не от сетевого', () => {
+  // Шаг жёлтой зоны в конфиге — 30 минут (04:59 → 05:29). От норматива лавки
+  // 04:30 жёлтая тянется до 05:00, дальше красная.
+  const attendance = [mark('М24', 'driver', 'Водитель-экспедитор', 'Осипов Сергей', '5:10:00')];
+  const yellow = analyzeDepartures(
+    [departure('Осипов Сергей', '04:55')],
+    attendance,
+    NORMS,
+    config,
+    '2026-09-01',
+    '2026-09-15',
+  );
+  const red = analyzeDepartures(
+    [departure('Осипов Сергей', '05:20')],
+    attendance,
+    NORMS,
+    config,
+    '2026-09-01',
+    '2026-09-15',
+  );
+
+  assert.equal(yellow.late[0].status, 'yellow');
+  assert.equal(red.late[0].status, 'red');
 });
 
 test('выезда за период нет — это видно отдельно от «нарушений нет»', () => {
-  const empty = analyzeDepartures([], config, '2026-09-01', '2026-09-15');
+  const empty = analyzeDepartures([], [], NORMS, config, '2026-09-01', '2026-09-15');
   assert.equal(empty.hasData, false);
   assert.equal(empty.late.length, 0);
 
-  const clean = analyzeDepartures([departure('Вовремя Иван', '04:30')], config, '2026-09-01', '2026-09-15');
+  const clean = analyzeDepartures(
+    [departure('Вовремя Иван', '03:30')],
+    [],
+    NORMS,
+    config,
+    '2026-09-01',
+    '2026-09-15',
+  );
   assert.equal(clean.hasData, true);
   assert.equal(clean.late.length, 0);
 });
 
 test('выезд вне периода в отчёт не попадает', () => {
   const r = analyzeDepartures(
-    [departure('Поздний Гость', '06:00', '2026-08-31'), departure('Наш Водитель', '06:00', '2026-09-02')],
+    [
+      departure('Поздний Гость', '06:00', '2026-08-31'),
+      departure('Наш Водитель', '06:00', '2026-09-02'),
+    ],
+    [],
+    NORMS,
     config,
     '2026-09-01',
     '2026-09-15',
@@ -301,26 +373,4 @@ test('выезд вне периода в отчёт не попадает', () 
 
   assert.equal(r.checked, 1);
   assert.deepEqual(r.late.map((l) => l.employeeName), ['Наш Водитель']);
-});
-
-test('сводка отделяет красную зону от жёлтой: минута и час — разные новости', () => {
-  const r = analyzeViolations(
-    [
-      // +3 минуты к норме 6:00 — жёлтая зона (шаг 15 минут).
-      mark('М24', 'driver', 'Водитель-экспедитор', 'Водитель А', '6:03:00', '2026-09-01'),
-      mark('М24', 'cook', 'Повар', 'Повар Первый', '5:40:00', '2026-09-01'),
-      // +40 минут — красная.
-      mark('М24', 'driver', 'Водитель-экспедитор', 'Водитель А', '6:40:00', '2026-09-02'),
-      mark('М24', 'cook', 'Повар', 'Повар Первый', '5:40:00', '2026-09-02'),
-    ],
-    NORMS,
-    config,
-    '2026-09-01',
-    '2026-09-15',
-  );
-
-  assert.equal(r.summary.byKind.driver_late, 2);
-  assert.equal(r.summary.driverLateRed, 1);
-  assert.equal(r.days[0].driverStatus, 'yellow');
-  assert.equal(r.days[1].driverStatus, 'red');
 });

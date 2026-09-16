@@ -407,6 +407,12 @@ export interface DepartureViolation {
   /** «05:42» — время убытия с РЦ. */
   time: string;
   minutes: number;
+  /** Норматив, с которым сравнивали: «03:50». */
+  norm: string;
+  /** Откуда норматив: из справочника лавки или сетевое правило. */
+  normSource: 'shop' | 'network';
+  /** Первая лавка маршрута, если её удалось определить: «М1 Милютинский». */
+  shop: string | null;
   /** На сколько минут позже норматива. */
   lateBy: number;
   status: Extract<Status, 'yellow' | 'red'>;
@@ -415,9 +421,11 @@ export interface DepartureViolation {
 export interface DeparturesReport {
   /** Выездов с живой отметкой — знаменатель. */
   checked: number;
-  /** Норматив из конфига: «до 04:59 — вовремя». */
+  /** Сетевой норматив из конфига — запасной, когда лавку определить не вышло. */
   greenUntil: string;
   yellowUntil: string;
+  /** Скольким выездам норматив достался от лавки, а не сетевой. */
+  byShopNorm: number;
   yellow: number;
   red: number;
   late: DepartureViolation[];
@@ -428,14 +436,25 @@ export interface DeparturesReport {
 /**
  * Выезды с РЦ позже установленного времени.
  *
- * Норматив — `rules.driverDeparture` из конфига (🟢 до 05:00, 🟡 05:00–05:29,
- * 🔴 с 05:30). Флаг `enabled` там про другое: он отключает замену критерия
- * лавки на выезд, потому что связать выезд с конкретной лавкой не по чему.
- * Считать сам выезд он не мешает — это сетевой показатель, и здесь он живёт
- * отдельным списком, а не в разрезе лавок.
+ * Норматив выезда свой у каждой лавки («Выезд с РЦ» в справочнике): у
+ * Милютинского это 3:50, у Николоямской — 5:40, потому что и путь от РЦ
+ * разный. Сравнивать все выезды с одним сетевым порогом — значит записывать
+ * в нарушители того, кто едет дальше всех.
+ *
+ * Какая лавка «своя» для выезда. В выгрузке по РЦ лавки нет — там только
+ * водитель и время. Но тот же водитель в тот же день отмечается в лавках, и
+ * первая его отметка — это первая точка маршрута: именно к ней он и выезжал.
+ * По ней и берётся норматив. Где связать не вышло (водитель РЦ в лавках не
+ * отмечался), остаётся сетевое правило `rules.driverDeparture` — и в отчёте
+ * видно, какой норматив применён.
+ *
+ * Жёлтая и красная зона считаются от применённого норматива тем же шагом, что
+ * задан сетевым правилом: от «до 04:59 / до 05:29» это 30 минут.
  */
 export function analyzeDepartures(
   rows: readonly DepartureRow[],
+  attendance: readonly AttendanceRow[],
+  norms: Readonly<Record<string, ShopNorms>>,
   config: ThresholdConfig,
   from: string,
   to: string,
@@ -443,23 +462,36 @@ export function analyzeDepartures(
   const rule = config.rules.driverDeparture;
   const greenUntil = rule?.greenUntil ?? '04:59';
   const yellowUntil = rule?.yellowUntil ?? '05:29';
-  const green = parseClock(greenUntil);
-  const yellow = parseClock(yellowUntil);
+  const networkGreen = parseClock(greenUntil);
+  const redStep = Math.max(parseClock(yellowUntil) - networkGreen, 0);
+
+  const firstStop = firstStopByDriver(attendance, from, to);
 
   const inPeriod = rows.filter((r) => r.date >= from && r.date <= to);
   const withMark = inPeriod.filter((r) => r.departureMinutes != null);
 
   const late: DepartureViolation[] = [];
+  let byShopNorm = 0;
+
   for (const row of withMark) {
+    const stop = firstStop.get(`${row.date}|${row.employeeName}`);
+    const shopNorm = stop ? norms[stop.shopCode]?.departureAt ?? null : null;
+    if (shopNorm) byShopNorm += 1;
+
+    const boundary = shopNorm ? parseClock(shopNorm) : networkGreen;
     const minutes = row.departureMinutes!;
-    if (minutes <= green) continue;
+    if (minutes <= boundary) continue;
+
     late.push({
       date: row.date,
       employeeName: row.employeeName,
       time: formatMinutes(minutes),
       minutes,
-      lateBy: minutes - green,
-      status: minutes <= yellow ? 'yellow' : 'red',
+      norm: shopNorm ?? greenUntil,
+      normSource: shopNorm ? 'shop' : 'network',
+      shop: stop?.shopName ?? null,
+      lateBy: minutes - boundary,
+      status: minutes - boundary <= redStep ? 'yellow' : 'red',
     });
   }
 
@@ -469,11 +501,42 @@ export function analyzeDepartures(
     checked: withMark.length,
     greenUntil,
     yellowUntil,
+    byShopNorm,
     yellow: late.filter((l) => l.status === 'yellow').length,
     red: late.filter((l) => l.status === 'red').length,
     late,
     hasData: inPeriod.length > 0,
   };
+}
+
+/**
+ * Первая лавка маршрута каждого водителя по дням.
+ *
+ * Ключ — «дата|фамилия»: связать выезд с лавкой больше не по чему, маршрутных
+ * листов в радаре нет.
+ */
+function firstStopByDriver(
+  attendance: readonly AttendanceRow[],
+  from: string,
+  to: string,
+): Map<string, { shopCode: string; shopName: string; seconds: number }> {
+  const stops = new Map<string, { shopCode: string; shopName: string; seconds: number }>();
+
+  for (const row of attendance) {
+    if (row.criterion !== 'driver') continue;
+    if (row.date < from || row.date > to) continue;
+    if (row.arrivalSource !== 'mark') continue;
+    const seconds = markSeconds(row);
+    if (seconds == null) continue;
+
+    const key = `${row.date}|${row.employeeName}`;
+    const known = stops.get(key);
+    if (!known || seconds < known.seconds) {
+      stops.set(key, { shopCode: row.shopCode, shopName: row.shopName, seconds });
+    }
+  }
+
+  return stops;
 }
 
 /* -------------------------------- мелочи ---------------------------------- */
@@ -563,10 +626,10 @@ export function toCsv(report: ViolationsReport, departures: DeparturesReport): s
       'Выезд с РЦ позже норматива',
       l.date,
       '',
-      'РЦ',
+      l.shop ? `РЦ → ${l.shop}` : 'РЦ',
       l.employeeName,
       'Водитель',
-      departures.greenUntil,
+      l.normSource === 'shop' ? l.norm : `${l.norm} (сеть)`,
       l.time,
       String(l.lateBy),
       '',
