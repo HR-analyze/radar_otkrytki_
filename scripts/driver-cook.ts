@@ -15,7 +15,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   analyzeDriverCook,
+  formatDelta,
   isSuspicious,
+  toCsv,
   type DriverCookGroup,
   type DriverCookPair,
   type DriverCookReport,
@@ -105,7 +107,7 @@ async function main(): Promise<void> {
     console.log(`\nОтчёт: ${args.md}`);
   }
   if (args.csv) {
-    fs.writeFileSync(path.resolve(args.csv), csv(report.pairs), 'utf8');
+    fs.writeFileSync(path.resolve(args.csv), toCsv(report.pairs), 'utf8');
     console.log(`Таблица пар: ${args.csv}`);
   }
 }
@@ -186,7 +188,7 @@ function pairTable(pairs: readonly DriverCookPair[]): string {
     p.shopCode,
     p.driverTime,
     p.cookTime,
-    delta(p.deltaMinutes),
+    formatDelta(p.deltaMinutes),
     p.driverName,
     p.cookName,
     p.precedingMark ?? 'никого',
@@ -195,12 +197,6 @@ function pairTable(pairs: readonly DriverCookPair[]): string {
     ['дата', 'лавка', 'водитель', 'повар', 'разрыв', 'кто за рулём', 'кто на кухне', 'до них'],
     rows,
   );
-}
-
-/** «+2,4 мин» — водитель раньше; «−0,3 мин» — повар раньше. */
-function delta(minutes: number): string {
-  const sign = minutes > 0 ? '+' : minutes < 0 ? '−' : '';
-  return `${sign}${String(Math.abs(minutes)).replace('.', ',')} мин`;
 }
 
 function table(head: readonly string[], rows: readonly string[][]): string {
@@ -268,48 +264,11 @@ function markdown(r: DriverCookReport): string {
   out.push('| --- | --- | --- | --- | ---: | --- | --- |');
   for (const p of suspicious) {
     out.push(
-      `| ${p.date} | ${p.shopCode} | ${p.driverTime} | ${p.cookTime} | ${delta(p.deltaMinutes)} | ${p.driverName} | ${p.cookName} |`,
+      `| ${p.date} | ${p.shopCode} | ${p.driverTime} | ${p.cookTime} | ${formatDelta(p.deltaMinutes)} | ${p.driverName} | ${p.cookName} |`,
     );
   }
   out.push('');
   return out.join('\n');
-}
-
-function csv(pairs: readonly DriverCookPair[]): string {
-  const head = [
-    'Дата',
-    'Код лавки',
-    'Лавка',
-    'Отметка водителя',
-    'Отметка повара',
-    'Разрыв, мин',
-    'Категория',
-    'До пары никого',
-    'Кто отметился раньше',
-    'Водитель',
-    'Повар',
-    'Должность повара',
-  ];
-  const rows = pairs.map((p) => [
-    p.date,
-    p.shopCode,
-    p.shopName,
-    p.driverTime,
-    p.cookTime,
-    String(p.deltaMinutes).replace('.', ','),
-    p.bucket,
-    p.aloneAtOpen ? 'да' : 'нет',
-    p.precedingMark ?? '',
-    p.driverName,
-    p.cookName,
-    p.cookRole,
-  ]);
-  // Разделитель «;» и BOM: так Excel открывает файл колонками и не ломает кириллицу.
-  return '﻿' + [head, ...rows].map((r) => r.map(cell).join(';')).join('\r\n') + '\r\n';
-}
-
-function cell(v: string): string {
-  return /[";\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
 
 main().catch((e: unknown) => {

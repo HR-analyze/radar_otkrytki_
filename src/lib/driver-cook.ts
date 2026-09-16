@@ -291,3 +291,54 @@ export const BUCKET_TITLES: Record<DriverCookBucket, string> = {
   cook_before_close: 'повар раньше водителя, в пределах порога',
   cook_before: 'повар раньше водителя',
 };
+
+/**
+ * Пары таблицей для Excel: разделитель `;` и BOM в начале — иначе Excel
+ * открывает файл одной колонкой и ломает кириллицу.
+ *
+ * Общая для команды в консоли и кнопки «Скачать CSV» на вкладке: колонки в
+ * обоих случаях должны быть одни и те же, иначе выгрузки не сравнить между
+ * собой.
+ */
+export function toCsv(pairs: readonly DriverCookPair[]): string {
+  const head = [
+    'Дата',
+    'Код лавки',
+    'Лавка',
+    'Отметка водителя',
+    'Отметка повара',
+    'Разрыв, мин',
+    'Категория',
+    'До пары никого',
+    'Кто отметился раньше',
+    'Водитель',
+    'Повар',
+    'Должность повара',
+  ];
+  const rows = pairs.map((p) => [
+    p.date,
+    p.shopCode,
+    p.shopName,
+    p.driverTime,
+    p.cookTime,
+    String(p.deltaMinutes).replace('.', ','),
+    BUCKET_TITLES[p.bucket],
+    p.aloneAtOpen ? 'да' : 'нет',
+    p.precedingMark ?? '',
+    p.driverName,
+    p.cookName,
+    p.cookRole,
+  ]);
+
+  return '﻿' + [head, ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n') + '\r\n';
+}
+
+function csvCell(v: string): string {
+  return /[";\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+}
+
+/** «Разрыв» человеку: «+2,4 мин» — водитель раньше, «−0,3 мин» — повар раньше. */
+export function formatDelta(minutes: number): string {
+  const sign = minutes > 0 ? '+' : minutes < 0 ? '−' : '';
+  return `${sign}${String(Math.abs(minutes)).replace('.', ',')} мин`;
+}
