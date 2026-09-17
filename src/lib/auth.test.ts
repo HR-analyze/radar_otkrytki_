@@ -76,6 +76,7 @@ test('пароль спрашивается на вкладках, где дан
     // правка нормы перекрашивает статусы лавки за все дни.
     '/settings',
     '/api/norms',
+    '/api/contest/violations',
   ];
   for (const p of managed) {
     assert.equal(isManaged(p), true, `${p} должен быть под паролем`);

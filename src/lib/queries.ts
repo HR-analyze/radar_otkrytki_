@@ -11,7 +11,7 @@ import {
 } from './types';
 import { aggregateStatuses, isOpenOn, roundScore, statusFromScore } from './status';
 import { parseClock } from './time';
-import { compareShopNumber, isExactCode, matchesShop, shopNumber } from './shops';
+import { compareShopNumber, findShops, isExactCode, matchesShop, shopNumber } from './shops';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
 import {
   analyzeDepartures,
@@ -23,6 +23,7 @@ import {
 import { readNorms } from './shop-norms-store';
 import type { DepartureRow } from './parsers/departure';
 import {
+  CONTEST_START,
   addStatus,
   averagePoints,
   emptyScore,
@@ -30,6 +31,7 @@ import {
   sumScores,
   type ContestScore,
 } from './contest';
+import { readContestViolations, type ContestViolation } from './contest-violations-store';
 
 /**
  * Чтение для дашборда поверх снимка в памяти (см. snapshot.ts).
@@ -627,10 +629,21 @@ export async function contest(
   rows: ContestRow[];
   regions: ContestRegionRow[];
   total: ContestScore;
+  violations: ContestViolation[];
 }> {
   const snap = await loadSnapshot();
 
-  const shops = await shopsMatching(filters.region, filters.shop, filters.from, filters.to);
+  const scoredShops = await shopsMatching(filters.region, filters.shop, filters.from, filters.to);
+  // Нарушения закреплены за конкурсом, а не за выбранными днями. Поиск по
+  // лавке и РМ действует и на них; передача лавки не переносит чужой штраф.
+  const searchedShops = findShops(snap.shops, filters.shop ?? '');
+  const searchedCodes = new Set(searchedShops.map((s) => s.code));
+  const violations = filters.to < CONTEST_START ? [] : (await readContestViolations()).filter(
+    (v) => searchedCodes.has(v.shopCode) && (!filters.region || v.region === filters.region),
+  );
+  const penalizedCodes = new Set(violations.map((v) => v.shopCode));
+  const shops = [...new Map([...scoredShops, ...searchedShops.filter((s) => penalizedCodes.has(s.code))]
+    .map((s) => [s.code, s])).values()];
   const allowedShops = new Set(shops.map((s) => s.code));
   const inRegion = await regionDayMatcher(filters.region);
 
@@ -644,7 +657,6 @@ export async function contest(
   );
 
   const dates = [...new Set(relevant.map((s) => s.date))].sort();
-  if (dates.length === 0) return { dates, rows: [], regions: [], total: emptyScore() };
 
   const byShop = new Map<string, Map<string, ContestCell>>();
   for (const s of relevant) {
@@ -658,8 +670,7 @@ export async function contest(
 
   const rows: ContestRow[] = [];
   for (const shop of shops) {
-    const days = byShop.get(shop.code);
-    if (!days) continue;
+    const days = byShop.get(shop.code) ?? new Map<string, ContestCell>();
 
     const cells: Record<string, ContestCell> = {};
     const score = emptyScore();
@@ -681,8 +692,17 @@ export async function contest(
       bucket.shops.add(shop.code);
     }
 
-    if (score.rated === 0) continue;
-    rows.push({ shop, cells, score, avgFill: fillSum / score.rated });
+    for (const violation of violations.filter((v) => v.shopCode === shop.code)) {
+      score.violations++;
+      score.points--;
+      let bucket = regions.get(violation.region);
+      if (!bucket) regions.set(violation.region, (bucket = { score: emptyScore(), fill: 0, shops: new Set() }));
+      bucket.score.violations++;
+      bucket.score.points--;
+      bucket.shops.add(shop.code);
+    }
+    if (score.rated === 0 && score.violations === 0) continue;
+    rows.push({ shop, cells, score, avgFill: score.rated ? fillSum / score.rated : null });
   }
 
   // Больше баллов — выше; при равенстве вперёд тот, у кого меньше красных, а
@@ -717,6 +737,7 @@ export async function contest(
     rows,
     regions: regionRows,
     total: sumScores(rows.map((r) => r.score)),
+    violations,
   };
 }
 

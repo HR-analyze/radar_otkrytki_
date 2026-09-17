@@ -33,7 +33,7 @@ import {
  * в альбомной ориентации минус поля, фиксированные колонки, отступы ячеек и
  * минимум под фамилию РМ.
  */
-export const DAYS_MAX_WIDTH = 842 - 28 * 2 - (14 + 120 + 52 + 38 + 34) - 7 * 8 - 90;
+export const DAYS_MAX_WIDTH = 842 - 28 * 2 - (14 + 120 + 52 + 38 + 48 + 34) - 8 * 8 - 90;
 
 export interface ContestReportInput {
   from: string;
@@ -89,6 +89,7 @@ export function contestReportDefinition(input: ContestReportInput): TDocumentDef
       header(scope, generatedAt),
       kpiRow(total, mean, rows.length, dates.length),
       legend(),
+      { text: 'Каждое нарушение: постоянный −1 к итогу лавки и её РМ, независимо от выбранного периода.', fontSize: 7, color: MUTED, margin: [0, 5, 0, 0] },
       { text: 'Рейтинг лавок', style: 'h2', margin: [0, 14, 0, 6] },
       shopsTable(rows, dates),
       // Разрез по РМ — с новой страницы: разорванный пополам, он читается как
@@ -194,7 +195,7 @@ function shopsTable(rows: ContestRow[], dates: string[]): Content {
   // Шаг полосы дней подбирается под период: за две недели квадраты крупные,
   // за месяц — мельче, но в отведённую ширину влезают всегда.
   const step = Math.min(9, DAYS_MAX_WIDTH / Math.max(dates.length, 1));
-  const daysWidth = step * Math.max(dates.length, 1);
+  const daysWidth = dates.length ? step * dates.length : 52;
   const size = Math.max(3, step - 1.6);
 
   // Заголовки счётчиков — словами: эмодзи Roboto не рисует.
@@ -205,6 +206,7 @@ function shopsTable(rows: ContestRow[], dates: string[]): Content {
     { text: dayHeader(dates, step), style: 'th' },
     { text: 'кр / жл / зл', style: 'th', alignment: 'right' },
     { text: 'Витрина', style: 'th', alignment: 'right' },
+    { text: 'Нарушения', style: 'th', alignment: 'right' },
     { text: 'Баллы', style: 'th', alignment: 'right' },
   ];
 
@@ -212,7 +214,7 @@ function shopsTable(rows: ContestRow[], dates: string[]): Content {
     { text: String(i + 1), alignment: 'right', color: MUTED },
     { text: r.shop.name, bold: true },
     { text: r.shop.region ?? '—', color: MUTED },
-    { canvas: dayStripe(r, dates, step, size), margin: [0, 1.5, 0, 0] },
+    dates.length ? { canvas: dayStripe(r, dates, step, size), margin: [0, 1.5, 0, 0] } : { text: '—', color: MUTED },
     {
       text: `${r.score.red} / ${r.score.yellow} / ${r.score.green}`,
       alignment: 'right',
@@ -223,6 +225,7 @@ function shopsTable(rows: ContestRow[], dates: string[]): Content {
       alignment: 'right',
       color: MUTED,
     },
+    { text: String(r.score.violations), alignment: 'right', color: MUTED },
     {
       text: formatPoints(r.score.points),
       alignment: 'right',
@@ -236,7 +239,7 @@ function shopsTable(rows: ContestRow[], dates: string[]): Content {
       headerRows: 1,
       // РМ — звёздочкой: лишнюю ширину лучше отдать длинным фамилиям, чем
       // оставить пустое поле у правого края.
-      widths: [14, 120, '*', daysWidth, 52, 38, 34],
+      widths: [14, 120, '*', daysWidth, 52, 38, 48, 34],
       body: [head, ...body],
     },
     layout: rowsLayout(),
@@ -245,6 +248,7 @@ function shopsTable(rows: ContestRow[], dates: string[]): Content {
 
 /** Подписи дней над полосой — только если они не сольются в кашу. */
 function dayHeader(dates: string[], step: number): string {
+  if (dates.length === 0) return 'Нет витрин';
   return step >= 12
     ? dates.map((d) => shortDate(d)).join(' ')
     : `Дни: ${shortDate(dates[0])} — ${shortDate(dates[dates.length - 1])}`;
@@ -278,6 +282,7 @@ function regionsTable(regions: ContestRegionRow[]): Content {
     { text: 'кр / жл / зл', style: 'th', alignment: 'right' },
     { text: 'Витрина', style: 'th', alignment: 'right' },
     { text: 'Ср. балл', style: 'th', alignment: 'right' },
+    { text: 'Нарушения', style: 'th', alignment: 'right' },
     { text: 'Баллы', style: 'th', alignment: 'right' },
   ];
 
@@ -297,6 +302,7 @@ function regionsTable(regions: ContestRegionRow[]): Content {
         color: MUTED,
       },
       { text: mean == null ? '—' : formatPoints(mean), alignment: 'right' },
+      { text: String(r.score.violations), alignment: 'right', color: MUTED },
       {
         text: formatPoints(r.score.points),
         alignment: 'right',
@@ -311,7 +317,7 @@ function regionsTable(regions: ContestRegionRow[]): Content {
       headerRows: 1,
       // Имя РМ — звёздочкой: считать остаток вручную нельзя, к ширинам
       // прибавляются отступы ячеек, и последняя колонка уезжала за край листа.
-      widths: ['*', 40, 70, 50, 50, 44],
+      widths: ['*', 40, 70, 50, 50, 52, 44],
       body: [head, ...body],
     },
     layout: rowsLayout(),

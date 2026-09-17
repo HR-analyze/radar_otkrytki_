@@ -85,6 +85,7 @@ export function ContestTable({
                 Витрина
               </SortButton>
             </th>
+            <th className="px-2 py-2 text-right text-xs font-medium muted">Нарушения</th>
             <th
               className="hidden px-2 py-2 text-right text-xs font-medium whitespace-nowrap muted md:table-cell"
               aria-sort={sort === 'rank' ? 'descending' : 'none'}
@@ -135,6 +136,9 @@ export function ContestTable({
               <td className="hidden px-2 py-1 text-right text-xs whitespace-nowrap tabular-nums muted md:table-cell">
                 {r.avgFill == null ? '—' : `${Math.round(r.avgFill * 100)}%`}
               </td>
+              <td className="px-2 py-1 text-right text-xs tabular-nums" title="Каждое нарушение вычитает 1 балл из итога">
+                {r.score.violations}{r.score.violations > 0 && ` (${formatPoints(-r.score.violations)})`}
+              </td>
               <Points score={r.score} />
               <td aria-hidden />
             </tr>
@@ -177,9 +181,8 @@ function SortButton({
  * `rank` — то, как строки пришли с сервера, поэтому здесь он ничего не
  * сортирует: правило турнирной таблицы одно и живёт в queries.ts.
  *
- * Лавки без единого оценённого дня сюда не доезжают вовсе (сервер их
- * отбрасывает), так что защищаться от «нуля, который на самом деле не
- * участвовала» здесь не от чего.
+ * Сервер включает лавки с оценёнными днями или закреплённым нарушением.
+ * У штрафа без витрин нет средней наполненности.
  */
 function order(rows: readonly ContestRow[], sort: Sort): ContestRow[] {
   if (sort === 'rank') return [...rows];
@@ -211,7 +214,7 @@ function Points({ score }: { score: ContestScore }) {
   return (
     <td
       className="hidden px-2 py-1 text-right text-sm font-semibold whitespace-nowrap tabular-nums md:table-cell"
-      title={`🟢 ${score.green} · 🟡 ${score.yellow} · 🔴 ${score.red} → ${formatPoints(score.points)} за ${score.rated} ${plural(score.rated, 'день', 'дня', 'дней')}`}
+      title={`🟢 ${score.green} · 🟡 ${score.yellow} · 🔴 ${score.red} · нарушения ${formatPoints(-score.violations)} → ${formatPoints(score.points)} за ${score.rated} ${plural(score.rated, 'день', 'дня', 'дней')}`}
       style={{ color: pointsColor(score.points) }}
     >
       {formatPoints(score.points)}

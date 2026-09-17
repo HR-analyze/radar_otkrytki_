@@ -139,6 +139,15 @@ function migrate(db: BetterSqlite3.Database): void {
       updated_at  TEXT NOT NULL
     );
 
+    -- Ручные нарушения конкурса: одна запись = один постоянный штраф.
+    CREATE TABLE IF NOT EXISTS contest_violations (
+      id         TEXT PRIMARY KEY,
+      shop_code  TEXT NOT NULL,
+      region     TEXT NOT NULL,
+      reason     TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
     -- Разовые отметки: например, что сид из репозитория уже залит.
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,

@@ -390,12 +390,12 @@ test('конкурс: баллы = зелёные минус красные, ж�
     assert.equal(r.score.rated, cells.length, `${r.shop.code}: знаменатель разошёлся с ячейками`);
     assert.equal(
       r.score.points,
-      r.score.green - r.score.red,
+      r.score.green - r.score.red - r.score.violations,
       `${r.shop.code}: жёлтые не должны двигать сумму`,
     );
     assert.equal(
       r.score.points,
-      cells.reduce((a, c) => a + c.points, 0),
+      cells.reduce((a, c) => a + c.points, 0) - r.score.violations,
       `${r.shop.code}: сумма строки разошлась с ячейками`,
     );
   }
