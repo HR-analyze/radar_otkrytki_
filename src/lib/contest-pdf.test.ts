@@ -55,6 +55,24 @@ test('в отчёте есть период, лавки и РМ', () => {
   assert.match(text, /\+2/, 'балл лавки должен быть со знаком');
 });
 
+test('штраф виден в обеих таблицах PDF, включая период без витрин', async () => {
+  const data = input();
+  for (const row of data.rows) {
+    row.cells = {};
+    row.avgFill = null;
+    row.score = { green: 0, yellow: 0, red: 0, rated: 0, violations: 1, points: -1 };
+  }
+  data.dates = [];
+  data.regions = data.rows.map((r) => ({ region: r.shop.region!, shops: 1, score: r.score, avgFill: null }));
+  data.total = sumScores(data.rows.map((r) => r.score));
+  const text = JSON.stringify(contestReportDefinition(data));
+  assert.equal((text.match(/"text":"Нарушения"/g) ?? []).length, 2);
+  assert.match(text, /−1/);
+  assert.doesNotMatch(text, /undefined|NaN/);
+  const pdf = await renderContestReport(data);
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+});
+
 test('эмодзи и стрелок в отчёте нет — Roboto их не рисует', () => {
   const text = JSON.stringify(contestReportDefinition(input()));
 
@@ -85,7 +103,7 @@ test('за месяц полоса дней сжимается, а не выле
   const doc = contestReportDefinition({ ...input(), from: dates[0], to: dates[30], dates });
 
   const table = (doc.content as { table?: { widths?: unknown[] } }[]).find(
-    (c) => Array.isArray(c.table?.widths) && c.table.widths.length === 7,
+    (c) => Array.isArray(c.table?.widths) && c.table.widths.length === 8,
   );
   const daysWidth = table?.table?.widths?.[3] as number;
 

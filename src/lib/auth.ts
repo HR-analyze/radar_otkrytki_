@@ -27,9 +27,9 @@ export const COOKIE = 'radar_manage';
  * нормы перекрашивает статусы лавки за все дни. Раньше страница была только
  * для чтения и висела открытой.
  */
-const MANAGED = ['/showcase', '/history', '/settings', '/api/showcase', '/api/norms'];
+const MANAGED = ['/showcase', '/history', '/settings', '/api/showcase', '/api/norms', '/api/contest/violations'];
 
-export const MANAGED_TITLE = 'Витрины, История и Пороги';
+export const MANAGED_TITLE = 'Витрины, История, Пороги и внесение нарушений';
 
 export function password(): string | undefined {
   return process.env.RADAR_MANAGE_PASSWORD || undefined;

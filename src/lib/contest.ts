@@ -36,12 +36,14 @@ export interface ContestScore {
    * читается как «конкурс идёт 22 дня».
    */
   rated: number;
-  /** Сумма баллов: 🟢 +1, 🟡 0, 🔴 −1. */
+  /** Закреплённые нарушения: каждое вычитает один балл из итога. */
+  violations: number;
+  /** Сумма баллов за витрину минус нарушения. */
   points: number;
 }
 
 export function emptyScore(): ContestScore {
-  return { green: 0, yellow: 0, red: 0, rated: 0, points: 0 };
+  return { green: 0, yellow: 0, red: 0, rated: 0, violations: 0, points: 0 };
 }
 
 /** Балл одного дня; null — день без оценки. */
@@ -78,6 +80,7 @@ export function sumScores(scores: readonly ContestScore[]): ContestScore {
     total.yellow += s.yellow;
     total.red += s.red;
     total.rated += s.rated;
+    total.violations += s.violations;
     total.points += s.points;
   }
   return total;

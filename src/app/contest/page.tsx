@@ -1,3 +1,8 @@
+import { cookies } from 'next/headers';
+import { COOKIE, isUnlocked } from '@/lib/auth';
+import { openManualDb } from '@/lib/manual-db';
+import { readContestViolations } from '@/lib/contest-violations-store';
+import { ContestViolations } from '@/components/ContestViolations';
 import Link from 'next/link';
 import { loadConfig } from '@/lib/config';
 import { resolveParams } from '@/lib/params';
@@ -34,13 +39,20 @@ export default async function ContestPage({
   const config = loadConfig();
   const [regions, shops] = await Promise.all([listRegions(p.from, p.to), listShops()]);
 
-  const { dates, rows, regions: regionRows, total } = await contest({
+  const { dates, rows, regions: regionRows, total, violations } = await contest({
     from: p.from,
     to: p.to,
     region: p.region,
     shop: p.shop,
   });
 
+  // В фильтре остаётся и РМ с закреплённым штрафом после передачи лавки.
+  const allViolations = await readContestViolations();
+  for (const v of allViolations) {
+    if (!regions.current.includes(v.region) && !regions.past.includes(v.region)) regions.past.push(v.region);
+  }
+  const unlocked = await isUnlocked((await cookies()).get(COOKIE)?.value);
+  const editable = Boolean(await openManualDb());
   const avg = averagePoints(total);
 
   return (
@@ -49,7 +61,7 @@ export default async function ContestPage({
         <div>
         <h1 className="text-2xl font-semibold tracking-tight">Конкурс по витринам</h1>
         <p className="mt-1 text-sm muted">
-          Только наполнение витрины. Балл за день: 🟢 +1 · 🟡 0 · 🔴 −1
+          Балл за витрину: 🟢 +1 · 🟡 0 · 🔴 −1. Каждое нарушение: −1 к итогу.
           {rows.length > 0 && (
             <>
               {' · '}
@@ -86,7 +98,7 @@ export default async function ContestPage({
         showStatus={false}
       />
 
-      {dates.length === 0 || rows.length === 0 ? (
+      {rows.length === 0 ? (
         <div className="surface p-8 text-center text-sm muted">
           {p.shop
             ? `По запросу «${p.shop}» витрин за период не нашлось. Попробуйте код (М17) или часть названия.`
@@ -104,7 +116,7 @@ export default async function ContestPage({
               value={formatPoints(total.points)}
               /* Без подписи: «за N оценённых дней» под суммой читалось как
                  «баллы за день» и путало — само число есть в подсказке. */
-              explain="Сумма баллов всех лавок за все дни периода: зелёный день даёт +1, жёлтый 0, красный −1. Дни без заполненной витрины не считаются вовсе."
+              explain="Баллы за витрины выбранного периода минус закреплённые нарушения. За каждое нарушение вычитается один балл, независимо от числа дней."
             />
             <Tile
               title="Средний балл за день"
@@ -118,13 +130,13 @@ export default async function ContestPage({
               title="Лавок в конкурсе"
               value={String(rows.length)}
               hint={`дней в таблице: ${dates.length}`}
-              explain="Лавки, попавшие под фильтры. Те, у кого за период нет ни одного дня с заполненной витриной, в сортировках всегда уходят вниз: ноль баллов у них означает «не участвовала», а не «сыграла вничью»."
+              explain="Лавки с заполненными витринами или закреплёнными нарушениями, попавшие под фильтры."
             />
           </div>
 
           {/* Обозначения те же, что на радаре, но балл — своё правило, и
               его стоит держать перед глазами рядом с таблицей. */}
-          <StatusLegend note="Балл за день: 🟢 +1 · 🟡 0 · 🔴 −1. Клик по ячейке — карточка лавки за этот день." />
+          <StatusLegend note="Балл за день: 🟢 +1 · 🟡 0 · 🔴 −1. Нарушение: −1 к итогу. Клик по ячейке — карточка лавки за этот день." />
 
           {/* --- Лавки --- */}
           <ContestTable rows={rows} dates={dates} from={p.from} to={p.to} />
@@ -134,7 +146,7 @@ export default async function ContestPage({
             <h2 className="text-sm font-semibold">Статистика по РМ</h2>
             <p className="mt-0.5 text-xs muted">
               День лавки идёт тому РМ, который вёл её в этот день. Сортировка — по среднему баллу:
-              сумма у РМ с двенадцатью лавками больше просто потому, что лавок больше.
+              сумма у РМ с двенадцатью лавками больше просто потому, что лавок больше. Закреплённые нарушения вычтены из баллов.
             </p>
             {regionRows.length === 0 ? (
               <p className="mt-4 text-sm muted">За период РМ не определились — справочник пуст.</p>
@@ -154,9 +166,10 @@ export default async function ContestPage({
                       <th className="px-2 py-2 text-right text-xs font-medium muted">
                         <span className="inline-flex items-center gap-1">
                           Ср. балл
-                          <Hint text="Сумма баллов ÷ оценённые лавко-дни: средний балл одной лавки за один день. Именно по нему таблица и отсортирована — сумма у РМ с двенадцатью лавками больше просто потому, что лавок больше." />
+                          <Hint text="Сумма баллов ÷ оценённые лавко-дни: средний балл одной лавки за один день. Именно по нему таблица и отсортирована — сумма у РМ с двенадцатью лавками больше просто потому, что лавок больше. Закреплённые нарушения вычтены из баллов." />
                         </span>
                       </th>
+                      <th className="px-2 py-2 text-right text-xs font-medium muted">Нарушения</th>
                       <th className="px-2 py-2 text-right text-xs font-medium muted">Баллы</th>
                     </tr>
                   </thead>
@@ -183,6 +196,9 @@ export default async function ContestPage({
                           <td className="px-2 py-1.5 text-right text-xs font-medium tabular-nums">
                             {mean == null ? '—' : formatPoints(mean)}
                           </td>
+                          <td className="px-2 py-1.5 text-right text-xs tabular-nums" title="Каждое нарушение вычитает 1 балл из итога">
+                            {r.score.violations}{r.score.violations > 0 && ` (${formatPoints(-r.score.violations)})`}
+                          </td>
                           <td
                             className="px-2 py-1.5 text-right text-sm font-semibold tabular-nums"
                             title={`${r.score.rated} ${plural(r.score.rated, 'оценённый лавко-день', 'оценённых лавко-дня', 'оценённых лавко-дней')}`}
@@ -199,6 +215,9 @@ export default async function ContestPage({
           </section>
         </>
       )}
+      <ContestViolations violations={violations} shops={shops} editable={editable}
+        unlocked={unlocked} tokenRequired={Boolean(process.env.RADAR_UPLOAD_TOKEN)}
+        returnTo={`/contest?${reportQuery(p)}`} />
     </div>
   );
 }
