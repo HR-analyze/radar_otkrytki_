@@ -154,7 +154,7 @@ async function importShowcase(files: readonly UploadInspection[]): Promise<strin
   }
 
   try {
-    const { changed } = await saveShowcaseEdits(edits);
+    const { changed } = await saveShowcaseEdits(edits, { source: 'upload' });
     // Снимок держит витрины в кеше — без сброса правки были бы видны не сразу.
     invalidateSnapshot();
 

@@ -97,6 +97,38 @@ function migrate(db: BetterSqlite3.Database): void {
       updated_at TEXT NOT NULL
     );
 
+    -- Журнал правок витрин: одна строка = одно изменённое поле.
+    --
+    -- Зачем отдельная таблица. В showcase_fill лежит только текущее значение и
+    -- время последней правки: на вопрос «а 95% с утра кто-то менял или их там
+    -- и не было?» она не отвечает — прежнее число перезаписано, а стёртое
+    -- значение исчезает вместе со строкой. Журнал пишется в той же транзакции,
+    -- что и сама правка: запись без правки и правка без записи невозможны.
+    --
+    -- Кто правил, здесь не пишется: вход в радар один общий пароль, отдельных
+    -- пользователей нет — и выдумывать автора там, где его неоткуда взять,
+    -- хуже, чем честно его не показывать. Вместо автора — source: пришла
+    -- правка со страницы «Витрины» или из залитой книги.
+    --
+    -- field: 'fill' (наполнение, доля 0–1 строкой) или 'note' (комментарий).
+    -- NULL в old_value значит «значения не было», в new_value — «стёрли».
+    CREATE TABLE IF NOT EXISTS showcase_audit (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      at        TEXT NOT NULL,
+      date      TEXT NOT NULL,
+      shop_code TEXT NOT NULL,
+      field     TEXT NOT NULL,
+      old_value TEXT,
+      new_value TEXT,
+      source    TEXT NOT NULL
+    );
+
+    -- Лента правок читается двумя разрезами: «что меняли последним» и «что
+    -- было с этой лавкой в этот день».
+    CREATE INDEX IF NOT EXISTS showcase_audit_at ON showcase_audit (at DESC);
+    CREATE INDEX IF NOT EXISTS showcase_audit_cell
+      ON showcase_audit (date, shop_code, at DESC);
+
     -- Журнал загрузок для вкладки «История»: что и когда залили кнопкой.
     CREATE TABLE IF NOT EXISTS uploads (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
