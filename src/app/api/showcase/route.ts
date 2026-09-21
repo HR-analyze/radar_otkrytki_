@@ -184,7 +184,7 @@ export async function POST(req: Request) {
 
   let changed: number;
   try {
-    ({ changed } = await saveShowcaseEdits(edits.value));
+    ({ changed } = await saveShowcaseEdits(edits.value, { source: 'ui' }));
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : 'Не удалось сохранить' },

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig } from './config';
 import { getMeta, manualDbWritable, openManualDb, setMeta } from './manual-db';
+import { showcaseAuditWriter, type ShowcaseEditSource } from './showcase-audit';
 import { normalizeFill, statusForFill } from './status';
 import type { CriterionStatusRow, ShowcaseRow } from './types';
 
@@ -21,6 +22,9 @@ import type { CriterionStatusRow, ShowcaseRow } from './types';
  *
  * В снимок витрины не пекутся: сборка занимает секунды, а правка ячейки должна
  * быть видна сразу. Они подмешиваются при чтении снимка — см. withShowcase.
+ *
+ * Здесь лежит только текущее значение. «Было 95%, стало 90%, в 13:40» —
+ * в журнале правок, см. showcase-audit.ts: он пишется этой же транзакцией.
  */
 
 export interface ShowcaseStore {
@@ -122,14 +126,24 @@ export async function readShowcase(): Promise<ShowcaseStore> {
   };
 }
 
+export interface SaveShowcaseOptions {
+  /** Откуда пришла правка: пишется в журнал (см. showcase-audit.ts). */
+  source?: ShowcaseEditSource;
+  /** Время правки, ISO. Задаётся в тестах, чтобы лента была предсказуемой. */
+  now?: string;
+}
+
 /**
  * Сохраняет правки. Возвращает, сколько значений реально изменилось: повтор
  * того же числа правкой не считается.
+ *
+ * Заодно пишет журнал «было → стало» — в той же транзакции, что и сами данные.
  */
 export async function saveShowcaseEdits(
   edits: readonly ShowcaseEdit[],
-  now = new Date().toISOString(),
+  options: SaveShowcaseOptions = {},
 ): Promise<{ changed: number }> {
+  const now = options.now ?? new Date().toISOString();
   const db = await openManualDb();
   if (!db) {
     throw new Error(
@@ -156,6 +170,8 @@ export async function saveShowcaseEdits(
      ON CONFLICT(date) DO UPDATE SET updated_at = excluded.updated_at`,
   );
 
+  const audit = showcaseAuditWriter(db, now, options.source ?? 'unknown');
+
   const apply = db.transaction((list: readonly ShowcaseEdit[]) => {
     let changed = 0;
     for (const e of list) {
@@ -169,12 +185,22 @@ export async function saveShowcaseEdits(
         if (e.fill === null) {
           if (before !== undefined) {
             drop.run(e.date, e.shopCode);
+            // Стирание — единственная правка, после которой в showcase_fill не
+            // остаётся вообще ничего. Без журнала она была бы невидима.
+            audit({ date: e.date, shopCode: e.shopCode, field: 'fill', from: String(before), to: null });
             touched = true;
           }
         } else {
           const next = round(normalizeFill(e.fill));
           if (before !== next) {
             put.run(e.date, e.shopCode, next, now);
+            audit({
+              date: e.date,
+              shopCode: e.shopCode,
+              field: 'fill',
+              from: before === undefined ? null : String(before),
+              to: String(next),
+            });
             touched = true;
           }
         }
@@ -187,10 +213,18 @@ export async function saveShowcaseEdits(
         if (next === '') {
           if (was !== undefined) {
             dropNote.run(e.date, e.shopCode);
+            audit({ date: e.date, shopCode: e.shopCode, field: 'note', from: was, to: null });
             touched = true;
           }
         } else if (was !== next) {
           putNote.run(e.date, e.shopCode, next, now);
+          audit({
+            date: e.date,
+            shopCode: e.shopCode,
+            field: 'note',
+            from: was ?? null,
+            to: next,
+          });
           touched = true;
         }
       }

@@ -3,7 +3,15 @@ import path from 'node:path';
 import { readUploadLog, type UploadLogEntry } from '@/lib/upload-log';
 import { fixturesDir } from '@/lib/upload-store';
 import { readShowcase } from '@/lib/showcase-store';
+import {
+  formatAuditValue,
+  readShowcaseAudit,
+  showcaseAuditCount,
+  SOURCE_TITLE,
+  type ShowcaseAuditEntry,
+} from '@/lib/showcase-audit';
 import { regionTransitions } from '@/lib/queries';
+import { normalizeCode } from '@/lib/shops';
 import { formatMoment, shortDate } from '@/lib/time';
 import { plural } from '@/lib/plural';
 
@@ -19,14 +27,34 @@ const KIND_TITLE: Record<string, string> = {
 /**
  * История: что и когда попало в радар.
  *
- * Три ответа на вопрос «откуда взялись эти цифры»: журнал загрузок с временем,
- * текущее состояние папки выгрузок и когда последний раз правили витрины.
+ * Ответы на вопрос «откуда взялись эти цифры»: журнал загрузок с временем,
+ * текущее состояние папки выгрузок, журнал правок витрин «было → стало» и
+ * когда последний раз правили витрины.
  */
-export default async function HistoryPage() {
+export default async function HistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  // Фильтр журнала живёт в ссылке: «посмотри, меняли ли М22 за 21.09» должно
+  // передаваться ссылкой, а не пересказом, куда что ввести.
+  const shopFilter = typeof sp.shop === 'string' ? sp.shop.trim().slice(0, 8) : '';
+  const dateFilter = typeof sp.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sp.date)
+    ? sp.date
+    : '';
+
   const log = await readUploadLog();
   const files = readFixtureFiles();
   const showcase = await readShowcase();
   const transitions = await regionTransitions();
+  const audit = await readShowcaseAudit({
+    shopCode: shopFilter || undefined,
+    date: dateFilter || undefined,
+  });
+  // Пустая лента под фильтром и пустой журнал вообще — разные ответы:
+  // первое значит «не меняли», второе — «спросить не у кого».
+  const auditTotal = await showcaseAuditCount();
 
   const showcaseDays = Object.entries(showcase.touched)
     .sort((a, b) => b[1].localeCompare(a[1]))
@@ -107,7 +135,7 @@ export default async function HistoryPage() {
           <h2 className="text-sm font-semibold">Правки наполнения витрин</h2>
           <p className="mt-0.5 text-xs muted">
             Витрины заполняются на вкладке «Витрины», а не файлом. Здесь — когда какой день трогали
-            последний раз.
+            последний раз; что именно в нём меняли — в журнале правок ниже.
           </p>
           {showcaseDays.length === 0 ? (
             <p className="mt-3 text-sm muted">Пока ни один день не правили на сайте.</p>
@@ -128,6 +156,40 @@ export default async function HistoryPage() {
           )}
         </section>
       </div>
+
+      <section className="surface p-4">
+        <h2 className="text-sm font-semibold">Журнал правок витрин</h2>
+        <p className="mt-0.5 text-xs muted">
+          Каждое изменение наполнения и комментария: что было, что стало и откуда пришла правка.
+          Сводка выше говорит только «день трогали в 13:40», а здесь видно, что именно поменялось.
+        </p>
+        {/*
+          Автора в журнале нет намеренно: вход на «Витрины» — один общий пароль
+          на команду, отдельных пользователей в радаре не заведено (см. auth.ts).
+          Приписать правке выдуманного автора хуже, чем честно его не показывать,
+          поэтому пишется только источник: страница или залитая книга.
+        */}
+        <p className="mt-0.5 text-xs muted">
+          Кто именно правил, радар не знает: вход общий, отдельных пользователей нет.
+        </p>
+
+        <AuditFilter shop={shopFilter} date={dateFilter} />
+
+        {auditTotal === 0 ? (
+          <p className="mt-3 text-sm muted">
+            Журнал пуст: он начинает заполняться с первой правки после обновления. Что правили
+            раньше, в нём не отражено — прежние значения нигде не сохранялись.
+          </p>
+        ) : audit.length === 0 ? (
+          <p className="mt-3 text-sm">
+            Под этот отбор правок нет — значит, {describeFilter(shopFilter, dateFilter)} не меняли.
+            Проверьте, что цвет не изменился по другой причине: пороги критерия правятся
+            в <code>config/thresholds.json</code>, а пустая ячейка и зелёная — разные вещи.
+          </p>
+        ) : (
+          <AuditTable entries={audit} />
+        )}
+      </section>
 
       <section className="surface p-4">
         <h2 className="text-sm font-semibold">Смены РМ</h2>
@@ -176,6 +238,129 @@ export default async function HistoryPage() {
       </section>
     </div>
   );
+}
+
+const FIELD_STYLE = {
+  borderColor: 'var(--border)',
+  background: 'var(--surface)',
+  color: 'var(--text)',
+} as const;
+
+/**
+ * Отбор по лавке и дню обычной формой: страница серверная, и GET-форма
+ * работает без скриптов, с клавиатуры и ссылкой, которую можно переслать.
+ */
+function AuditFilter({ shop, date }: { shop: string; date: string }) {
+  return (
+    <form method="get" className="mt-3 flex flex-wrap items-end gap-2">
+      <label className="flex flex-col gap-1 text-xs muted">
+        Лавка
+        <input
+          name="shop"
+          defaultValue={shop}
+          placeholder="М22"
+          className="rounded-lg border px-3 py-2 text-sm"
+          style={{ ...FIELD_STYLE, width: '7rem' }}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs muted">
+        День витрины
+        <input
+          type="date"
+          name="date"
+          defaultValue={date}
+          className="rounded-lg border px-3 py-2 text-sm"
+          style={FIELD_STYLE}
+        />
+      </label>
+      <button type="submit" className="rounded-lg border px-3 py-2 text-sm" style={FIELD_STYLE}>
+        Показать
+      </button>
+      {(shop || date) && (
+        <a href="/history" className="px-1 py-2 text-sm underline muted">
+          сбросить
+        </a>
+      )}
+    </form>
+  );
+}
+
+const FIELD_TITLE: Record<ShowcaseAuditEntry['field'], string> = {
+  fill: 'Наполнение',
+  note: 'Комментарий',
+};
+
+/** Свежие правки сверху; остальные — под раскрытием, как и файлы выгрузок. */
+const AUDIT_SHOWN = 15;
+
+function AuditTable({ entries }: { entries: ShowcaseAuditEntry[] }) {
+  const head = entries.slice(0, AUDIT_SHOWN);
+  const rest = entries.slice(AUDIT_SHOWN);
+
+  return (
+    <>
+      <AuditRows entries={head} />
+      {rest.length > 0 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs muted">
+            Ещё {rest.length} {plural(rest.length, 'правка', 'правки', 'правок')} постарше
+          </summary>
+          <AuditRows entries={rest} />
+        </details>
+      )}
+    </>
+  );
+}
+
+function AuditRows({ entries }: { entries: ShowcaseAuditEntry[] }) {
+  return (
+    <div className="radar-scroll">
+      <table className="mt-3 w-full text-sm">
+        <thead>
+          <tr className="text-xs muted">
+            <th className="pb-1.5 pr-3 text-left font-medium">Когда правили</th>
+            <th className="pb-1.5 pr-3 text-left font-medium">День</th>
+            <th className="pb-1.5 pr-3 text-left font-medium">Лавка</th>
+            <th className="pb-1.5 pr-3 text-left font-medium">Что</th>
+            <th className="pb-1.5 pr-3 text-left font-medium">Было</th>
+            <th className="pb-1.5 pr-3 text-left font-medium">Стало</th>
+            <th className="pb-1.5 text-right font-medium">Откуда</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((e, i) => (
+            <tr
+              key={`${e.at}-${e.date}-${e.shopCode}-${e.field}-${i}`}
+              className="border-t"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <td className="py-1.5 pr-3 text-xs tabular-nums whitespace-nowrap muted">
+                {stamp(e.at)}
+              </td>
+              <td className="py-1.5 pr-3 tabular-nums whitespace-nowrap">{shortDate(e.date)}</td>
+              <td className="py-1.5 pr-3 whitespace-nowrap">{e.shopCode}</td>
+              <td className="py-1.5 pr-3 whitespace-nowrap muted">{FIELD_TITLE[e.field]}</td>
+              <td className="py-1.5 pr-3 muted">{formatAuditValue(e.field, e.from)}</td>
+              <td className="py-1.5 pr-3">{formatAuditValue(e.field, e.to)}</td>
+              <td className="py-1.5 text-right text-xs whitespace-nowrap muted">
+                {SOURCE_TITLE[e.source]}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * «М22 за 21.09» — так пустой отбор читается как ответ, а не как сбой. Код
+ * показываем нормализованным: искали-то по нему, и «M70» латиницей в ответе
+ * заставило бы гадать, не в раскладке ли дело.
+ */
+function describeFilter(shop: string, date: string): string {
+  const parts = [shop && normalizeCode(shop), date && `за ${shortDate(date)}`].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : 'витрины';
 }
 
 interface FixtureFile {
