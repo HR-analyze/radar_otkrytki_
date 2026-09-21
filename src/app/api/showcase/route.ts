@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { loadConfig } from '@/lib/config';
 import { listDates, listShops } from '@/lib/queries';
+import { resolveShowcaseRange } from '@/lib/showcase-range';
 import { invalidateSnapshot } from '@/lib/snapshot';
-import { scheduleFor, statusForFill } from '@/lib/status';
+import { closureOf, isOpenOn, scheduleFor, statusForFill } from '@/lib/status';
+import { dateRange } from '@/lib/time';
 import { checkUploadToken } from '@/lib/upload-store';
 import {
   canEditShowcase,
@@ -16,15 +18,34 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Наполнение витрин за день: что показать в редакторе и что он присылает назад.
+ * Наполнение витрин: что показать в редакторе и что он присылает назад.
  *
  * Правки сохраняются пачкой в базу ручных данных и видны на дашборде сразу —
  * снимок читает витрины оттуда же (см. showcase-store.ts), пересобирать
  * ничего не нужно.
  */
+
+/** Код лавки: тот же формат, что принимают правки. */
+const SHOP_CODE = /^[А-ЯA-Z]{1,3}\d{1,4}$/i;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Два разреза одних и тех же данных:
+ *
+ *  · `?date=2026-09-21` — день: список лавок. Так заполняют за сегодня.
+ *  · `?shop=М12&from=…&to=…` — лавка: список дней. Так дозаполняют пропуски,
+ *    не переключая дату после каждой цифры (см. showcase-range.ts).
+ *
+ * Правки в обоих случаях уходят одним и тем же POST: у каждой правки своя
+ * дата, и серверу всё равно, из какого разреза она пришла.
+ */
 export async function GET(req: Request) {
-  const date = new URL(req.url).searchParams.get('date') ?? '';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  const params = new URL(req.url).searchParams;
+  const shop = params.get('shop');
+  if (shop) return shopSlice(shop, params.get('from') ?? '', params.get('to') ?? '');
+
+  const date = params.get('date') ?? '';
+  if (!ISO_DATE.test(date)) {
     return NextResponse.json({ ok: false, error: 'Нужна дата в виде 2026-08-31' }, { status: 400 });
   }
 
@@ -38,6 +59,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     ok: true,
+    mode: 'day',
     date,
     editable: canEditShowcase(),
     hint: showcaseEditHint(),
@@ -64,6 +86,80 @@ export async function GET(req: Request) {
       status: statusForFill(values[s.code] ?? null, config),
       note: notes[s.code] ?? '',
     })),
+  });
+}
+
+/**
+ * Одна лавка за окно дней.
+ *
+ * Дни, когда лавка была закрыта, в список не попадают — как не попадает
+ * закрытая лавка в дневной список. Но прошлые дни той же лавки открываются
+ * как прежде: закрытие отрезает будущее, а не историю (см. isOpenOn).
+ */
+async function shopSlice(rawShop: string, rawFrom: string, rawTo: string): Promise<Response> {
+  const shopCode = rawShop.trim();
+  // `*` — «первая лавка справочника»: редактор открывается на чём-то, а не на
+  // пустом экране с просьбой выбрать. Какая это лавка, он узнаёт из ответа.
+  const first = shopCode === '*';
+  if (!first && !SHOP_CODE.test(shopCode)) {
+    return NextResponse.json({ ok: false, error: `Некорректный код лавки «${shopCode}»` }, { status: 400 });
+  }
+  if (!ISO_DATE.test(rawFrom) || !ISO_DATE.test(rawTo)) {
+    return NextResponse.json({ ok: false, error: 'Нужны обе границы в виде 2026-08-31' }, { status: 400 });
+  }
+
+  const { from, to } = resolveShowcaseRange(rawFrom, rawTo);
+  const config = loadConfig();
+  const store = await readShowcase();
+
+  // Справочник целиком, без привязки к дню: закрытую лавку в выпадающем списке
+  // всё равно нужно уметь выбрать — её прошлые дни никуда не делись.
+  const shops = await listShops();
+  const shop = first ? shops[0] : shops.find((s) => s.code.toUpperCase() === shopCode.toUpperCase());
+  if (!shop) {
+    return NextResponse.json(
+      { ok: false, error: first ? 'Справочник лавок пуст' : `Лавка «${shopCode}» не найдена` },
+      { status: 404 },
+    );
+  }
+
+  const days = dateRange(from, to)
+    .filter((date) => isOpenOn(config, shop.code, date))
+    .map((date) => {
+      const fill = store.days[date]?.[shop.code] ?? null;
+      return {
+        date,
+        percent: fill == null ? null : Math.round(fill * 100),
+        status: statusForFill(fill, config),
+        note: store.notes[date]?.[shop.code] ?? '',
+        updatedAt: store.touched[date] ?? null,
+      };
+    })
+    // Свежий день сверху: дозаполняют обычно вчерашнее, а не начало месяца.
+    .reverse();
+
+  return NextResponse.json({
+    ok: true,
+    mode: 'shop',
+    from,
+    to,
+    editable: canEditShowcase(),
+    hint: showcaseEditHint(),
+    tokenRequired: Boolean(process.env.RADAR_UPLOAD_TOKEN),
+    thresholds: {
+      green: config.criteria.showcase.kind === 'percent' ? config.criteria.showcase.greenFrom : 0,
+      yellow: config.criteria.showcase.kind === 'percent' ? config.criteria.showcase.yellowFrom : 0,
+    },
+    shop: {
+      code: shop.code,
+      name: shop.name,
+      region: shop.region,
+      opensAt: scheduleFor(config, shop.code)?.opensAt ?? null,
+      closedFrom: closureOf(config, shop.code)?.closedFrom ?? null,
+    },
+    /** Справочник для переключателя «предыдущая/следующая лавка». */
+    shops: shops.map((s) => ({ code: s.code, name: s.name, region: s.region })),
+    days,
   });
 }
 
