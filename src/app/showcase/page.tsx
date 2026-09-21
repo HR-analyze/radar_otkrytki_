@@ -27,6 +27,11 @@ export default async function ShowcasePage({
   const initial = asked ?? todayIso();
   const last = await latestDate();
 
+  // Способ заполнения и лавка — в ссылке: «открой мне М12 по дням» должно
+  // передаваться ссылкой, а не пересказом «переключи там режим и выбери».
+  const mode = sp.mode === 'shop' ? 'shop' : 'day';
+  const shop = typeof sp.shop === 'string' ? sp.shop.trim().slice(0, 8) : '';
+
   // Месяц сводки — тот же, на котором открывается весь радар (см. defaultRange),
   // чтобы вкладки не показывали разные периоды.
   const month = monthParam(sp.month) ?? defaultRange(await listDates()).to.slice(0, 7);
@@ -38,13 +43,13 @@ export default async function ShowcasePage({
         <h1 className="text-2xl font-semibold tracking-tight">Наполнение витрин</h1>
         <p className="mt-1 text-sm muted">
           {canEditShowcase()
-            ? 'Заполняется здесь, руками. Правки сразу идут в дашборд — перезагружать и перезаливать ничего не нужно.'
+            ? 'Заполняется здесь, руками. Правки сразу идут в дашборд — перезагружать и перезаливать ничего не нужно. Два способа: день со списком лавок и лавка со списком дней.'
             : 'Просмотр: этот хостинг не даёт записи, править можно там, где радар стоит на своём сервере.'}
           {last && ` Последний день с данными — ${last.split('-').reverse().slice(0, 2).join('.')}.`}
         </p>
       </div>
 
-      <ShowcaseEditor initialDate={initial} />
+      <ShowcaseEditor initialDate={initial} initialMode={mode} initialShop={shop} />
 
       <NotesSummary
         notes={notes}
