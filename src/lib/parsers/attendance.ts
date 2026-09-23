@@ -46,7 +46,7 @@ export interface AttendanceParseResult {
 }
 
 export interface ParseWarning {
-  kind: 'unknown_role' | 'no_shop' | 'no_stamps' | 'shop_mismatch' | 'no_date';
+  kind: 'unknown_role' | 'no_shop' | 'no_stamps' | 'shop_mismatch' | 'no_date' | 'previous_shift';
   message: string;
   row?: number;
 }
@@ -136,6 +136,21 @@ export function parseAttendanceBuffer(
     }
 
     const arrival = resolveArrival(r.arrival, r.departure, config);
+
+    // Только ночной «Уход» — хвост вчерашней смены. Сегодняшнего открытия он
+    // не описывает, а в радаре превращался в красного сотрудника за день,
+    // которого у человека не было (случай 23.09.2026: приход накануне не
+    // отмечен, уход в 00:00). Строка отбрасывается, но не молча.
+    if (arrival.previousShift) {
+      warnings.push({
+        kind: 'previous_shift',
+        message:
+          `Строка ${rowNo}: у «${employeeName}» (лавка ${shop.code}) только ночной «Уход» ` +
+          `${String(r.departure ?? '')} — конец вчерашней смены, строка пропущена`,
+        row: rowNo,
+      });
+      continue;
+    }
 
     const stampDate = parseStamp(r.arrival)?.date ?? parseStamp(r.departure)?.date ?? fallbackDate ?? null;
     if (!stampDate) {

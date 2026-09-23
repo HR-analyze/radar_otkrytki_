@@ -188,6 +188,11 @@ export interface ArrivalResolution {
   minutes: number | null;
   source: ArrivalSource;
   note: string | null;
+  /**
+   * Строка — хвост вчерашней смены: «Прихода» нет, а «Уход» ночной (00:00 при
+   * смене накануне). Утро этого дня она не описывает, и в радар её не пускают.
+   */
+  previousShift?: true;
 }
 
 /**
@@ -195,9 +200,13 @@ export interface ArrivalResolution {
  *
  * 1. Есть «Приход» → используем его.
  * 2. Нет «Прихода», есть «Уход» → приход = Уход − 30 мин (время приёмки),
- *    но только если результат попадает в окно правдоподобия. Ночные уходы
- *    (в тестовой выгрузке 0:19, 1:51 — это конец вчерашней смены) через это
- *    окно не проходят и остаются «нет отметки».
+ *    но только если результат попадает в окно правдоподобия.
+ *    - Расчёт раньше окна — ночной уход (0:00, 0:19, 1:51): это конец
+ *      вчерашней смены, а не сегодняшнее открытие. Помечается previousShift,
+ *      и парсер такую строку отбрасывает — иначе человек, забывший отметить
+ *      приход накануне, горел бы красным сегодня.
+ *    - Расчёт позже окна (ушёл днём или вечером) — смена была, приход не
+ *      отмечен: «нет отметки».
  * 3. Нет ничего → «нет отметки».
  */
 export function resolveArrival(
@@ -217,13 +226,21 @@ export function resolveArrival(
   const derived = departure.minutes - rule.minutesBeforeDeparture;
   const from = parseClock(rule.plausibleWindow.from);
   const to = parseClock(rule.plausibleWindow.to);
-  if (derived < from || derived > to) {
+  if (derived < from) {
+    return {
+      minutes: null,
+      source: 'none',
+      note: 'Только ночной «Уход» — конец вчерашней смены, к открытию этого дня не относится.',
+      previousShift: true,
+    };
+  }
+  if (derived > to) {
     return {
       minutes: null,
       source: 'none',
       note:
         `Есть «Уход», но расчётный приход вне окна правдоподобия ` +
-        `(${rule.plausibleWindow.from}–${rule.plausibleWindow.to}) — вероятно, конец ночной смены.`,
+        `(${rule.plausibleWindow.from}–${rule.plausibleWindow.to}) — приход не отмечен.`,
     };
   }
 
@@ -310,6 +327,19 @@ export function scheduleShift(config: ThresholdConfig, shopCode?: string): numbe
 }
 
 /**
+ * Приход во вторую смену — «другой график».
+ *
+ * Граница включительная: смена «с 8» начинается в 08:00, и секунды в
+ * отметке этого не меняют. Минуты берутся без секунд, поэтому строгое
+ * «позже 08:00» пропускало 08:00:55 — кассира, выходящего к восьми по своему
+ * графику, радар красил как опоздавшего на час (решение заказчика 23.09.2026).
+ */
+export function isOtherSchedule(minutes: number, config: ThresholdConfig, shift = 0): boolean {
+  const other = config.rules.otherSchedule;
+  return other.enabled && minutes >= parseClock(other.after) + shift;
+}
+
+/**
  * Статус по времени прихода для конкретного критерия.
  *
  * `shopCode` нужен из-за лавок с особым графиком: М71 и М72 открываются с
@@ -329,8 +359,7 @@ export function statusForTime(
   // п.5.0: правило «другой график» выполняется раньше остальных. Для лавки с
   // особым графиком порог едет вместе с открытием: приход в 09:00 в лавке,
   // открывающейся в 10:00, — это рано, а не «другой график».
-  const other = config.rules.otherSchedule;
-  if (other.enabled && minutes > parseClock(other.after) + shift) return 'other_schedule';
+  if (isOtherSchedule(minutes, config, shift)) return 'other_schedule';
 
   const cfg = config.criteria[criterion];
   if (!cfg || cfg.kind !== 'time') return 'no_data';
