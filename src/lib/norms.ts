@@ -1,4 +1,4 @@
-import { scheduleShift } from './status';
+import { isOtherSchedule, scheduleShift } from './status';
 import { parseClock } from './time';
 import type { AttendanceRow, ShopNorms, Status, ThresholdConfig } from './types';
 
@@ -53,8 +53,7 @@ export function statusByNorm(
 
   // п.5.0: «другой график» проверяется раньше остальных правил — иначе выход
   // во вторую смену считался бы гигантским опозданием первой.
-  const other = config.rules.otherSchedule;
-  if (other.enabled && minutes > parseClock(other.after) + shift) return 'other_schedule';
+  if (isOtherSchedule(minutes, config, shift)) return 'other_schedule';
 
   const norm = parseClock(normAt) + shift;
   if (minutes <= norm) return 'green';

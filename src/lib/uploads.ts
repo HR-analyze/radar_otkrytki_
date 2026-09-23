@@ -352,6 +352,12 @@ function describeWarnings(warnings: readonly ParseWarning[]): string[] {
   if (n('no_shop') > 0) {
     notes.push(`${n('no_shop')} строк без лавки — пропущены`);
   }
+  if (n('previous_shift') > 0) {
+    notes.push(
+      `${n('previous_shift')} ${plural(n('previous_shift'), 'ночной уход', 'ночных ухода', 'ночных уходов')} ` +
+        'без прихода — конец вчерашней смены, не учитываются',
+    );
+  }
   if (n('shop_mismatch') > 0) {
     notes.push(
       `${n('shop_mismatch')} ${plural(n('shop_mismatch'), 'отметка', 'отметки', 'отметок')} ` +

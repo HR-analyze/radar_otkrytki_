@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import * as XLSX from 'xlsx';
 import os from 'node:os';
 import path from 'node:path';
 import { loadConfig } from '../config';
@@ -17,7 +18,10 @@ const fx = (name: string) => fs.readFileSync(path.join(process.cwd(), 'fixtures'
 
 test('парсер выгрузки сотрудников: строка «Итого» не становится лавкой', () => {
   const r = parseAttendanceBuffer(fx('2026-08-25_vyhody.xls'), config);
-  assert.equal(r.rows.length, 336, 'все строки кроме «Итого»');
+  // 336 строк без «Итого», из них три — ночные уходы без прихода (0:19, 0:32,
+  // 1:51): конец вчерашней смены, в радар они не идут.
+  assert.equal(r.rows.length, 333, 'все строки кроме «Итого» и ночных уходов');
+  assert.equal(r.warnings.filter((w) => w.kind === 'previous_shift').length, 3);
   assert.deepEqual(r.dates, ['2026-08-25']);
   assert.ok(!r.rows.some((x) => /итого/i.test(x.shopCode) || /итого/i.test(x.shopName)));
 });
@@ -54,7 +58,7 @@ test('новый формат 1С: две строки на человека р�
   const r = parseAttendanceBuffer(fx('2026-08-29_vyhody.xls'), config);
 
   assert.equal(r.layout, 'paired');
-  assert.equal(r.rows.length, 1004);
+  assert.equal(r.rows.length, 1001, '1004 отметки минус три ночных ухода без прихода');
   assert.deepEqual(r.dates, ['2026-08-29', '2026-08-30']); // две отметки ночной смены
   assert.ok(!r.rows.some((x) => /итого/i.test(x.shopCode) || /итого/i.test(x.shopName)));
   assert.ok(r.rows.every((x) => x.employeeName !== ''), 'ФИО берётся из строки сотрудника');
@@ -307,4 +311,35 @@ test('подстановка отгрузок: только там, где не�
 
   // Имя лавки подтягивается из справочника, если оно известно.
   assert.equal(merged.rows.find((r) => r.shopCode === 'М3')?.shopName, 'М3 Пресня');
+});
+
+test('ночной уход без прихода отбрасывается, приход 08:00:55 — другой график', () => {
+  // Оба случая из сообщения заказчика 23.09.2026. Первый: приход накануне не
+  // отмечен, в выгрузке остался только «Уход» в 00:00 — это конец вчерашней
+  // смены, и красным за сегодня человек гореть не должен. Второй: кассир
+  // выходит с 8 по своему графику, отметка 08:00:55.
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.aoa_to_sheet([
+      ['Подразделение', 'Сотрудник', 'Должность', 'Подразделение сотрудника', 'Приход', 'Уход'],
+      ['М1 Милютинский', 'Ночная Н.Н.', 'Кассир', 'М1 Милютинский', null, '23.09.2026 0:00:00'],
+      ['М1 Милютинский', 'Восьмой В.В.', 'Кассир', 'М1 Милютинский', '23.09.2026 8:00:55', null],
+      ['М1 Милютинский', 'Дневной Д.Д.', 'Повар', 'М1 Милютинский', null, '23.09.2026 18:33:28'],
+    ]),
+    'Лист1',
+  );
+  const r = parseAttendanceBuffer(
+    Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as ArrayBuffer),
+    config,
+  );
+
+  assert.deepEqual(
+    r.rows.map((x) => [x.employeeName, x.status]),
+    [
+      ['Восьмой В.В.', 'other_schedule'],
+      ['Дневной Д.Д.', 'red'],
+    ],
+  );
+  assert.deepEqual(r.warnings.map((w) => w.kind), ['previous_shift']);
 });

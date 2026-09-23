@@ -85,7 +85,8 @@ test('нет отметки → красный, без исключений (п.
 
 test('«другой график» срабатывает раньше пороговой таблицы (п.5.0 ТЗ)', () => {
   assert.equal(statusForTime(at(8, 1), 'cook', config), 'other_schedule');
-  assert.equal(statusForTime(at(8, 0), 'cook', config), 'red', 'ровно 8:00 — ещё опоздание');
+  assert.equal(statusForTime(at(7, 59), 'cook', config), 'red', '7:59 — ещё опоздание');
+  assert.equal(statusForTime(at(8, 0), 'cook', config), 'other_schedule', 'смена «с 8» — не опоздание');
   assert.equal(statusForTime(at(9, 15), 'cashier', config), 'other_schedule');
 });
 
@@ -102,13 +103,31 @@ test('реальная отметка приоритетнее расчёта', 
   assert.equal(r.source, 'mark');
 });
 
-test('ночной уход не превращается в приход: окно правдоподобия', () => {
+test('приход 08:00:55 у кассира со сменой с 8 — другой график, а не красный', () => {
+  // Случай 23.09.2026: секунды отбрасываются, и строгое «позже 08:00» его
+  // пропускало — кассир, выходящий к восьми по своему графику, горел красным.
+  const r = resolveArrival('23.09.2026 8:00:55', null, config);
+  assert.equal(r.minutes, at(8, 0));
+  assert.equal(statusForTime(r.minutes, 'cashier', config), 'other_schedule');
+});
+
+test('ночной уход без прихода — хвост вчерашней смены, а не сегодняшний красный', () => {
   // Реальный случай из выгрузки: бариста М3 Пресня, уход 00:32.
   const r = resolveArrival(null, '25.08.2026 0:32:11', config);
   assert.equal(r.minutes, null);
   assert.equal(r.source, 'none');
+  assert.equal(r.previousShift, true);
+
+  // Случай 23.09.2026: приход накануне не отмечен, уход ровно в 00:00.
+  assert.equal(resolveArrival(null, '23.09.2026 0:00:00', config).previousShift, true);
+});
+
+test('дневной уход без прихода — смена была, приход не отмечен', () => {
+  const r = resolveArrival(null, '25.08.2026 18:33:28', config);
+  assert.equal(r.minutes, null);
+  assert.equal(r.previousShift, undefined);
   assert.match(r.note ?? '', /вне окна правдоподобия/);
-  assert.equal(statusForTime(r.minutes, 'barista', config), 'red');
+  assert.equal(statusForTime(r.minutes, 'cook', config), 'red');
 });
 
 test('нет ни прихода, ни ухода → source=none без примечания', () => {

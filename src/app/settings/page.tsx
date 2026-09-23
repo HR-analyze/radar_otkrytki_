@@ -209,7 +209,7 @@ export default async function SettingsPage() {
             title="Другой график"
             value={
               config.rules.otherSchedule.enabled
-                ? `приход позже ${config.rules.otherSchedule.after} → нейтральный статус, из агрегатов исключается`
+                ? `приход в ${config.rules.otherSchedule.after} и позже → нейтральный статус, из агрегатов исключается`
                 : 'выключено'
             }
             note={config.rules.otherSchedule.note}
@@ -217,7 +217,7 @@ export default async function SettingsPage() {
           />
           <Rule
             title="Досчёт прихода"
-            value={`уход − ${config.rules.derivedArrival.minutesBeforeDeparture} мин, окно правдоподобия ${config.rules.derivedArrival.plausibleWindow.from}–${config.rules.derivedArrival.plausibleWindow.to}`}
+            value={`уход − ${config.rules.derivedArrival.minutesBeforeDeparture} мин, окно правдоподобия ${config.rules.derivedArrival.plausibleWindow.from}–${config.rules.derivedArrival.plausibleWindow.to}; ночной уход без прихода — хвост вчерашней смены, не учитывается`}
             note={config.rules.derivedArrival.note}
           />
           {config.rules.driverDeparture && (
