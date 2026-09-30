@@ -1,15 +1,16 @@
 import * as XLSX from 'xlsx';
-import { worstFill, type ShowcaseStore } from './showcase-store';
+import type { ShowcaseStore } from './showcase-store';
 
 /**
  * Наполнение витрин таблицей для Excel: одна строка — лавка за день, оба замера
  * рядом.
  *
- *   Номер лавки | Дата | Утро | 16:00 | Общий результат
+ *   Номер лавки | Дата | Утро | 16:00 | Средний результат
  *
- * Общий результат — итог дня, как на радаре и в карточке лавки: худший из двух
- * замеров (утром 100%, в 16:00 50% → 50%), а если мерили один раз — он и есть
- * итог (см. worstFill).
+ * Средний результат — среднее двух замеров (утром 100%, в 16:00 50% → 75%), а
+ * если мерили один раз — он сам. Это НЕ итог дня радара: радар, карточка лавки
+ * и балл берут худший из двух (см. worstFill), выгрузка — среднее по просьбе
+ * заказчика.
  *
  * Строки идут по лавке, внутри лавки — по дням: так читают «как держала витрину
  * М12 весь месяц», а автофильтр Excel переворачивает таблицу в «все лавки за
@@ -25,11 +26,11 @@ export interface ShowcaseXlsxRow {
   /** Доля 0–1 или null — не мерили. */
   morning: number | null;
   afternoon: number | null;
-  /** Итог дня — худший из двух замеров; null — не мерили вовсе. */
-  total: number | null;
+  /** Среднее двух замеров; null — не мерили вовсе. */
+  average: number | null;
 }
 
-export const SHOWCASE_XLSX_HEADER = ['Номер лавки', 'Дата', 'Утро', '16:00', 'Общий результат'] as const;
+export const SHOWCASE_XLSX_HEADER = ['Номер лавки', 'Дата', 'Утро', '16:00', 'Средний результат'] as const;
 
 /**
  * Строки выгрузки: каждая лавка за каждый день окна, в который она работала.
@@ -50,10 +51,22 @@ export function showcaseXlsxRows(
       if (!isOpen(shopCode, date)) continue;
       const morning = store.days[date]?.[shopCode] ?? null;
       const afternoon = store.afternoon[date]?.[shopCode] ?? null;
-      rows.push({ shopCode, date, morning, afternoon, total: worstFill(morning, afternoon) });
+      rows.push({ shopCode, date, morning, afternoon, average: averageFill(morning, afternoon) });
     }
   }
   return rows;
+}
+
+/**
+ * Среднее двух замеров. Пустой замер в среднее не входит: не мерили в 16:00 —
+ * результат равен утреннему, а не половине его.
+ *
+ * Округление до сотых процента — чтобы в ячейке лежало 0.725, а не 0.7250000001.
+ */
+export function averageFill(morning: number | null, afternoon: number | null): number | null {
+  if (morning == null) return afternoon;
+  if (afternoon == null) return morning;
+  return Math.round(((morning + afternoon) / 2) * 10_000) / 10_000;
 }
 
 /**
@@ -63,7 +76,7 @@ export function showcaseXlsxRows(
 export function showcaseXlsx(rows: readonly ShowcaseXlsxRow[]): Buffer {
   const aoa: (string | number | null)[][] = [
     [...SHOWCASE_XLSX_HEADER],
-    ...rows.map((r) => [r.shopCode, excelSerial(r.date), r.morning, r.afternoon, r.total]),
+    ...rows.map((r) => [r.shopCode, excelSerial(r.date), r.morning, r.afternoon, r.average]),
   ];
 
   const sheet = XLSX.utils.aoa_to_sheet(aoa);
@@ -79,7 +92,7 @@ export function showcaseXlsx(rows: readonly ShowcaseXlsxRow[]): Buffer {
     format(r, 4, '0%');
   }
 
-  sheet['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 16 }];
+  sheet['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 18 }];
   sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ r: 0, c: 0 }, { r: rows.length, c: 4 }) };
 
   const book = XLSX.utils.book_new();
