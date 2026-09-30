@@ -11,6 +11,7 @@ import {
   readShowcase,
   saveShowcaseEdits,
   showcaseEditHint,
+  worstFill,
   type ShowcaseEdit,
 } from '@/lib/showcase-store';
 
@@ -38,6 +39,9 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  *
  * Правки в обоих случаях уходят одним и тем же POST: у каждой правки своя
  * дата, и серверу всё равно, из какого разреза она пришла.
+ *
+ * Замеров в день два: `percent` — утренний, `afternoonPercent` — в 16:00.
+ * `status` — статус итога дня, худшего из двух (см. worstFill).
  */
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
@@ -52,6 +56,7 @@ export async function GET(req: Request) {
   const config = loadConfig();
   const store = await readShowcase();
   const values = store.days[date] ?? {};
+  const afternoon = store.afternoon[date] ?? {};
   const notes = store.notes[date] ?? {};
   // Лавки на этот день: закрытая в список заполнения не попадает, но её
   // прошлые дни открываются как прежде (см. shopClosures).
@@ -74,6 +79,9 @@ export async function GET(req: Request) {
     filledByDate: Object.fromEntries(
       Object.entries(store.days).map(([d, v]) => [d, Object.keys(v).length]),
     ),
+    afternoonFilledByDate: Object.fromEntries(
+      Object.entries(store.afternoon).map(([d, v]) => [d, Object.keys(v).length]),
+    ),
     shops: shops.map((s) => ({
       code: s.code,
       name: s.name,
@@ -82,8 +90,9 @@ export async function GET(req: Request) {
       // открытия не зависит, но человек, который проходит день по списку,
       // должен видеть, что лавка в 08:00 ещё закрыта, и не искать у неё нули.
       opensAt: scheduleFor(config, s.code)?.opensAt ?? null,
-      percent: values[s.code] == null ? null : Math.round(values[s.code] * 100),
-      status: statusForFill(values[s.code] ?? null, config),
+      percent: toPercent(values[s.code]),
+      afternoonPercent: toPercent(afternoon[s.code]),
+      status: statusForFill(worstFill(values[s.code] ?? null, afternoon[s.code] ?? null), config),
       note: notes[s.code] ?? '',
     })),
   });
@@ -127,10 +136,12 @@ async function shopSlice(rawShop: string, rawFrom: string, rawTo: string): Promi
     .filter((date) => isOpenOn(config, shop.code, date))
     .map((date) => {
       const fill = store.days[date]?.[shop.code] ?? null;
+      const afternoon = store.afternoon[date]?.[shop.code] ?? null;
       return {
         date,
-        percent: fill == null ? null : Math.round(fill * 100),
-        status: statusForFill(fill, config),
+        percent: toPercent(fill),
+        afternoonPercent: toPercent(afternoon),
+        status: statusForFill(worstFill(fill, afternoon), config),
         note: store.notes[date]?.[shop.code] ?? '',
         updatedAt: store.touched[date] ?? null,
       };
@@ -201,19 +212,34 @@ export async function POST(req: Request) {
     updatedAt: store.updatedAt,
     /** Статусы после сохранения — редактор красит ячейки по ответу сервера. */
     saved: edits.value.map((e) => {
-      // fill=undefined значит «правили только комментарий»: процент остаётся
-      // прежним, и брать его надо из базы, а не из правки.
-      const fill = e.fill === undefined ? (store.days[e.date]?.[e.shopCode] ?? null) : e.fill;
+      // Значения берём из базы после записи, а не из правки: правка могла
+      // трогать только один замер или только комментарий, а статус итога
+      // зависит от обоих замеров.
+      const fill = store.days[e.date]?.[e.shopCode] ?? null;
+      const afternoon = store.afternoon[e.date]?.[e.shopCode] ?? null;
       return {
         date: e.date,
         shopCode: e.shopCode,
-        percent: fill == null ? null : Math.round(fill * 100),
-        status: statusForFill(fill, config),
+        percent: toPercent(fill),
+        afternoonPercent: toPercent(afternoon),
+        status: statusForFill(worstFill(fill, afternoon), config),
         note: store.notes[e.date]?.[e.shopCode] ?? '',
       };
     }),
     filled: Object.keys(store.days[edits.value[0]?.date ?? ''] ?? {}).length,
   });
+}
+
+function toPercent(fill: number | null | undefined): number | null {
+  return fill == null ? null : Math.round(fill * 100);
+}
+
+/** Процент из браузера: null/'' — стереть, число 0–100 — доля, иначе ошибка. */
+function parsePercent(raw: unknown): number | null | string {
+  if (raw == null || raw === '') return null;
+  const percent = Number(String(raw).replace(',', '.'));
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) return 'bad';
+  return percent / 100;
 }
 
 /** Комментарий — короткая пометка, а не поле для романа. */
@@ -232,7 +258,13 @@ function parseEdits(raw: unknown): ParsedEdits {
 
   const value: ShowcaseEdit[] = [];
   for (const item of raw) {
-    const e = item as { date?: unknown; shopCode?: unknown; percent?: unknown; note?: unknown };
+    const e = item as {
+      date?: unknown;
+      shopCode?: unknown;
+      percent?: unknown;
+      afternoonPercent?: unknown;
+      note?: unknown;
+    };
     const date = String(e.date ?? '');
     const shopCode = String(e.shopCode ?? '').trim();
 
@@ -245,15 +277,18 @@ function parseEdits(raw: unknown): ParsedEdits {
 
     // Ключа нет вовсе — поле не правили. Пустая строка или null — стереть.
     if ('percent' in e) {
-      if (e.percent == null || e.percent === '') {
-        edit.fill = null;
-      } else {
-        const percent = Number(String(e.percent).replace(',', '.'));
-        if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-          return { ok: false, error: `${shopCode}: наполнение должно быть числом от 0 до 100` };
-        }
-        edit.fill = percent / 100;
+      const fill = parsePercent(e.percent);
+      if (typeof fill === 'string') {
+        return { ok: false, error: `${shopCode}: наполнение должно быть числом от 0 до 100` };
       }
+      edit.fill = fill;
+    }
+    if ('afternoonPercent' in e) {
+      const fill = parsePercent(e.afternoonPercent);
+      if (typeof fill === 'string') {
+        return { ok: false, error: `${shopCode}: наполнение в 16:00 должно быть числом от 0 до 100` };
+      }
+      edit.afternoonFill = fill;
     }
 
     if ('note' in e) {
@@ -264,7 +299,7 @@ function parseEdits(raw: unknown): ParsedEdits {
       edit.note = note;
     }
 
-    if (edit.fill === undefined && edit.note === undefined) {
+    if (edit.fill === undefined && edit.afternoonFill === undefined && edit.note === undefined) {
       return { ok: false, error: `${shopCode}: в правке нет ни процента, ни комментария` };
     }
     value.push(edit);

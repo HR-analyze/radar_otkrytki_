@@ -6,14 +6,16 @@ import { shiftDate } from '@/lib/showcase-range';
 import type { Status } from '@/lib/types';
 import { ClearButton } from './ClearButton';
 import {
+  EmptyFilter,
+  FILL_SLOTS,
   FIELD_STYLE,
+  FillInputs,
   SaveBadge,
   StepButton,
   TokenInput,
   UndoButton,
   humanDate,
-  statusLabel,
-  statusOf,
+  type FillField,
 } from './showcase-ui';
 import { useShowcaseEdits, type SavedRow } from './use-showcase-edits';
 
@@ -25,6 +27,9 @@ import { useShowcaseEdits, type SavedRow } from './use-showcase-edits';
  * числом, Enter — вниз, статус 🟢/🟡/🔴 появляется прямо в строке, счётчик
  * «заполнено N из 80» показывает, сколько осталось.
  *
+ * Замеров в строке два — утро и 16:00; статус в строке — итог дня, худший из
+ * двух.
+ *
  * Дозаполнять пропуски задним числом здесь неудобно — для этого есть второй
  * режим, «лавка → дни» (см. ShowcaseShopEditor).
  */
@@ -35,7 +40,11 @@ interface ShopRow {
   region: string | null;
   /** Особый час открытия («10:00») — у обычной лавки null. См. shopSchedules. */
   opensAt: string | null;
+  /** Утренний замер. */
   percent: number | null;
+  /** Замер в 16:00. */
+  afternoonPercent: number | null;
+  /** Статус итога дня — худшего из двух замеров. */
   status: Status;
   /** Короткая пометка: «не привезли ягоды», «витрину чинили». */
   note: string;
@@ -71,12 +80,18 @@ export function ShowcaseDayEditor({
   onRegion: (region: string) => void;
 }) {
   const [data, setData] = useState<DayData | null>(null);
-  const [onlyEmpty, setOnlyEmpty] = useState(false);
-  // Список лавок под галочкой «только незаполненные» замораживается: без этого
+  /** По какому замеру показывать только незаполненные; пусто — показывать всё. */
+  const [onlyEmpty, setOnlyEmpty] = useState<FillField | ''>('');
+  // Список лавок под фильтром «только незаполненные» замораживается: без этого
   // строка вылетала бы из фильтра после первой же цифры («9» — уже не пусто),
-  // и дописать «95» было бы некуда. Набор пересобирается при включении галочки,
+  // и дописать «95» было бы некуда. Набор пересобирается при выборе фильтра,
   // при смене дня и по кнопке «спрятать заполненные».
   const [emptyLock, setEmptyLock] = useState<Set<string>>(new Set());
+  const onlyEmptyRef = useRef(onlyEmpty);
+  useEffect(() => {
+    onlyEmptyRef.current = onlyEmpty;
+  }, [onlyEmpty]);
+  /** Поля ввода по ключу «лавка|замер»: Enter ведёт вниз по тому же замеру. */
   const inputs = useRef<Map<string, HTMLInputElement>>(new Map());
 
   // Красим строки по ответу сервера, а не по своей догадке о порогах.
@@ -89,7 +104,13 @@ export function ShowcaseDayEditor({
               shops: prev.shops.map((s) => {
                 const saved = rows.find((x) => x.shopCode === s.code && x.date === prev.date);
                 return saved
-                  ? { ...s, percent: saved.percent, status: saved.status, note: saved.note }
+                  ? {
+                      ...s,
+                      percent: saved.percent,
+                      afternoonPercent: saved.afternoonPercent,
+                      status: saved.status,
+                      note: saved.note,
+                    }
                   : s;
               }),
             }
@@ -107,7 +128,11 @@ export function ShowcaseDayEditor({
       const res = await fetch(`/api/showcase?date=${day}`);
       const body = (await res.json()) as DayData;
       setData(body);
-      setEmptyLock(new Set((body.shops ?? []).filter((s) => s.percent == null).map((s) => s.code)));
+      // Фильтр читаем через ref: перезагружать день из-за его смены незачем.
+      const field = onlyEmptyRef.current;
+      setEmptyLock(
+        new Set((body.shops ?? []).filter((s) => field && s[field] == null).map((s) => s.code)),
+      );
       if (!body.ok) setError(body.error ?? 'Не удалось загрузить день');
     },
     [setError],
@@ -123,8 +148,8 @@ export function ShowcaseDayEditor({
   const thresholds = data?.thresholds ?? { green: 1, yellow: 1 };
 
   const percentOf = useCallback(
-    (shop: ShopRow): string =>
-      edits.draft(date, shop.code, 'percent') ?? (shop.percent == null ? '' : String(shop.percent)),
+    (shop: ShopRow, field: FillField): string =>
+      edits.draft(date, shop.code, field) ?? (shop[field] == null ? '' : String(shop[field])),
     [edits, date],
   );
   const noteOf = useCallback(
@@ -150,21 +175,22 @@ export function ShowcaseDayEditor({
         if (region && s.region !== region) return false;
         if (shopCode && s.code !== shopCode) return false;
         // Замок держит строку в списке, пока в неё дописывают число.
-        if (onlyEmpty && !emptyLock.has(s.code) && percentOf(s) !== '') return false;
+        if (onlyEmpty && !emptyLock.has(s.code) && percentOf(s, onlyEmpty) !== '') return false;
         return true;
       }),
     [shops, region, shopCode, onlyEmpty, emptyLock, percentOf],
   );
 
-  const filled = shops.filter((s) => percentOf(s) !== '').length;
+  const filled = (field: FillField) => shops.filter((s) => percentOf(s, field) !== '').length;
   /** Сколько строк остались в списке только благодаря замку — их можно спрятать. */
-  const doneInView = onlyEmpty ? visible.filter((s) => percentOf(s) !== '').length : 0;
-  const relock = () => setEmptyLock(new Set(shops.filter((s) => percentOf(s) === '').map((s) => s.code)));
+  const doneInView = onlyEmpty ? visible.filter((s) => percentOf(s, onlyEmpty) !== '').length : 0;
+  const relock = (field: FillField | '' = onlyEmpty) =>
+    setEmptyLock(new Set(field ? shops.filter((s) => percentOf(s, field) === '').map((s) => s.code) : []));
   const readOnly = data ? !data.editable : false;
 
-  function focusNext(index: number) {
-    const next = visible[index + 1];
-    if (next) inputs.current.get(next.code)?.focus();
+  function focusAt(index: number, field: FillField) {
+    const shop = visible[index];
+    if (shop) inputs.current.get(`${shop.code}|${field}`)?.focus();
   }
 
   return (
@@ -187,8 +213,14 @@ export function ShowcaseDayEditor({
         <span className="text-sm font-medium">{humanDate(date)}</span>
 
         <span className="text-sm">
-          Заполнено <b className="tabular-nums">{filled}</b> из {shops.length}{' '}
-          {plural(shops.length, 'лавки', 'лавок', 'лавок')}
+          Заполнено{' '}
+          {FILL_SLOTS.map((slot, i) => (
+            <span key={slot.field}>
+              {i > 0 && ' · '}
+              {slot.label} <b className="tabular-nums">{filled(slot.field)}</b>
+            </span>
+          ))}{' '}
+          из {shops.length} {plural(shops.length, 'лавки', 'лавок', 'лавок')}
         </span>
 
         <SaveBadge save={edits.save} queued={edits.queued} updatedAt={data?.updatedAt} />
@@ -253,24 +285,18 @@ export function ShowcaseDayEditor({
           </select>
           {region && <ClearButton onClick={() => onRegion('')} label="Сбросить фильтр по РМ" />}
         </div>
-        <label
-          className="flex items-center gap-2 text-sm"
-          title="Список фиксируется на момент включения: заполненная лавка остаётся на месте, пока её не спрятать вручную"
-        >
-          <input
-            type="checkbox"
-            checked={onlyEmpty}
-            onChange={(e) => {
-              setOnlyEmpty(e.target.checked);
-              if (e.target.checked) relock();
-            }}
-          />
-          только незаполненные
-        </label>
+        <EmptyFilter
+          value={onlyEmpty}
+          noun="лавка"
+          onChange={(next) => {
+            setOnlyEmpty(next);
+            relock(next);
+          }}
+        />
         {onlyEmpty && doneInView > 0 && (
           <button
             type="button"
-            onClick={relock}
+            onClick={() => relock()}
             className="rounded-lg border px-3 py-2 text-sm"
             style={FIELD_STYLE}
           >
@@ -288,7 +314,6 @@ export function ShowcaseDayEditor({
         ) : (
           <ul>
             {visible.map((shop, i) => {
-              const value = percentOf(shop);
               return (
                 <li
                   key={shop.code}
@@ -313,51 +338,51 @@ export function ShowcaseDayEditor({
                   </span>
 
                   {/*
-                    Процент стоит в разметке раньше комментария, а на экране
-                    остаётся справа от него (order): так устроен порядок Tab.
+                    Замеры стоят в разметке раньше комментария, а на экране
+                    остаются справа от него (order): так устроен порядок Tab.
 
                     Раньше поля шли в обратном порядке, и Tab из процента уводил
                     в комментарий СОСЕДНЕЙ лавки — человек, проходящий день по
                     списку, через раз оказывался не там, где думал. Теперь Tab
-                    остаётся внутри строки: процент → комментарий той же лавки →
-                    процент следующей.
+                    остаётся внутри строки: утро → 16:00 → комментарий той же
+                    лавки → утро следующей.
                   */}
-                  <div className="order-2 flex items-center gap-1.5">
-                    <input
-                      ref={(el) => {
-                        if (el) inputs.current.set(shop.code, el);
-                        else inputs.current.delete(shop.code);
-                      }}
-                      value={value}
-                      onChange={(e) =>
-                        edits.edit(date, shop.code, 'percent', e.target.value, value, `${shop.code}: наполнение`)
+                  <FillInputs
+                    values={{
+                      percent: percentOf(shop, 'percent'),
+                      afternoonPercent: percentOf(shop, 'afternoonPercent'),
+                    }}
+                    thresholds={thresholds}
+                    disabled={readOnly}
+                    ariaSuffix={shop.code}
+                    register={(field, el) => {
+                      const key = `${shop.code}|${field}`;
+                      if (el) inputs.current.set(key, el);
+                      else inputs.current.delete(key);
+                    }}
+                    onChange={(field, raw) =>
+                      edits.edit(
+                        date,
+                        shop.code,
+                        field,
+                        raw,
+                        percentOf(shop, field),
+                        `${shop.code}: наполнение, ${FILL_SLOTS.find((x) => x.field === field)!.label}`,
+                      )
+                    }
+                    onKeyDown={(field, e) => {
+                      // Вниз и вверх — по тому же замеру: утренний столбик
+                      // проходят целиком, потом столбик 16:00.
+                      if (e.key === 'Enter' || e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        focusAt(i + 1, field);
                       }
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          focusNext(i);
-                        }
-                        if (e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          const prev = visible[i - 1];
-                          if (prev) inputs.current.get(prev.code)?.focus();
-                        }
-                      }}
-                      onFocus={(e) => e.target.select()}
-                      disabled={readOnly}
-                      inputMode="decimal"
-                      placeholder="—"
-                      aria-label={`Наполнение витрины, ${shop.code}`}
-                      className="w-20 rounded-lg border px-2 py-1.5 text-right text-sm tabular-nums disabled:opacity-50"
-                      style={FIELD_STYLE}
-                    />
-                    <span className="w-4 text-xs muted">%</span>
-                    <span
-                      className={`st-${statusOf(value, thresholds)} w-16 shrink-0 rounded px-2 py-1 text-center text-xs font-medium`}
-                    >
-                      {statusLabel(statusOf(value, thresholds))}
-                    </span>
-                  </div>
+                      if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        focusAt(i - 1, field);
+                      }
+                    }}
+                  />
 
                   {/* Комментарий: поле без рамки, пока пустое, — восемьдесят
                       строк с рамками превратили бы список в решётку. Рамка
@@ -372,7 +397,7 @@ export function ShowcaseDayEditor({
                       // и в поле процента: вниз, к следующей лавке.
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        focusNext(i);
+                        focusAt(i + 1, 'percent');
                       }
                     }}
                     disabled={readOnly}
@@ -389,13 +414,15 @@ export function ShowcaseDayEditor({
       </div>
 
       <p className="text-xs muted">
-        Значение вводится в процентах. Enter или ↓ — следующая лавка, ↑ — предыдущая,
-        Tab — комментарий этой же лавки. Пустое поле
-        означает «в этот день не заполняли»: такая лавка в средние значения не входит. Комментарий
+        Значение вводится в процентах, замеров два: утром и в 16:00. Статус в строке — итог
+        дня, худший из двух: утром 100%, в 16:00 50% — итог 50%. Конкурс по витринам считается
+        только по утреннему замеру. Enter или ↓ — следующая лавка, ↑ — предыдущая (по тому же
+        замеру), Tab — следующее поле этой же лавки. Пустое поле означает «не заполняли»: такой
+        замер в итог не входит, а лавка без обоих замеров — в средние значения. Комментарий
         рядом — свободный текст на случай «не привезли ягоды»; на цифры он не влияет. Сохраняется
-        само, а последнее изменение отменяется кнопкой «Отменить» или Ctrl+Z. Галочка
-        «только незаполненные» фиксирует список: заполненная лавка не
-        выпрыгивает из-под курсора на первой же цифре, а прячется по кнопке рядом с галочкой или
+        само, а последнее изменение отменяется кнопкой «Отменить» или Ctrl+Z. Фильтр
+        «только незаполненные» (по утру или по 16:00) фиксирует список: заполненная лавка не
+        выпрыгивает из-под курсора на первой же цифре, а прячется по кнопке рядом с фильтром или
         при смене дня. Метка «🕙 с 10:00» — лавка открывается позже общих 08:00 (М71 Кузьминки, М72
         Ватутинки): раннее наполнение у неё считать не с чего.
       </p>

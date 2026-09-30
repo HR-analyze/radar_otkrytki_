@@ -451,6 +451,36 @@ test('конкурс: дни без витрины в баллы не попад
   }
 });
 
+test('конкурс считается по утреннему замеру, итог лавки — по худшему', async () => {
+  const { saveShowcaseEdits } = await import('./showcase-store');
+  const day = '2026-08-26';
+  await saveShowcaseEdits([
+    // Утром полная витрина, в 16:00 — половина.
+    { date: day, shopCode: 'М8', fill: 1, afternoonFill: 0.5 },
+    // Мерили только в 16:00 — для конкурса день не заполнен.
+    { date: day, shopCode: 'М10', fill: null, afternoonFill: 0.99 },
+  ]);
+
+  const { rows } = await q.contest({ from: day, to: day });
+  const m8 = rows.find((r) => r.shop.code === 'М8');
+  assert.equal(m8?.cells[day]?.status, 'green', 'конкурс видит утренние 100%');
+  assert.equal(m8?.cells[day]?.fill, 1);
+  assert.equal(
+    rows.find((r) => r.shop.code === 'М10')?.cells[day],
+    undefined,
+    'только 16:00 — в конкурсе дня нет',
+  );
+
+  const [history] = await q.shopHistory('М8', day, day);
+  assert.equal(history.fill, 0.5, 'в карточке лавки итог — худший замер');
+  assert.deepEqual(history.fillSlots, { morning: 1, afternoon: 0.5 });
+  assert.equal(
+    history.criteria.find((c) => c.criterion === 'showcase')?.status,
+    'red',
+    'критерий «витрина» в итоге лавки — по худшему замеру',
+  );
+});
+
 test('закрытая лавка уходит из списков, но не из прошлых дней', async () => {
   // М15 закрыта с 14.09.2026 (см. shopClosures). Проверяем оба конца правила:
   // в справочнике за будущие дни её нет, за август — есть.

@@ -1,9 +1,10 @@
 'use client';
 
+import type { KeyboardEvent } from 'react';
 import { plural } from '@/lib/plural';
 import { formatDay, formatMoment } from '@/lib/time';
 import type { Status } from '@/lib/types';
-import type { SaveState } from './use-showcase-edits';
+import type { EditField, SaveState } from './use-showcase-edits';
 
 /**
  * Мелочь, общая для обоих редакторов витрин — дневного и полавочного.
@@ -33,6 +34,127 @@ export function statusOf(
   if (share >= thresholds.green) return 'green';
   if (share >= thresholds.yellow) return 'yellow';
   return 'red';
+}
+
+/**
+ * Замеры наполнения за день. Утренний был всегда, второй — в 16:00: витрину,
+ * полную с утра и пустую после обеда, одним замером не поймать.
+ */
+export const FILL_SLOTS = [
+  { field: 'percent', label: 'утро', title: 'Утренний замер' },
+  { field: 'afternoonPercent', label: '16:00', title: 'Замер в 16:00' },
+] as const satisfies readonly { field: EditField; label: string; title: string }[];
+
+export type FillField = (typeof FILL_SLOTS)[number]['field'];
+
+/**
+ * Статус итога дня, пока правка летит на сервер: худший из набранных замеров.
+ * Пустой замер итог не портит — так же считает сервер (см. worstFill).
+ */
+export function worstStatusOf(
+  values: readonly string[],
+  thresholds: { green: number; yellow: number },
+): Status {
+  const numbers = values.filter((v) => v !== '').map(Number).filter(Number.isFinite);
+  if (numbers.length === 0) return 'no_data';
+  return statusOf(String(Math.min(...numbers)), thresholds);
+}
+
+/**
+ * Оба замера и статус итога — одна группа полей, общая для дневного и
+ * полавочного редакторов. Навигация стрелками у редакторов своя (по лавкам
+ * или по дням), поэтому клавиши и ссылки на поля отдаются наружу.
+ */
+export function FillInputs({
+  values,
+  thresholds,
+  disabled,
+  ariaSuffix,
+  onChange,
+  onKeyDown,
+  register,
+}: {
+  values: Record<FillField, string>;
+  thresholds: { green: number; yellow: number };
+  disabled: boolean;
+  /** «М12» или «М12, 2026-09-21» — чтобы программа чтения с экрана различала поля. */
+  ariaSuffix: string;
+  onChange: (field: FillField, raw: string) => void;
+  onKeyDown: (field: FillField, e: KeyboardEvent<HTMLInputElement>) => void;
+  register: (field: FillField, el: HTMLInputElement | null) => void;
+}) {
+  const status = worstStatusOf(
+    FILL_SLOTS.map((slot) => values[slot.field]),
+    thresholds,
+  );
+  return (
+    <div className="order-2 flex items-center gap-1.5">
+      {FILL_SLOTS.map((slot) => (
+        <label key={slot.field} className="flex items-center gap-1" title={slot.title}>
+          <span className="text-xs muted tabular-nums">{slot.label}</span>
+          <input
+            ref={(el) => register(slot.field, el)}
+            value={values[slot.field]}
+            onChange={(e) => onChange(slot.field, e.target.value)}
+            onKeyDown={(e) => onKeyDown(slot.field, e)}
+            onFocus={(e) => e.target.select()}
+            disabled={disabled}
+            inputMode="decimal"
+            placeholder="—"
+            aria-label={`${slot.title}, ${ariaSuffix}`}
+            className="w-14 rounded-lg border px-2 py-1.5 text-right text-sm tabular-nums disabled:opacity-50"
+            style={FIELD_STYLE}
+          />
+        </label>
+      ))}
+      <span className="w-4 text-xs muted">%</span>
+      <span
+        className={`st-${status} w-18 shrink-0 whitespace-nowrap rounded px-2 py-1 text-center text-xs font-medium`}
+        title="Итог дня — худший из двух замеров"
+      >
+        {statusLabel(status)}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Фильтр «только незаполненные»: по какому замеру. Утром всё, что в 16:00, ещё
+ * пусто, и общий фильтр «хоть один замер пуст» показывал бы весь список.
+ */
+export function EmptyFilter({
+  value,
+  onChange,
+  noun,
+}: {
+  value: FillField | '';
+  onChange: (value: FillField | '') => void;
+  /** «лавка» или «день» — для подсказки. */
+  noun: string;
+}) {
+  return (
+    <label
+      className="flex items-center gap-2 text-sm"
+      title={`Список фиксируется на момент выбора: заполненный ${noun} остаётся на месте, пока его не спрятать вручную`}
+    >
+      <span>только незаполненные:</span>
+      {/* Ширина — на обёртке: select растягивается на всю ширину родителя. */}
+      <span className="w-24">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value as FillField | '')}
+          aria-label="Только незаполненные"
+        >
+          <option value="">нет</option>
+          {FILL_SLOTS.map((slot) => (
+            <option key={slot.field} value={slot.field}>
+              {slot.label}
+            </option>
+          ))}
+        </select>
+      </span>
+    </label>
+  );
 }
 
 export function statusLabel(status: Status): string {

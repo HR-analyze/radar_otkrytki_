@@ -24,8 +24,8 @@ import { normalizeCode } from './shops';
 /** Откуда пришла правка. 'unknown' — вызов без указания источника. */
 export type ShowcaseEditSource = 'ui' | 'upload' | 'unknown';
 
-/** Какое поле лавки за день изменилось. */
-export type ShowcaseAuditField = 'fill' | 'note';
+/** Какое поле лавки за день изменилось: утренний замер, замер в 16:00, комментарий. */
+export type ShowcaseAuditField = 'fill' | 'fill_afternoon' | 'note';
 
 export interface ShowcaseAuditEntry {
   /** Когда правка применена, ISO. */
@@ -122,7 +122,7 @@ export async function readShowcaseAudit(
     at: String(r.at),
     date: String(r.date),
     shopCode: String(r.shop_code),
-    field: r.field === 'note' ? 'note' : 'fill',
+    field: r.field === 'note' || r.field === 'fill_afternoon' ? r.field : 'fill',
     from: r.old_value == null ? null : String(r.old_value),
     to: r.new_value == null ? null : String(r.new_value),
     source: source(r.source),
