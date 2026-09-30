@@ -55,7 +55,7 @@ export default async function ShowcasePage({
           href={`/api/showcase/xlsx?from=${month}-01&to=${lastDayOf(month)}`}
           className="rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap hover:opacity-90"
           style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
-          title="Номер лавки, дата, наполнение утром и в 16:00 — таблицей Excel за месяц"
+          title="Номер лавки, дата, наполнение утром и в 16:00, общий результат — таблицей Excel за месяц"
         >
           ⬇ Excel за {formatDay(`${month}-01`, { month: 'long' })}
         </a>

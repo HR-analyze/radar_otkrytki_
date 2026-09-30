@@ -1,11 +1,15 @@
 import * as XLSX from 'xlsx';
-import type { ShowcaseStore } from './showcase-store';
+import { worstFill, type ShowcaseStore } from './showcase-store';
 
 /**
  * Наполнение витрин таблицей для Excel: одна строка — лавка за день, оба замера
  * рядом.
  *
- *   Номер лавки | Дата | Утро | 16:00
+ *   Номер лавки | Дата | Утро | 16:00 | Общий результат
+ *
+ * Общий результат — итог дня, как на радаре и в карточке лавки: худший из двух
+ * замеров (утром 100%, в 16:00 50% → 50%), а если мерили один раз — он и есть
+ * итог (см. worstFill).
  *
  * Строки идут по лавке, внутри лавки — по дням: так читают «как держала витрину
  * М12 весь месяц», а автофильтр Excel переворачивает таблицу в «все лавки за
@@ -21,9 +25,11 @@ export interface ShowcaseXlsxRow {
   /** Доля 0–1 или null — не мерили. */
   morning: number | null;
   afternoon: number | null;
+  /** Итог дня — худший из двух замеров; null — не мерили вовсе. */
+  total: number | null;
 }
 
-export const SHOWCASE_XLSX_HEADER = ['Номер лавки', 'Дата', 'Утро', '16:00'] as const;
+export const SHOWCASE_XLSX_HEADER = ['Номер лавки', 'Дата', 'Утро', '16:00', 'Общий результат'] as const;
 
 /**
  * Строки выгрузки: каждая лавка за каждый день окна, в который она работала.
@@ -42,12 +48,9 @@ export function showcaseXlsxRows(
   for (const shopCode of shopCodes) {
     for (const date of dates) {
       if (!isOpen(shopCode, date)) continue;
-      rows.push({
-        shopCode,
-        date,
-        morning: store.days[date]?.[shopCode] ?? null,
-        afternoon: store.afternoon[date]?.[shopCode] ?? null,
-      });
+      const morning = store.days[date]?.[shopCode] ?? null;
+      const afternoon = store.afternoon[date]?.[shopCode] ?? null;
+      rows.push({ shopCode, date, morning, afternoon, total: worstFill(morning, afternoon) });
     }
   }
   return rows;
@@ -60,7 +63,7 @@ export function showcaseXlsxRows(
 export function showcaseXlsx(rows: readonly ShowcaseXlsxRow[]): Buffer {
   const aoa: (string | number | null)[][] = [
     [...SHOWCASE_XLSX_HEADER],
-    ...rows.map((r) => [r.shopCode, excelSerial(r.date), r.morning, r.afternoon]),
+    ...rows.map((r) => [r.shopCode, excelSerial(r.date), r.morning, r.afternoon, r.total]),
   ];
 
   const sheet = XLSX.utils.aoa_to_sheet(aoa);
@@ -73,10 +76,11 @@ export function showcaseXlsx(rows: readonly ShowcaseXlsxRow[]): Buffer {
     format(r, 1, 'dd.mm.yyyy');
     format(r, 2, '0%');
     format(r, 3, '0%');
+    format(r, 4, '0%');
   }
 
-  sheet['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 8 }];
-  sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ r: 0, c: 0 }, { r: rows.length, c: 3 }) };
+  sheet['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 16 }];
+  sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ r: 0, c: 0 }, { r: rows.length, c: 4 }) };
 
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, 'Наполнение витрин');
