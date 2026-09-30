@@ -279,9 +279,17 @@ export interface AttendanceRow {
 export interface ShowcaseRow {
   date: string;
   shopCode: string;
-  /** Доля 0–1. */
+  /** Итог дня, доля 0–1: худший из утреннего замера и замера в 16:00. */
   fill: number;
+  /** Статус итога. */
   status: Status;
+  /**
+   * Утренний замер; null — утром не заполняли. Поля нет у строк из источников,
+   * где замер был один (книга «Витрины», старый снимок), — там утренний и есть `fill`.
+   */
+  morning?: number | null;
+  /** Замер в 16:00; null или нет поля — не мерили. */
+  afternoon?: number | null;
 }
 
 /** Статус критерия у лавки за день. */

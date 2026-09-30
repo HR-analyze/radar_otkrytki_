@@ -170,6 +170,81 @@ test('экспорт в файл-сид отсортирован и читает
   assert.equal(back.days['2026-09-05']['М1'], 0.96);
 });
 
+test('итог дня — худший из двух замеров, пустой замер итог не портит', () => {
+  assert.equal(store.worstFill(1, 0.5), 0.5, 'утром 100%, в 16:00 50% — итог 50%');
+  assert.equal(store.worstFill(0.6, 0.9), 0.6, 'и наоборот: худшее может быть утром');
+  assert.equal(store.worstFill(0.9, null), 0.9, 'в 16:00 не мерили — итог по утру');
+  assert.equal(store.worstFill(null, 0.8), 0.8, 'утром не мерили — итог по 16:00');
+  assert.equal(store.worstFill(null, null), null);
+});
+
+test('замер в 16:00 хранится отдельно и не трогает утренний', async () => {
+  await store.saveShowcaseEdits([{ date: '2026-09-12', shopCode: 'М1', fill: 1 }]);
+  const saved = await store.saveShowcaseEdits([
+    { date: '2026-09-12', shopCode: 'М1', afternoonFill: 0.5 },
+  ]);
+  assert.equal(saved.changed, 1);
+
+  const read = await store.readShowcase();
+  assert.equal(read.days['2026-09-12']['М1'], 1, 'утренний замер на месте');
+  assert.equal(read.afternoon['2026-09-12']['М1'], 0.5);
+
+  // Стирание 16:00 тоже не задевает утро.
+  await store.saveShowcaseEdits([{ date: '2026-09-12', shopCode: 'М1', afternoonFill: null }]);
+  const after = await store.readShowcase();
+  assert.equal(after.afternoon['2026-09-12']?.['М1'], undefined);
+  assert.equal(after.days['2026-09-12']['М1'], 1);
+});
+
+test('правка 16:00 пишется в журнал отдельным полем', async () => {
+  const { readShowcaseAudit } = await import('./showcase-audit');
+  await store.saveShowcaseEdits([{ date: '2026-09-13', shopCode: 'М4', afternoonFill: 0.7 }]);
+
+  const entries = await readShowcaseAudit({ date: '2026-09-13', shopCode: 'М4' });
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].field, 'fill_afternoon');
+  assert.equal(entries[0].from, null);
+  assert.equal(entries[0].to, '0.7');
+});
+
+test('радар красится по худшему замеру, сами замеры лежат рядом', async () => {
+  await store.saveShowcaseEdits([
+    { date: '2026-09-14', shopCode: 'М1', fill: 1, afternoonFill: 0.5 },
+    // Только 16:00 — лавка всё равно в итоге дня.
+    { date: '2026-09-14', shopCode: 'М2', afternoonFill: 0.97 },
+  ]);
+
+  const { showcase, criteria } = store.showcaseRowsFromStore(await store.readShowcase());
+  const m1 = showcase.find((s) => s.date === '2026-09-14' && s.shopCode === 'М1')!;
+  assert.equal(m1.fill, 0.5);
+  assert.equal(m1.status, 'red', 'утренние 100% не вытягивают провал в 16:00');
+  assert.equal(m1.morning, 1);
+  assert.equal(m1.afternoon, 0.5);
+  assert.equal(
+    criteria.find((c) => c.date === '2026-09-14' && c.shopCode === 'М1')?.status,
+    'red',
+    'критерий «витрина» — тоже по итогу',
+  );
+
+  const m2 = showcase.find((s) => s.date === '2026-09-14' && s.shopCode === 'М2')!;
+  assert.equal(m2.fill, 0.97);
+  assert.equal(m2.morning, null);
+});
+
+test('замер 16:00 попадает в резервную копию и возвращается из неё', async () => {
+  await store.saveShowcaseEdits([{ date: '2026-09-15', shopCode: 'М3', afternoonFill: 0.88 }]);
+  store.writeSeed(await store.readShowcase());
+
+  assert.equal(store.readSeed().afternoon['2026-09-15']['М3'], 0.88);
+  assert.ok(store.readSeed().touched['2026-09-15'], 'день с одним лишь 16:00 не теряет отметку');
+});
+
+test('версия витрин меняется и от правки 16:00', async () => {
+  const before = await store.showcaseVersion();
+  await store.saveShowcaseEdits([{ date: '2026-09-16', shopCode: 'М9', afternoonFill: 0.42 }]);
+  assert.notEqual(before, await store.showcaseVersion());
+});
+
 test('в закоммиченном сиде репозитория лежит вся история витрин', () => {
   // Сид — резервная копия истории: если он потеряется, свежая установка
   // поднимется с пустыми витринами. Порог не равенство, а «не меньше»:

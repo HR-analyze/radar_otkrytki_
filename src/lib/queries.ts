@@ -9,7 +9,7 @@ import {
   type Status,
   type ThresholdConfig,
 } from './types';
-import { aggregateStatuses, isOpenOn, roundScore, statusFromScore } from './status';
+import { aggregateStatuses, isOpenOn, roundScore, statusForFill, statusFromScore } from './status';
 import { parseClock } from './time';
 import { compareShopNumber, findShops, isExactCode, matchesShop, shopNumber } from './shops';
 import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
@@ -586,7 +586,7 @@ export interface ContestFilters {
 
 export interface ContestCell {
   status: Status;
-  /** Наполнение витрины 0–1 в этот день. */
+  /** Утреннее наполнение витрины 0–1 в этот день — замер 16:00 конкурс не видит. */
   fill: number;
   /** Балл дня: +1 / 0 / −1. */
   points: number;
@@ -614,9 +614,11 @@ export interface ContestRegionRow {
  * единственный критерий — витрина, а в итоге баллы (🟢 +1, 🟡 0, 🔴 −1), а не
  * число красных. Правило считает contest.ts.
  *
- * Источник — `snap.showcase`: там и процент, и статус по действующим порогам.
- * Через `snap.criteria` идти незачем — статусы витрины приходят туда из того же
- * стора (см. showcase-store.ts), но без процента.
+ * Источник — `snap.showcase`, но **только утренний замер**. Итог дня там —
+ * худший из утреннего и 16:00, а конкурс условились не трогать: он как считался
+ * по одному (утреннему) замеру, так и считается. День, где мерили только в
+ * 16:00, для конкурса не заполнен. Статус утреннего замера считается здесь же,
+ * по действующим порогам, — через `snap.criteria` идти нельзя: там статус итога.
  *
  * День лавки относится к тому РМ, который вёл её в этот день (regionAt), а не
  * к нынешнему: иначе после передачи лавки чужие дни утекали бы в статистику
@@ -647,14 +649,22 @@ export async function contest(
   const allowedShops = new Set(shops.map((s) => s.code));
   const inRegion = await regionDayMatcher(filters.region);
 
-  const relevant = snap.showcase.filter(
-    (s) =>
-      s.date >= filters.from &&
-      s.date <= filters.to &&
-      allowedShops.has(s.shopCode) &&
-      inRegion(s.shopCode, s.date) &&
-      pointsOf(s.status) != null,
-  );
+  const config = loadConfig();
+  const relevant = snap.showcase
+    .filter(
+      (s) =>
+        s.date >= filters.from &&
+        s.date <= filters.to &&
+        allowedShops.has(s.shopCode) &&
+        inRegion(s.shopCode, s.date),
+    )
+    .flatMap((s) => {
+      // Нет поля morning — строка из источника с одним замером: он и утренний.
+      const fill = s.morning === undefined ? s.fill : s.morning;
+      if (fill == null) return [];
+      const status = statusForFill(fill, config);
+      return pointsOf(status) == null ? [] : [{ ...s, fill, status }];
+    });
 
   const dates = [...new Set(relevant.map((s) => s.date))].sort();
 
@@ -1455,7 +1465,10 @@ export interface ShopDay {
     score: number | null;
     origin: CriterionStatusRow['origin'];
   }[];
+  /** Итог дня по витрине — худший из замеров. */
   fill: number | null;
+  /** Сами замеры: утро и 16:00; null — не мерили. */
+  fillSlots: { morning: number | null; afternoon: number | null };
   shopStatus: Status;
   /** Итоговый балл лавки, если он считается по баллам. */
   shopScore: number | null;
@@ -1501,6 +1514,12 @@ export async function shopHistory(
   const criteria = snap.criteria.filter((c) => c.shopCode === shopCode && inRange(c.date));
   const dayShowcase = snap.showcase.filter((s) => s.shopCode === shopCode && inRange(s.date));
   const fills = new Map(dayShowcase.map((s) => [s.date, s.fill]));
+  const slots = new Map(
+    dayShowcase.map((s) => [
+      s.date,
+      { morning: s.morning === undefined ? s.fill : s.morning, afternoon: s.afternoon ?? null },
+    ]),
+  );
   const showcaseStatuses = new Map(dayShowcase.map((s) => [s.date, s.status]));
 
   const dates = [
@@ -1559,6 +1578,7 @@ export async function shopHistory(
         })),
       criteria: dayCriteria,
       fill: fills.get(date) ?? null,
+      fillSlots: slots.get(date) ?? { morning: null, afternoon: null },
       shopStatus: shop.status,
       shopScore: shop.score,
       rating,

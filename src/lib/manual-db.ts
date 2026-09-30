@@ -81,6 +81,18 @@ function migrate(db: BetterSqlite3.Database): void {
       PRIMARY KEY (date, shop_code)
     );
 
+    -- Второй замер наполнения — в 16:00. Утренний живёт в showcase_fill, как
+    -- и жил: отдельная таблица, а не столбец «слот» в первичном ключе, чтобы
+    -- не переписывать уже заполненные базы. Итог дня — худший из двух замеров
+    -- (см. showcaseRowsFromStore), конкурс считается только по утреннему.
+    CREATE TABLE IF NOT EXISTS showcase_fill_afternoon (
+      date       TEXT NOT NULL,
+      shop_code  TEXT NOT NULL,
+      fill       REAL NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (date, shop_code)
+    );
+
     -- Комментарий к лавке за день: «не привезли ягоды», «витрину чинили».
     -- Живёт отдельно от наполнения: заметку можно оставить и без процента.
     CREATE TABLE IF NOT EXISTS showcase_note (
@@ -110,7 +122,8 @@ function migrate(db: BetterSqlite3.Database): void {
     -- хуже, чем честно его не показывать. Вместо автора — source: пришла
     -- правка со страницы «Витрины» или из залитой книги.
     --
-    -- field: 'fill' (наполнение, доля 0–1 строкой) или 'note' (комментарий).
+    -- field: 'fill' (утреннее наполнение, доля 0–1 строкой), 'fill_afternoon'
+    -- (наполнение в 16:00) или 'note' (комментарий).
     -- NULL в old_value значит «значения не было», в new_value — «стёрли».
     CREATE TABLE IF NOT EXISTS showcase_audit (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,

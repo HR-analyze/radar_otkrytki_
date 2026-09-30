@@ -38,13 +38,16 @@ const SAVED_BADGE_MS = 2500;
 const UNDO_DEPTH = 50;
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-export type EditField = 'percent' | 'note';
+/** percent — утренний замер, afternoonPercent — замер в 16:00. */
+export type EditField = 'percent' | 'afternoonPercent' | 'note';
 
 /** Строка, как её вернул сервер после сохранения: по ней красят ячейку. */
 export interface SavedRow {
   date: string;
   shopCode: string;
   percent: number | null;
+  afternoonPercent: number | null;
+  /** Статус итога дня — худшего из двух замеров. */
   status: Status;
   note: string;
 }
@@ -99,9 +102,9 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
   const [undo, setUndo] = useState<UndoStep[]>([]);
   const [queued, setQueued] = useState(0);
 
-  // Копим правки по полям: процент и комментарий одной строки правят
+  // Копим правки по полям: оба замера и комментарий одной строки правят
   // независимо, и отправить нужно ровно то, что человек трогал.
-  const pending = useRef<Map<string, { percent?: string; note?: string }>>(new Map());
+  const pending = useRef<Map<string, Partial<Record<EditField, string>>>>(new Map());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Состояние сохранения для обработчиков, живущих вне рендера (см. beforeunload). */
   const saveRef = useRef<SaveState>('idle');
@@ -173,6 +176,9 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
                 // Ключ кладём только для тронутого поля: иначе правка
                 // комментария стёрла бы процент, и наоборот.
                 ...(fields.percent !== undefined ? { percent: fields.percent || null } : {}),
+                ...(fields.afternoonPercent !== undefined
+                  ? { afternoonPercent: fields.afternoonPercent || null }
+                  : {}),
                 ...(fields.note !== undefined ? { note: fields.note } : {}),
               };
             }),
@@ -258,7 +264,7 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
   }, [flush]);
 
   const queue = useCallback(
-    (date: string, shopCode: string, patch: { percent?: string; note?: string }) => {
+    (date: string, shopCode: string, patch: Partial<Record<EditField, string>>) => {
       const key = rowKey(date, shopCode);
       pending.current.set(key, { ...pending.current.get(key), ...patch });
       setQueued(pending.current.size);
@@ -290,9 +296,9 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
   const edit = useCallback<ShowcaseEdits['edit']>(
     (date, shopCode, field, raw, before, label) => {
       const value =
-        field === 'percent'
-          ? raw.replace(',', '.').replace(/[^\d.]/g, '').slice(0, 5)
-          : raw.slice(0, MAX_NOTE);
+        field === 'note'
+          ? raw.slice(0, MAX_NOTE)
+          : raw.replace(',', '.').replace(/[^\d.]/g, '').slice(0, 5);
 
       remember({ date, shopCode, field, before, label });
       setDrafts((d) => ({ ...d, [cellKey(date, shopCode, field)]: value }));

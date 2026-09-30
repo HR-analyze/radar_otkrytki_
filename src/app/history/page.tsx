@@ -146,7 +146,7 @@ export default async function HistoryPage({
                   <tr key={date} className="border-t" style={{ borderColor: 'var(--border)' }}>
                     <td className="py-1.5 tabular-nums">{shortDate(date)}</td>
                     <td className="py-1.5 text-xs muted">
-                      {countShops(showcase.days[date])}
+                      {countShops(showcase.days[date], showcase.afternoon[date])}
                     </td>
                     <td className="py-1.5 text-right text-xs tabular-nums muted">{stamp(at)}</td>
                   </tr>
@@ -286,7 +286,8 @@ function AuditFilter({ shop, date }: { shop: string; date: string }) {
 }
 
 const FIELD_TITLE: Record<ShowcaseAuditEntry['field'], string> = {
-  fill: 'Наполнение',
+  fill: 'Наполнение, утро',
+  fill_afternoon: 'Наполнение, 16:00',
   note: 'Комментарий',
 };
 
@@ -439,8 +440,12 @@ function readFixtureFiles(): FixtureFile[] {
   }
 }
 
-function countShops(day: Record<string, number> | undefined): string {
-  const n = Object.keys(day ?? {}).length;
+/** Лавка считается, если у неё есть хоть один замер: утренний или в 16:00. */
+function countShops(
+  morning: Record<string, number> | undefined,
+  afternoon: Record<string, number> | undefined,
+): string {
+  const n = new Set([...Object.keys(morning ?? {}), ...Object.keys(afternoon ?? {})]).size;
   return `${n} ${plural(n, 'лавка', 'лавки', 'лавок')}`;
 }
 

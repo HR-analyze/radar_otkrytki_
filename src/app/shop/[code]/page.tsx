@@ -152,8 +152,18 @@ export default async function ShopPage({
                     <div className="mt-1 flex items-center gap-2">
                       <StatusBadge status={item.status} />
                       {c === 'showcase' && day.fill != null && (
-                        <span className="text-xs tabular-nums muted">
+                        <span
+                          className="text-xs tabular-nums muted"
+                          title="Итог дня — худший из замеров утром и в 16:00"
+                        >
                           {Math.round(day.fill * 100)}%
+                          {day.fillSlots.afternoon != null && (
+                            <>
+                              {' '}
+                              (утро {formatSlot(day.fillSlots.morning)} · 16:00{' '}
+                              {formatSlot(day.fillSlots.afternoon)})
+                            </>
+                          )}
                         </span>
                       )}
                       {/* Средний балл — то, из чего получилась зона: заказчик
@@ -439,4 +449,9 @@ function scoreHint(config: ReturnType<typeof loadConfig>): string {
 function timeOnly(stamp: string): string {
   const m = /(\d{1,2}:\d{2})/.exec(stamp);
   return m ? m[1] : stamp;
+}
+
+/** Замер витрины в карточке: «95%» или «—», если в это время не мерили. */
+function formatSlot(fill: number | null): string {
+  return fill == null ? '—' : `${Math.round(fill * 100)}%`;
 }
