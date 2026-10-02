@@ -1134,6 +1134,18 @@ export interface DepartureDriver {
   medianStay: number | null;
   /** Выезды по дням. Нет ключа — в этот день не отмечался. */
   days: Record<string, DepartureTrip[]>;
+  /**
+   * На какие лавки ездит: где за период стоит его отметка водителя, чаще всего
+   * сверху. Пусто — в лавках он не отмечался, и откуда взять маршрут, неизвестно.
+   */
+  shops: DepartureShop[];
+}
+
+/** Лавка водителя РЦ и сколько дней за период он в ней отметился. */
+export interface DepartureShop {
+  code: string;
+  name: string;
+  days: number;
 }
 
 export interface DepartureSummary {
@@ -1211,6 +1223,42 @@ function departureRule(config: ThresholdConfig) {
 }
 
 /**
+ * Лавки водителей РЦ: по полному ФИО — где за период стоит отметка водителя.
+ *
+ * В выгрузке по РЦ лавок нет, поэтому другого источника маршрута нет: связка
+ * та же, что на карточке лавки, — полное имя (фамилии мало, Егоровых в
+ * выгрузках несколько). Берутся только отметки водителей: кассир-однофамилец с
+ * тем же ФИО маршрутом водителя не станет. Кто на РЦ отмечается, а в лавках
+ * нет, получает пустой список — честнее, чем гадать.
+ */
+function departureShops(
+  snap: Snapshot,
+  from: string,
+  to: string,
+): Map<string, DepartureShop[]> {
+  const names = new Map(snap.shops.map((s) => [s.code, s.name]));
+  // ФИО → лавка → дни с отметкой. Дни, а не отметки: две отметки за утро — один заезд.
+  const byName = new Map<string, Map<string, Set<string>>>();
+  for (const r of snap.attendance) {
+    if (r.criterion !== 'driver' || r.date < from || r.date > to) continue;
+    const name = r.employeeName.trim();
+    const shops = byName.get(name) ?? byName.set(name, new Map()).get(name)!;
+    (shops.get(r.shopCode) ?? shops.set(r.shopCode, new Set()).get(r.shopCode)!).add(r.date);
+  }
+
+  const out = new Map<string, DepartureShop[]>();
+  for (const [name, shops] of byName) {
+    out.set(
+      name,
+      [...shops]
+        .map(([code, days]) => ({ code, name: names.get(code) ?? code, days: days.size }))
+        .sort((a, b) => b.days - a.days || compareShopNumber(a, b)),
+    );
+  }
+  return out;
+}
+
+/**
  * Выезд с РЦ за период — сетевой показатель.
  *
  * К лавкам он не привязан: в выгрузке их нет, а водители РЦ и водители,
@@ -1238,7 +1286,7 @@ export async function departureSummary(from: string, to: string): Promise<Depart
 
   // Детализация по людям. Один водитель может выехать дважды за день (в
   // выгрузке такое есть), поэтому в клетке лежит список выездов, а не один.
-  type DriverBucket = Omit<DepartureDriver, 'score' | 'status' | 'medianStay'> & {
+  type DriverBucket = Omit<DepartureDriver, 'score' | 'status' | 'medianStay' | 'shops'> & {
     stays: number[];
     scores: number[];
   };
@@ -1332,6 +1380,8 @@ export async function departureSummary(from: string, to: string): Promise<Depart
     })
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  const shopsOf = departureShops(snap, from, to);
+
   // Худшие сверху: детализацию открывают, чтобы найти, с кем разговаривать.
   // Кто ни разу не выехал (только приход), уходит в конец — балла у него нет.
   const drivers = [...byDriver.values()]
@@ -1342,6 +1392,7 @@ export async function departureSummary(from: string, to: string): Promise<Depart
         score: driverScore,
         status: statusFromScore(driverScore, config),
         medianStay: median(stays),
+        shops: shopsOf.get(d.employeeName.trim()) ?? [],
       };
     })
     .sort(

@@ -1,4 +1,4 @@
-import type { DepartureDriver, DepartureSummary, DepartureTrip } from '@/lib/queries';
+import type { DepartureShop, DepartureSummary, DepartureTrip } from '@/lib/queries';
 import { formatClock, formatDuration, shortDate } from '@/lib/time';
 import { plural } from '@/lib/plural';
 import { StatusBadge, STATUS_TEXT } from '@/components/Status';
@@ -161,6 +161,12 @@ function DriverDetails({ data }: { data: DepartureSummary }) {
               <th className="radar-sticky px-3 py-2 text-left text-xs font-medium muted">
                 Водитель
               </th>
+              <th
+                className="px-2 py-2 text-left text-xs font-medium muted"
+                title="Где за период стоит его отметка водителя — по полному ФИО. Чаще всего — первой"
+              >
+                Лавки
+              </th>
               <th className="px-2 py-2 text-right text-xs font-medium muted">Балл</th>
               <th className="px-2 py-2 text-right text-xs font-medium muted">Выездов</th>
               <th
@@ -186,6 +192,7 @@ function DriverDetails({ data }: { data: DepartureSummary }) {
                 <td className="radar-sticky px-3 py-1 whitespace-nowrap" title={dr.employeeName}>
                   {dr.employeeName}
                 </td>
+                <ShopsCell shops={dr.shops} />
                 <td className="px-2 py-1 text-right whitespace-nowrap">
                   {dr.score == null ? (
                     <span className="muted">—</span>
@@ -222,12 +229,39 @@ function DriverDetails({ data }: { data: DepartureSummary }) {
         </table>
       </div>
       <p className="mt-1.5 text-xs muted">
-        Сверху — худший балл. «Выездов» — сколько раз выехал за период. «Без ухода» — строки, где
+        Сверху — худший балл. «Лавки» — где за период стоит его отметка водителя (по полному
+        ФИО), чаще всего — первой; в выгрузке по РЦ лавок нет, поэтому прочерк значит «в лавках
+        не отмечался», а не «никуда не ездил». «Выездов» — сколько раз выехал за период. «Без ухода» — строки, где
         приход на РЦ есть, а отметки о выезде нет: во сколько уехал, выгрузка не говорит, поэтому
         балл по ним не ставится (в клетке дня они стоят серой точкой). В клетке — время выезда за
         этот день.
       </p>
     </details>
+  );
+}
+
+/** Лавки водителя: коды через запятую, названия и число дней — в подсказке. */
+function ShopsCell({ shops }: { shops: DepartureShop[] }) {
+  if (shops.length === 0) {
+    return (
+      <td
+        className="px-2 py-1 text-xs muted"
+        title="За период в лавках не отмечался: в выгрузке по РЦ лавок нет, а других данных о маршруте нет"
+      >
+        —
+      </td>
+    );
+  }
+
+  return (
+    <td
+      className="px-2 py-1 text-xs whitespace-nowrap"
+      title={shops
+        .map((s) => `${s.name} — ${s.days} ${plural(s.days, 'день', 'дня', 'дней')}`)
+        .join('\n')}
+    >
+      {shops.map((s) => s.code).join(', ')}
+    </td>
   );
 }
 
