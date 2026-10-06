@@ -50,6 +50,7 @@ export function Filters({
   showCriterion = true,
   showStatus = true,
   showSlot = false,
+  slotDisabled,
   criterionDefault = DEFAULT_CRITERION,
 }: {
   base: string;
@@ -63,9 +64,16 @@ export function Filters({
   showStatus?: boolean;
   /**
    * Поле «Витрина»: итог дня, наполнение на 08:00 или на 16:00. Только там,
-   * где страница умеет считать по одному замеру (пока — сводка).
+   * где страница умеет считать по одному замеру: сводка и радар.
    */
   showSlot?: boolean;
+  /**
+   * Почему поле «Витрина» сейчас ни на что не влияет — например, на радаре
+   * выбран не критерий витрины. Задано — поле видно, но выключено, и причина
+   * в подсказке: спрятанное поле сдвигало бы панель при смене критерия, а
+   * включённое молча ничего бы не делало.
+   */
+  slotDisabled?: string;
   /**
    * Критерий, на котором открывается страница. Нужен здесь, чтобы знать,
    * какое значение в URL не писать, — см. apply.
@@ -138,7 +146,7 @@ export function Filters({
     shop: !!state.shop,
     criterion: showCriterion && criterion !== criterionDefault,
     status: showStatus && !!state.status && state.status !== 'all',
-    slot: showSlot && !!state.slot,
+    slot: showSlot && !slotDisabled && !!state.slot,
   };
   const activeCount = Object.values(active).filter(Boolean).length;
 
@@ -269,16 +277,21 @@ export function Filters({
         </Field>
       )}
 
-      {/* Замеров два, утром и в 16:00, а итог дня — худший из них. По итогу
+      {/* Замеров два, утром и в 16:00, а итог дня — их среднее. По итогу
           не видно, когда витрина просела: полная с утра и пустая к вечеру
-          лавка выглядит так же, как пустая с утра. */}
+          лавка выглядит так же, как наполовину пустая весь день. */}
       {showSlot && (
         <Field
           label="Витрина"
           onClear={active.slot ? () => apply({ slot: 'all' }) : undefined}
         >
-          <select value={state.slot ?? 'all'} onChange={(e) => apply({ slot: e.target.value })}>
-            <option value="all">Итог дня (худший замер)</option>
+          <select
+            value={state.slot ?? 'all'}
+            onChange={(e) => apply({ slot: e.target.value })}
+            disabled={!!slotDisabled}
+            title={slotDisabled}
+          >
+            <option value="all">Итог дня (среднее 08:00 и 16:00)</option>
             <option value="morning">{SLOT_FILTER_TITLE.morning}</option>
             <option value="afternoon">{SLOT_FILTER_TITLE.afternoon}</option>
           </select>

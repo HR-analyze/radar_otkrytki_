@@ -3,7 +3,7 @@ import { resolveParams } from '@/lib/params';
 import { listRegions, listShops, radar } from '@/lib/queries';
 import { Filters } from '@/components/Filters';
 import { plural } from '@/lib/plural';
-import { StatusLegend } from '@/components/Status';
+import { SLOT_TIME, StatusLegend } from '@/components/Status';
 import { RadarTable, type RadarSort } from '@/components/RadarTable';
 import { DEFAULT_CRITERION } from '@/lib/types';
 
@@ -27,6 +27,14 @@ export default async function RadarPage({
   const criterionTitle = config.criteria[p.criterion]?.title ?? p.criterion;
 
   /**
+   * Замер витрины (фильтр «Витрина») меняет только ячейки критерия витрины:
+   * у водителя или повара замеров нет. При другом критерии поле видно, но
+   * выключено — см. slotDisabled в Filters.
+   */
+  const showcase = p.criterion === 'showcase';
+  const slotTime = showcase && p.slot ? SLOT_TIME[p.slot] : null;
+
+  /**
    * Порядок строк. По умолчанию — как в справочнике (М1, М2, М3…): так лавку
    * ищут глазами. Дальше порядок меняется на месте, без похода на сервер, —
    * см. RadarTable; сюда он приезжает только из адреса, чтобы ссылкой на
@@ -41,6 +49,7 @@ export default async function RadarPage({
     criterion: p.criterion,
     status: p.status,
     shop: p.shop,
+    slot: showcase ? p.slot : undefined,
   });
 
   return (
@@ -54,6 +63,7 @@ export default async function RadarPage({
         <p className="mt-1 text-xs muted sm:text-sm">
           {rows.length} {plural(rows.length, 'лавка', 'лавки', 'лавок')} под фильтром
           {` · критерий «${criterionTitle}»`}
+          {slotTime ? ` на ${slotTime}` : showcase ? ' · итог дня' : ''}
           {p.shop && ` · поиск «${p.shop}»`}
           {p.region && ` · РМ ${p.region}`}
         </p>
@@ -67,6 +77,10 @@ export default async function RadarPage({
         config={config}
         shops={shops.map((s) => ({ code: s.code, name: s.name }))}
         criterionDefault={DEFAULT_CRITERION}
+        showSlot
+        slotDisabled={
+          showcase ? undefined : 'Замер выбирается только для критерия «Наполнение витрины»'
+        }
       />
 
       {dates.length === 0 || rows.length === 0 ? (
@@ -75,7 +89,9 @@ export default async function RadarPage({
               поиск по лавке, либо пустой критерий за период. */}
           {p.shop
             ? `По запросу «${p.shop}» лавок не нашлось. Попробуйте код (М17) или часть названия.`
-            : `За период по критерию «${criterionTitle}» оценок нет. Возьми другой критерий, расширь период или сними фильтр по статусу.`}
+            : slotTime
+              ? `Замер на ${slotTime} за период не вносили. Возьми итог дня или другой замер, расширь период или сними фильтр по статусу.`
+              : `За период по критерию «${criterionTitle}» оценок нет. Возьми другой критерий, расширь период или сними фильтр по статусу.`}
         </div>
       ) : (
         <>

@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import type { ShowcaseStore } from './showcase-store';
+import { dayFill, type ShowcaseStore } from './showcase-store';
 
 /**
  * Наполнение витрин таблицей для Excel: одна строка — лавка за день, оба замера
@@ -8,9 +8,9 @@ import type { ShowcaseStore } from './showcase-store';
  *   Номер лавки | Дата | Утро | 16:00 | Средний результат
  *
  * Средний результат — среднее двух замеров (утром 100%, в 16:00 50% → 75%), а
- * если мерили один раз — он сам. Это НЕ итог дня радара: радар, карточка лавки
- * и балл берут худший из двух (см. worstFill), выгрузка — среднее по просьбе
- * заказчика.
+ * если мерили один раз — он сам. С 06.10.2026 это и есть итог дня радара:
+ * считается той же функцией (dayFill), что радар, карточка лавки и балл, —
+ * до целого процента, половинка вверх. Цифра в выгрузке и на дашборде одна.
  *
  * Строки идут по лавке, внутри лавки — по дням: так читают «как держала витрину
  * М12 весь месяц», а автофильтр Excel переворачивает таблицу в «все лавки за
@@ -51,22 +51,10 @@ export function showcaseXlsxRows(
       if (!isOpen(shopCode, date)) continue;
       const morning = store.days[date]?.[shopCode] ?? null;
       const afternoon = store.afternoon[date]?.[shopCode] ?? null;
-      rows.push({ shopCode, date, morning, afternoon, average: averageFill(morning, afternoon) });
+      rows.push({ shopCode, date, morning, afternoon, average: dayFill(morning, afternoon) });
     }
   }
   return rows;
-}
-
-/**
- * Среднее двух замеров. Пустой замер в среднее не входит: не мерили в 16:00 —
- * результат равен утреннему, а не половине его.
- *
- * Округление до сотых процента — чтобы в ячейке лежало 0.725, а не 0.7250000001.
- */
-export function averageFill(morning: number | null, afternoon: number | null): number | null {
-  if (morning == null) return afternoon;
-  if (afternoon == null) return morning;
-  return Math.round(((morning + afternoon) / 2) * 10_000) / 10_000;
 }
 
 /**
