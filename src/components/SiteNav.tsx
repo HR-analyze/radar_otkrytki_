@@ -17,9 +17,9 @@ import { usePathname, useSearchParams } from 'next/navigation';
 const SHARED = ['from', 'to', 'region', 'shop'] as const;
 
 const TABS: { href: string; label: string; keys: readonly string[] }[] = [
-  // Замер витрины (08:00 / 16:00) умеет считать только сводка — только ей и отдаём.
+  // Замер витрины (08:00 / 16:00) умеют считать сводка и радар — только им и отдаём.
   { href: '/', label: 'Сводка', keys: [...SHARED, 'criterion', 'status', 'slot'] },
-  { href: '/radar', label: 'Радар по лавкам', keys: [...SHARED, 'criterion', 'status'] },
+  { href: '/radar', label: 'Радар по лавкам', keys: [...SHARED, 'criterion', 'status', 'slot'] },
   { href: '/showcase', label: 'Витрины', keys: [] },
   { href: '/contest', label: 'Конкурс', keys: SHARED },
   { href: '/violations', label: 'Нарушения', keys: SHARED },

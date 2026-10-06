@@ -83,8 +83,8 @@ function migrate(db: BetterSqlite3.Database): void {
 
     -- Второй замер наполнения — в 16:00. Утренний живёт в showcase_fill, как
     -- и жил: отдельная таблица, а не столбец «слот» в первичном ключе, чтобы
-    -- не переписывать уже заполненные базы. Итог дня — худший из двух замеров
-    -- (см. showcaseRowsFromStore), конкурс считается только по утреннему.
+    -- не переписывать уже заполненные базы. Итог дня — среднее двух замеров
+    -- (см. dayFill), конкурс считается только по утреннему.
     CREATE TABLE IF NOT EXISTS showcase_fill_afternoon (
       date       TEXT NOT NULL,
       shop_code  TEXT NOT NULL,

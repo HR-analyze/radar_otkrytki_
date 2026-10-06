@@ -279,7 +279,7 @@ export interface AttendanceRow {
 export interface ShowcaseRow {
   date: string;
   shopCode: string;
-  /** Итог дня, доля 0–1: худший из утреннего замера и замера в 16:00. */
+  /** Итог дня, доля 0–1: среднее утреннего замера и замера в 16:00 (см. dayFill). */
   fill: number;
   /** Статус итога. */
   status: Status;
@@ -294,7 +294,7 @@ export interface ShowcaseRow {
 
 /**
  * Один из двух замеров витрины: утренний (на 08:00) или в 16:00. Там, где
- * замер не выбран, витрина — итог дня, худший из двух (см. ShowcaseRow.fill).
+ * замер не выбран, витрина — итог дня, среднее двух (см. ShowcaseRow.fill).
  */
 export type FillSlot = 'morning' | 'afternoon';
 

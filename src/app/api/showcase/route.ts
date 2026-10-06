@@ -11,7 +11,7 @@ import {
   readShowcase,
   saveShowcaseEdits,
   showcaseEditHint,
-  worstFill,
+  dayFill,
   type ShowcaseEdit,
 } from '@/lib/showcase-store';
 
@@ -41,7 +41,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  * дата, и серверу всё равно, из какого разреза она пришла.
  *
  * Замеров в день два: `percent` — утренний, `afternoonPercent` — в 16:00.
- * `status` — статус итога дня, худшего из двух (см. worstFill).
+ * `status` — статус итога дня, среднего двух замеров (см. dayFill).
  */
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
@@ -92,7 +92,7 @@ export async function GET(req: Request) {
       opensAt: scheduleFor(config, s.code)?.opensAt ?? null,
       percent: toPercent(values[s.code]),
       afternoonPercent: toPercent(afternoon[s.code]),
-      status: statusForFill(worstFill(values[s.code] ?? null, afternoon[s.code] ?? null), config),
+      status: statusForFill(dayFill(values[s.code] ?? null, afternoon[s.code] ?? null), config),
       note: notes[s.code] ?? '',
     })),
   });
@@ -141,7 +141,7 @@ async function shopSlice(rawShop: string, rawFrom: string, rawTo: string): Promi
         date,
         percent: toPercent(fill),
         afternoonPercent: toPercent(afternoon),
-        status: statusForFill(worstFill(fill, afternoon), config),
+        status: statusForFill(dayFill(fill, afternoon), config),
         note: store.notes[date]?.[shop.code] ?? '',
         updatedAt: store.touched[date] ?? null,
       };
@@ -222,7 +222,7 @@ export async function POST(req: Request) {
         shopCode: e.shopCode,
         percent: toPercent(fill),
         afternoonPercent: toPercent(afternoon),
-        status: statusForFill(worstFill(fill, afternoon), config),
+        status: statusForFill(dayFill(fill, afternoon), config),
         note: store.notes[e.date]?.[e.shopCode] ?? '',
       };
     }),

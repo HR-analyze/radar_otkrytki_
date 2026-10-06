@@ -154,7 +154,7 @@ export default async function ShopPage({
                       {c === 'showcase' && day.fill != null && (
                         <span
                           className="text-xs tabular-nums muted"
-                          title="Итог дня — худший из замеров утром и в 16:00"
+                          title="Итог дня — среднее замеров утром и в 16:00"
                         >
                           {Math.round(day.fill * 100)}%
                           {day.fillSlots.afternoon != null && (

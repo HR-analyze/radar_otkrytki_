@@ -53,7 +53,7 @@ export default async function DashboardPage({
    * требовала уходить в радар.
    *
    * Шестое поле — замер витрины (на 08:00 или на 16:00) — есть только здесь:
-   * без него витрина везде — итог дня, худший из двух замеров.
+   * без него витрина везде — итог дня, среднее двух замеров.
    */
   const filters: SummaryFilters = {
     from: p.from,
@@ -177,9 +177,6 @@ export default async function DashboardPage({
         <p className="mt-0.5 text-xs muted">
           Здесь всегда все критерии: фильтр «{criterionTitle}» влияет на плитки выше,
           топ и анти-топ.
-          {/* Радар замера не знает: по клику витрина там — итог дня. Без
-              оговорки цифры карточки и радара выглядели бы противоречием. */}
-          {slotTime && ` Витрина — замер на ${slotTime}; радар по клику показывает итог дня.`}
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {summary.map((s) => {
@@ -374,15 +371,19 @@ export default async function DashboardPage({
  * Ссылка со сводки в радар: тот же период и те же фильтры, но со своим
  * критерием. Без переноса фильтров человек, отобравший лавки одного РМ,
  * проваливался в радар по всей сети.
+ *
+ * Замер витрины едет тоже: карточка «Наполнение витрины · 16:00» должна
+ * открывать радар на 16:00, а не на итоге дня с другими цифрами.
  */
 function radarQuery(
-  p: { from: string; to: string; region?: string; shop?: string; status?: string },
+  p: { from: string; to: string; region?: string; shop?: string; status?: string; slot?: FillSlot },
   criterion: CriterionKey,
 ): string {
   const q = new URLSearchParams({ from: p.from, to: p.to, criterion });
   if (p.region) q.set('region', p.region);
   if (p.shop) q.set('shop', p.shop);
   if (p.status && p.status !== 'all') q.set('status', p.status);
+  if (p.slot) q.set('slot', p.slot);
   return q.toString();
 }
 
@@ -414,7 +415,7 @@ function ShowcaseTile({
           text={
             time
               ? `Считается ${scope}, по замеру на ${time}. В среднее входят только лавки, у которых этот замер в этот день внесли.`
-              : `Считается ${scope}, по итогу дня — худшему из замеров на 08:00 и на 16:00. В среднее входят только лавки, у которых витрину в этот день заполняли.`
+              : `Считается ${scope}, по итогу дня — среднему замеров на 08:00 и на 16:00. В среднее входят только лавки, у которых витрину в этот день заполняли.`
           }
         />
       </div>

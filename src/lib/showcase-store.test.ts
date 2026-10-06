@@ -170,12 +170,22 @@ test('экспорт в файл-сид отсортирован и читает
   assert.equal(back.days['2026-09-05']['М1'], 0.96);
 });
 
-test('итог дня — худший из двух замеров, пустой замер итог не портит', () => {
-  assert.equal(store.worstFill(1, 0.5), 0.5, 'утром 100%, в 16:00 50% — итог 50%');
-  assert.equal(store.worstFill(0.6, 0.9), 0.6, 'и наоборот: худшее может быть утром');
-  assert.equal(store.worstFill(0.9, null), 0.9, 'в 16:00 не мерили — итог по утру');
-  assert.equal(store.worstFill(null, 0.8), 0.8, 'утром не мерили — итог по 16:00');
-  assert.equal(store.worstFill(null, null), null);
+test('итог дня — среднее двух замеров, пустой замер в него не входит', () => {
+  assert.equal(store.dayFill(1, 0.5), 0.75, 'утром 100%, в 16:00 50% — итог 75%');
+  assert.equal(store.dayFill(0.6, 0.9), 0.75, 'порядок замеров не важен');
+  assert.equal(store.dayFill(0.9, null), 0.9, 'в 16:00 не мерили — итог по утру, не половина');
+  assert.equal(store.dayFill(null, 0.8), 0.8, 'утром не мерили — итог по 16:00');
+  assert.equal(store.dayFill(null, null), null);
+});
+
+test('итог дня округляется до целого процента, половинка — вверх', () => {
+  // Пороги целые: 94,5% с жёлтым статусом показывались бы как «95%».
+  assert.equal(store.dayFill(0.95, 0.94), 0.95, '94,5% → 95%, хотя в долях это 0.9449999…');
+  assert.equal(store.dayFill(0.95, 0.5), 0.73, '72,5% → 73%');
+  assert.equal(store.dayFill(0.33, 0.34), 0.34);
+  assert.equal(store.dayFill(0.85, 0.84), 0.85, '84,5% → 85%: граница жёлтого включительно');
+  assert.equal(store.dayFill(0, 0), 0);
+  assert.equal(store.dayFill(1, 1), 1);
 });
 
 test('замер в 16:00 хранится отдельно и не трогает утренний', async () => {
@@ -207,7 +217,7 @@ test('правка 16:00 пишется в журнал отдельным по�
   assert.equal(entries[0].to, '0.7');
 });
 
-test('радар красится по худшему замеру, сами замеры лежат рядом', async () => {
+test('радар красится по среднему замеров, сами замеры лежат рядом', async () => {
   await store.saveShowcaseEdits([
     { date: '2026-09-14', shopCode: 'М1', fill: 1, afternoonFill: 0.5 },
     // Только 16:00 — лавка всё равно в итоге дня.
@@ -216,8 +226,8 @@ test('радар красится по худшему замеру, сами з�
 
   const { showcase, criteria } = store.showcaseRowsFromStore(await store.readShowcase());
   const m1 = showcase.find((s) => s.date === '2026-09-14' && s.shopCode === 'М1')!;
-  assert.equal(m1.fill, 0.5);
-  assert.equal(m1.status, 'red', 'утренние 100% не вытягивают провал в 16:00');
+  assert.equal(m1.fill, 0.75);
+  assert.equal(m1.status, 'red', 'среднее 75% — ниже жёлтого порога');
   assert.equal(m1.morning, 1);
   assert.equal(m1.afternoon, 0.5);
   assert.equal(
@@ -262,3 +272,11 @@ test('в закоммиченном сиде репозитория лежит �
 });
 
 test.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+test('среднее замеров — одна формула у сервера и у превью в редакторе', async () => {
+  const { averagePercent } = await import('./day-fill');
+  // Превью в браузере считает в процентах, сервер — в долях; ответ один.
+  for (const [m, a] of [[95, 94], [95, 50], [33, 34], [85, 84], [100, 0], [29, 58]]) {
+    assert.equal(store.dayFill(m / 100, a / 100), averagePercent(m, a) / 100, `${m}% и ${a}%`);
+  }
+});

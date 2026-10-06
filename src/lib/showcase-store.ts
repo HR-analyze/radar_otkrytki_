@@ -3,6 +3,7 @@ import path from 'node:path';
 import { loadConfig } from './config';
 import { getMeta, manualDbWritable, openManualDb, setMeta } from './manual-db';
 import { showcaseAuditWriter, type ShowcaseEditSource } from './showcase-audit';
+import { averagePercent } from './day-fill';
 import { normalizeFill, statusForFill } from './status';
 import type { CriterionStatusRow, ShowcaseRow } from './types';
 
@@ -27,9 +28,10 @@ import type { CriterionStatusRow, ShowcaseRow } from './types';
  * в журнале правок, см. showcase-audit.ts: он пишется этой же транзакцией.
  *
  * Замеров в день два: утренний (`days`, как было всегда) и в 16:00
- * (`afternoon`). Итог дня для радара, статусов и балла лавки — худший из двух:
- * утром 100%, в 16:00 50% — значит, 50%. Конкурс по витринам считается только
- * по утреннему замеру, как и до появления второго (см. contest в queries.ts).
+ * (`afternoon`). Итог дня для радара, статусов и балла лавки — среднее двух
+ * (см. dayFill): утром 100%, в 16:00 50% — значит, 75%. Конкурс по витринам
+ * считается только по утреннему замеру, как и до появления второго (см.
+ * contest в queries.ts).
  */
 
 export interface ShowcaseStore {
@@ -406,23 +408,24 @@ function round(fill: number): number {
 }
 
 /**
- * Итог дня по двум замерам — худший из тех, что есть: утром 100%, в 16:00
- * 50% — это 50%. Незаполненный замер итог не портит: если в 16:00 не мерили,
- * итог равен утреннему, и наоборот.
+ * Итог дня по двум замерам, доля 0–1 — их среднее: утром 100%, в 16:00 50% —
+ * это 75%. Незаполненный замер итог не трогает: если в 16:00 не мерили, итог
+ * равен утреннему как есть, и наоборот. Формула среднего (до целого процента,
+ * половинка вверх) — в day-fill.ts: по ней же превью статуса в редакторе.
  */
-export function worstFill(morning: number | null, afternoon: number | null): number | null {
+export function dayFill(morning: number | null, afternoon: number | null): number | null {
   if (morning == null) return afternoon;
   if (afternoon == null) return morning;
-  return Math.min(morning, afternoon);
+  return averagePercent(morning * 100, afternoon * 100) / 100;
 }
 
 /**
  * Витрины в том виде, в каком их ждёт дашборд: строки наполнения плюс статусы
  * критерия «витрина», посчитанные по действующим порогам.
  *
- * `fill` и статус строки — итог дня (худший из двух замеров), по нему красится
- * радар и считается балл лавки. Сами замеры лежат рядом: конкурсу нужен
- * утренний.
+ * `fill` и статус строки — итог дня (среднее двух замеров, см. dayFill), по
+ * нему красится радар и считается балл лавки. Сами замеры лежат рядом: конкурсу
+ * нужен утренний, фильтру «Витрина» — любой из двух.
  */
 export function showcaseRowsFromStore(store: Omit<ShowcaseStore, 'source'>): {
   showcase: ShowcaseRow[];
@@ -443,7 +446,7 @@ export function showcaseRowsFromStore(store: Omit<ShowcaseStore, 'source'>): {
       const morning = store.days[date]?.[shopCode] ?? null;
       const afternoon = afternoonDays[date]?.[shopCode] ?? null;
       // Хотя бы один замер есть: иначе лавки не было бы в codes.
-      const fill = worstFill(morning, afternoon)!;
+      const fill = dayFill(morning, afternoon)!;
       const status = statusForFill(fill, config);
 
       showcase.push({ date, shopCode, fill, status, morning, afternoon });
@@ -452,7 +455,7 @@ export function showcaseRowsFromStore(store: Omit<ShowcaseStore, 'source'>): {
         shopCode,
         criterion: 'showcase',
         status,
-        // Итог — один процент на лавку (худший замер), усреднять нечего.
+        // Итог — один процент на лавку (среднее замеров), усреднять дальше нечего.
         score: null,
         origin: 'manual',
       });

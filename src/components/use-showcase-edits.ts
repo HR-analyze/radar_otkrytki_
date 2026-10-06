@@ -47,7 +47,7 @@ export interface SavedRow {
   shopCode: string;
   percent: number | null;
   afternoonPercent: number | null;
-  /** Статус итога дня — худшего из двух замеров. */
+  /** Статус итога дня — среднего двух замеров. */
   status: Status;
   note: string;
 }

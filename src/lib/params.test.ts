@@ -75,7 +75,7 @@ test('выбранный критерий важнее предвыбора, м�
 test('замер витрины: 08:00 и 16:00 — значения, остальное — итог дня', () => {
   assert.equal(resolveSlot('morning'), 'morning');
   assert.equal(resolveSlot('afternoon'), 'afternoon');
-  // Пусто и мусор — фильтра нет: витрина считается по худшему из замеров.
+  // Пусто и мусор — фильтра нет: витрина считается по итогу дня, среднему замеров.
   assert.equal(resolveSlot(undefined), undefined);
   assert.equal(resolveSlot('all'), undefined);
   assert.equal(resolveSlot('16:00'), undefined);

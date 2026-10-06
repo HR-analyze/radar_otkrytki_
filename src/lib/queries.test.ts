@@ -451,7 +451,7 @@ test('конкурс: дни без витрины в баллы не попад
   }
 });
 
-test('конкурс считается по утреннему замеру, итог лавки — по худшему', async () => {
+test('конкурс считается по утреннему замеру, итог лавки — по среднему', async () => {
   const { saveShowcaseEdits } = await import('./showcase-store');
   const day = '2026-08-26';
   await saveShowcaseEdits([
@@ -472,12 +472,12 @@ test('конкурс считается по утреннему замеру, и
   );
 
   const [history] = await q.shopHistory('М8', day, day);
-  assert.equal(history.fill, 0.5, 'в карточке лавки итог — худший замер');
+  assert.equal(history.fill, 0.75, 'в карточке лавки итог — среднее замеров');
   assert.deepEqual(history.fillSlots, { morning: 1, afternoon: 0.5 });
   assert.equal(
     history.criteria.find((c) => c.criterion === 'showcase')?.status,
     'red',
-    'критерий «витрина» в итоге лавки — по худшему замеру',
+    'критерий «витрина» в итоге лавки — по среднему: 75% ниже жёлтого порога',
   );
 });
 
@@ -491,25 +491,39 @@ test('сводка по замеру: на 08:00 и на 16:00 — свои ст
     { date: day, shopCode: 'М10', fill: null, afternoonFill: 0.99 },
     // Только утро: в 16:00 не мерили.
     { date: day, shopCode: 'М12', fill: 0.5, afternoonFill: null },
+    // Среднее и худший расходятся цветом: 95% 🟢 против 90% 🟡.
+    { date: day, shopCode: 'М14', fill: 1, afternoonFill: 0.9 },
   ]);
 
   const one = { from: day, to: day, criterion: 'showcase' as const };
   const cells = async (slot?: 'morning' | 'afternoon') => {
     const { rows } = await q.radar({ ...one, slot });
     const at = (code: string) => rows.find((r) => r.shop.code === code)?.cells[day]?.status;
-    return { М8: at('М8'), М10: at('М10'), М12: at('М12') };
+    return { М8: at('М8'), М10: at('М10'), М12: at('М12'), М14: at('М14') };
   };
 
-  assert.deepEqual(await cells(), { М8: 'red', М10: 'green', М12: 'red' }, 'итог — худший замер');
+  assert.deepEqual(
+    await cells(),
+    { М8: 'red', М10: 'green', М12: 'red', М14: 'green' },
+    'итог — среднее замеров: у М14 100% и 90% дают 95% 🟢, а не худшие 90% 🟡',
+  );
   assert.deepEqual(
     await cells('morning'),
-    { М8: 'green', М10: undefined, М12: 'red' },
+    { М8: 'green', М10: undefined, М12: 'red', М14: 'green' },
     'на 08:00: лавка без утреннего замера — без данных, а не итог под чужой подписью',
   );
   assert.deepEqual(
     await cells('afternoon'),
-    { М8: 'red', М10: 'green', М12: undefined },
+    { М8: 'red', М10: 'green', М12: undefined, М14: 'yellow' },
     'на 16:00: лавка, где в 16:00 не мерили, — без данных',
+  );
+
+  // Замер — только про витрину: ячейки водителя от него не меняются.
+  const driver = { from: day, to: day, criterion: 'driver' as const };
+  assert.deepEqual(
+    await q.radar({ ...driver, slot: 'afternoon' }),
+    await q.radar(driver),
+    'у водителя замеров нет — фильтр «Витрина» его не трогает',
   );
 
   // Плитки и среднее наполнение — тем же замером, что и радар.
@@ -518,7 +532,7 @@ test('сводка по замеру: на 08:00 и на 16:00 — свои ст
   assert.equal((await q.shopTotals({ ...m8, slot: 'afternoon' })).red, 1);
   assert.equal((await q.showcaseStats({ ...m8, slot: 'morning' })).avg, 1);
   assert.equal((await q.showcaseStats({ ...m8, slot: 'afternoon' })).avg, 0.5);
-  assert.equal((await q.showcaseStats(m8)).avg, 0.5, 'без замера — итог дня');
+  assert.equal((await q.showcaseStats(m8)).avg, 0.75, 'без замера — итог дня, среднее');
 
   // Фильтр «Статус» на сводке берёт лавки у радара — и замер тоже его.
   const green = async (slot: 'morning' | 'afternoon') =>

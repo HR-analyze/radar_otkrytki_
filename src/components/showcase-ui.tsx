@@ -1,6 +1,7 @@
 'use client';
 
 import type { KeyboardEvent } from 'react';
+import { averagePercent } from '@/lib/day-fill';
 import { plural } from '@/lib/plural';
 import { formatDay, formatMoment } from '@/lib/time';
 import type { Status } from '@/lib/types';
@@ -48,16 +49,23 @@ export const FILL_SLOTS = [
 export type FillField = (typeof FILL_SLOTS)[number]['field'];
 
 /**
- * Статус итога дня, пока правка летит на сервер: худший из набранных замеров.
- * Пустой замер итог не портит — так же считает сервер (см. worstFill).
+ * Статус итога дня, пока правка летит на сервер: среднее набранных замеров.
+ * Та же формула, что у сервера (averagePercent — общая, см. dayFill), иначе
+ * статус в строке менялся бы в момент сохранения. Пустой замер в среднее не
+ * входит: набран один — статус по нему.
  */
-export function worstStatusOf(
+export function dayStatusOf(
   values: readonly string[],
   thresholds: { green: number; yellow: number },
 ): Status {
-  const numbers = values.filter((v) => v !== '').map(Number).filter(Number.isFinite);
+  const numbers = values
+    .filter((v) => v !== '')
+    // Запятая — как на сервере: «95,5» там принимается, значит и здесь число.
+    .map((v) => Number(v.replace(',', '.')))
+    .filter(Number.isFinite);
   if (numbers.length === 0) return 'no_data';
-  return statusOf(String(Math.min(...numbers)), thresholds);
+  const day = numbers.length === 1 ? numbers[0] : averagePercent(numbers[0], numbers[1]);
+  return statusOf(String(day), thresholds);
 }
 
 /**
@@ -83,7 +91,7 @@ export function FillInputs({
   onKeyDown: (field: FillField, e: KeyboardEvent<HTMLInputElement>) => void;
   register: (field: FillField, el: HTMLInputElement | null) => void;
 }) {
-  const status = worstStatusOf(
+  const status = dayStatusOf(
     FILL_SLOTS.map((slot) => values[slot.field]),
     thresholds,
   );
@@ -110,7 +118,7 @@ export function FillInputs({
       <span className="w-4 text-xs muted">%</span>
       <span
         className={`st-${status} w-18 shrink-0 whitespace-nowrap rounded px-2 py-1 text-center text-xs font-medium`}
-        title="Итог дня — худший из двух замеров"
+        title="Итог дня — среднее двух замеров"
       >
         {statusLabel(status)}
       </span>
