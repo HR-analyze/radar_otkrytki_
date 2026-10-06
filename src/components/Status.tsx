@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { Status } from '@/lib/types';
+import type { FillSlot, Status } from '@/lib/types';
 
 export const STATUS_TEXT: Record<Status, string> = {
   green: 'Зелёная',
@@ -19,6 +19,18 @@ export const STATUS_FILTER_TITLE: Record<Status, string> = {
   green: '🟢 Есть зелёные',
   other_schedule: '🕘 Другой график',
   no_data: '· Без данных',
+};
+
+/** Время замера витрины — для подписей рядом с процентами. */
+export const SLOT_TIME: Record<FillSlot, string> = {
+  morning: '08:00',
+  afternoon: '16:00',
+};
+
+/** Подписи фильтра «Витрина» — по той же причине, что и у статуса. */
+export const SLOT_FILTER_TITLE: Record<FillSlot, string> = {
+  morning: `Наполнение на ${SLOT_TIME.morning}`,
+  afternoon: `Наполнение на ${SLOT_TIME.afternoon}`,
 };
 
 export function StatusBadge({ status, children }: { status: Status; children?: React.ReactNode }) {

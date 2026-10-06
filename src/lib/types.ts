@@ -292,6 +292,14 @@ export interface ShowcaseRow {
   afternoon?: number | null;
 }
 
+/**
+ * Один из двух замеров витрины: утренний (на 08:00) или в 16:00. Там, где
+ * замер не выбран, витрина — итог дня, худший из двух (см. ShowcaseRow.fill).
+ */
+export type FillSlot = 'morning' | 'afternoon';
+
+export const FILL_SLOTS: readonly FillSlot[] = ['morning', 'afternoon'];
+
 /** Статус критерия у лавки за день. */
 export interface CriterionStatusRow {
   date: string;

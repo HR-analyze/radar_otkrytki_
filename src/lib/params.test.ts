@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultRange, resolveCriterion } from './params';
+import { defaultRange, resolveCriterion, resolveSlot } from './params';
 import { DEFAULT_CRITERION } from './types';
 
 /**
@@ -70,4 +70,13 @@ test('выбранный критерий важнее предвыбора, м�
   assert.equal(resolveCriterion('driver', 'showcase'), 'driver');
   assert.equal(resolveCriterion('нет такого', 'showcase'), 'showcase');
   assert.equal(resolveCriterion('', 'showcase'), 'showcase');
+});
+
+test('замер витрины: 08:00 и 16:00 — значения, остальное — итог дня', () => {
+  assert.equal(resolveSlot('morning'), 'morning');
+  assert.equal(resolveSlot('afternoon'), 'afternoon');
+  // Пусто и мусор — фильтра нет: витрина считается по худшему из замеров.
+  assert.equal(resolveSlot(undefined), undefined);
+  assert.equal(resolveSlot('all'), undefined);
+  assert.equal(resolveSlot('16:00'), undefined);
 });

@@ -18,9 +18,15 @@ import { isWritable } from '@/lib/snapshot';
 import { formatMoment, shortDate } from '@/lib/time';
 import { Filters } from '@/components/Filters';
 import { DepartureBlock } from '@/components/DepartureBlock';
-import { StatusBadge, StatusBar, STATUS_FILTER_TITLE } from '@/components/Status';
+import {
+  SLOT_FILTER_TITLE,
+  SLOT_TIME,
+  StatusBadge,
+  StatusBar,
+  STATUS_FILTER_TITLE,
+} from '@/components/Status';
 import { RefreshButton } from '@/components/RefreshButton';
-import { CRITERION_ORDER, DEFAULT_CRITERION, type CriterionKey } from '@/lib/types';
+import { CRITERION_ORDER, DEFAULT_CRITERION, type CriterionKey, type FillSlot } from '@/lib/types';
 import { plural } from '@/lib/plural';
 import { Hint } from '@/components/Hint';
 
@@ -45,6 +51,9 @@ export default async function DashboardPage({
    * Один объект фильтров на все виджеты сводки: пять полей шапки — те же, что
    * на радаре. Раньше сюда доезжали только период и РМ, и «сводка по лавке»
    * требовала уходить в радар.
+   *
+   * Шестое поле — замер витрины (на 08:00 или на 16:00) — есть только здесь:
+   * без него витрина везде — итог дня, худший из двух замеров.
    */
   const filters: SummaryFilters = {
     from: p.from,
@@ -53,6 +62,7 @@ export default async function DashboardPage({
     shop: p.shop,
     criterion: p.criterion,
     status: p.status,
+    slot: p.slot,
   };
 
   const departures = await departureSummary(p.from, p.to);
@@ -75,6 +85,7 @@ export default async function DashboardPage({
   // Что именно сейчас выбрано — словами, а не только видом выпадающих списков.
   const criterionTitle = config.criteria[p.criterion]?.title ?? p.criterion;
   const statusTitle = p.status && p.status !== 'all' ? STATUS_FILTER_TITLE[p.status] : null;
+  const slotTime = p.slot ? SLOT_TIME[p.slot] : null;
 
   // За период счётчики усреднены по дням — подпись должна это говорить.
   const scope = singleDay
@@ -83,7 +94,9 @@ export default async function DashboardPage({
 
   // Плитки, топ и анти-топ считаются по выбранному критерию, а не по агрегату
   // лавки — без подписи цифры выглядели бы необъяснимо просевшими.
-  const byCriterion = ` · критерий «${criterionTitle}»`;
+  const byCriterion =
+    ` · критерий «${criterionTitle}»` +
+    (p.criterion === 'showcase' && slotTime ? ` на ${slotTime}` : '');
 
   const unconfirmed = CRITERION_ORDER.filter((c) => config.criteria[c]?.confirmed === false);
 
@@ -100,6 +113,9 @@ export default async function DashboardPage({
             {p.shop ? ` · поиск «${p.shop}»` : ''}
             {byCriterion}
             {statusTitle ? ` · ${statusTitle}` : ''}
+            {/* При критерии «витрина» замер уже назван в byCriterion — второй
+                раз подряд он читался бы как опечатка. */}
+            {p.slot && p.criterion !== 'showcase' ? ` · ${SLOT_FILTER_TITLE[p.slot]}` : ''}
             {` · ${totals.total} ${plural(totals.total, 'лавка', 'лавки', 'лавок')}`}
           </p>
         </div>
@@ -131,6 +147,7 @@ export default async function DashboardPage({
         config={config}
         shops={shops.map((s) => ({ code: s.code, name: s.name }))}
         criterionDefault={DEFAULT_CRITERION}
+        showSlot
       />
 
       {/* Фильтр может не найти ни одной лавки — «0 из 0» на шести плитках
@@ -148,7 +165,7 @@ export default async function DashboardPage({
         <Tile title="Лавок в 🔴" value={totals.red} total={totals.total} tone="red" hint={scope + byCriterion} />
         <Tile title="Лавок в 🟡" value={totals.yellow} total={totals.total} tone="yellow" hint={scope + byCriterion} />
         <Tile title="Лавок в 🟢" value={totals.green} total={totals.total} tone="green" hint={scope + byCriterion} />
-        <ShowcaseTile fill={fill} totalShops={totals.total} scope={scope} />
+        <ShowcaseTile fill={fill} totalShops={totals.total} scope={scope} slot={p.slot} />
       </div>
 
       {/* --- По критериям --- */}
@@ -160,6 +177,9 @@ export default async function DashboardPage({
         <p className="mt-0.5 text-xs muted">
           Здесь всегда все критерии: фильтр «{criterionTitle}» влияет на плитки выше,
           топ и анти-топ.
+          {/* Радар замера не знает: по клику витрина там — итог дня. Без
+              оговорки цифры карточки и радара выглядели бы противоречием. */}
+          {slotTime && ` Витрина — замер на ${slotTime}; радар по клику показывает итог дня.`}
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {summary.map((s) => {
@@ -178,6 +198,7 @@ export default async function DashboardPage({
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-sm font-medium group-hover:underline">
                     {cfg?.title ?? s.criterion}
+                    {s.criterion === 'showcase' && slotTime && ` · ${slotTime}`}
                     {cfg?.confirmed === false && <span title="Пороги требуют подтверждения"> ⚠</span>}
                   </span>
                   <span className="text-xs muted tabular-nums">
@@ -235,7 +256,7 @@ export default async function DashboardPage({
                     {/* Числитель со знаменателем: без них доля не проверяется. */}
                     <p className="mt-0.5 text-xs muted">
                       {r.greenCount} из {r.total} ячеек
-                      {r.fill != null && ` · витрина ${Math.round(r.fill * 100)}%`}
+                      {r.fill != null && ` · витрина${slotTime ? ` на ${slotTime}` : ''} ${Math.round(r.fill * 100)}%`}
                     </p>
                   </div>
                   <span
@@ -279,7 +300,7 @@ export default async function DashboardPage({
                     {r.shop.region && <span className="ml-1.5 text-xs muted">{r.shop.region}</span>}
                     <p className="mt-0.5 text-xs muted">
                       {r.criteria.map((c) => config.criteria[c]?.title ?? c).join(' / ')}
-                      {r.fill != null && ` · витрина ${Math.round(r.fill * 100)}%`}
+                      {r.fill != null && ` · витрина${slotTime ? ` на ${slotTime}` : ''} ${Math.round(r.fill * 100)}%`}
                     </p>
                   </div>
                   <span className="shrink-0 text-sm font-semibold tabular-nums" title="Красных ячеек за период">
@@ -317,7 +338,10 @@ export default async function DashboardPage({
           {weak.map((w) => (
             <div key={w.criterion}>
               <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span>{config.criteria[w.criterion]?.title ?? w.criterion}</span>
+                <span>
+                  {config.criteria[w.criterion]?.title ?? w.criterion}
+                  {w.criterion === 'showcase' && slotTime && ` · ${slotTime}`}
+                </span>
                 <span className="tabular-nums muted">
                   {Math.round(w.share * 100)}% · {w.red} из {w.total}
                 </span>
@@ -370,19 +394,29 @@ function ShowcaseTile({
   fill,
   totalShops,
   scope,
+  slot,
 }: {
   fill: Awaited<ReturnType<typeof showcaseStats>>;
   totalShops: number;
   scope: string;
+  /** Замер из фильтра «Витрина»; не выбран — итог дня. */
+  slot?: FillSlot;
 }) {
   const coverage = totalShops > 0 ? fill.filled / totalShops : 0;
   const thin = coverage < 0.5;
+  const time = slot ? SLOT_TIME[slot] : null;
 
   return (
     <div className="surface p-4">
       <div className="flex items-center gap-1.5 text-xs muted">
-        <span>Среднее наполнение витрины</span>
-        <Hint text={`Считается ${scope}. В среднее входят только лавки, у которых витрину в этот день заполняли.`} />
+        <span>Среднее наполнение витрины{time && ` на ${time}`}</span>
+        <Hint
+          text={
+            time
+              ? `Считается ${scope}, по замеру на ${time}. В среднее входят только лавки, у которых этот замер в этот день внесли.`
+              : `Считается ${scope}, по итогу дня — худшему из замеров на 08:00 и на 16:00. В среднее входят только лавки, у которых витрину в этот день заполняли.`
+          }
+        />
       </div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-2xl font-semibold tabular-nums">
@@ -395,7 +429,9 @@ function ShowcaseTile({
         )}
       </div>
       {fill.filled === 0 ? (
-        <p className="mt-1 text-xs muted">За день таблицу ещё не заполняли.</p>
+        <p className="mt-1 text-xs muted">
+          {time ? `Замер на ${time} за день ещё не вносили.` : 'За день таблицу ещё не заполняли.'}
+        </p>
       ) : thin ? (
         <p className="mt-1 text-xs ink-yellow">
           ⚠ Заполнено меньше половины лавок — это не среднее по сети.

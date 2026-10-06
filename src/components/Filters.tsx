@@ -12,7 +12,7 @@ import { activePreset, periodPresets } from '@/lib/periods';
 import { ClearButton } from './ClearButton';
 import { DateRangePicker } from './DateRangePicker';
 import { ShopSearch, type ShopOption } from './ShopFilter';
-import { STATUS_FILTER_TITLE } from './Status';
+import { SLOT_FILTER_TITLE, STATUS_FILTER_TITLE } from './Status';
 
 export interface FilterState {
   from: string;
@@ -21,6 +21,8 @@ export interface FilterState {
   criterion?: CriterionKey;
   status?: string;
   shop?: string;
+  /** Замер витрины: 'morning' — на 08:00, 'afternoon' — на 16:00; пусто — итог дня. */
+  slot?: string;
 }
 
 export interface RegionOptions {
@@ -47,6 +49,7 @@ export function Filters({
   shops,
   showCriterion = true,
   showStatus = true,
+  showSlot = false,
   criterionDefault = DEFAULT_CRITERION,
 }: {
   base: string;
@@ -58,6 +61,11 @@ export function Filters({
   shops?: ShopOption[];
   showCriterion?: boolean;
   showStatus?: boolean;
+  /**
+   * Поле «Витрина»: итог дня, наполнение на 08:00 или на 16:00. Только там,
+   * где страница умеет считать по одному замеру (пока — сводка).
+   */
+  showSlot?: boolean;
   /**
    * Критерий, на котором открывается страница. Нужен здесь, чтобы знать,
    * какое значение в URL не писать, — см. apply.
@@ -130,6 +138,7 @@ export function Filters({
     shop: !!state.shop,
     criterion: showCriterion && criterion !== criterionDefault,
     status: showStatus && !!state.status && state.status !== 'all',
+    slot: showSlot && !!state.slot,
   };
   const activeCount = Object.values(active).filter(Boolean).length;
 
@@ -145,7 +154,7 @@ export function Filters({
    */
   const resetAll = useCallback(() => {
     const q = new URLSearchParams(searchParams.toString());
-    for (const key of ['from', 'to', 'region', 'shop', 'criterion', 'status']) q.delete(key);
+    for (const key of ['from', 'to', 'region', 'shop', 'criterion', 'status', 'slot']) q.delete(key);
     go(q);
   }, [go, searchParams]);
 
@@ -259,6 +268,22 @@ export function Filters({
           </select>
         </Field>
       )}
+
+      {/* Замеров два, утром и в 16:00, а итог дня — худший из них. По итогу
+          не видно, когда витрина просела: полная с утра и пустая к вечеру
+          лавка выглядит так же, как пустая с утра. */}
+      {showSlot && (
+        <Field
+          label="Витрина"
+          onClear={active.slot ? () => apply({ slot: 'all' }) : undefined}
+        >
+          <select value={state.slot ?? 'all'} onChange={(e) => apply({ slot: e.target.value })}>
+            <option value="all">Итог дня (худший замер)</option>
+            <option value="morning">{SLOT_FILTER_TITLE.morning}</option>
+            <option value="afternoon">{SLOT_FILTER_TITLE.afternoon}</option>
+          </select>
+        </Field>
+      )}
     </>
   );
 
@@ -306,7 +331,7 @@ export function Filters({
         id="filters-grid"
         className={`${openOnPhone ? 'mt-3 block' : 'hidden'} sm:mt-0 sm:block`}
       >
-        <FilterGrid pending={pending} wide={!!shops}>
+        <FilterGrid pending={pending} wide={!!shops} extra={showSlot}>
           {fields}
         </FilterGrid>
       </div>
@@ -371,17 +396,25 @@ export function Filters({
 function FilterGrid({
   pending,
   wide,
+  extra,
   children,
 }: {
   pending: boolean;
   /** Есть ли поле «Лавка»: от него зависит, пять колонок или четыре. */
   wide: boolean;
+  /**
+   * Есть ли поле «Витрина». Шесть полей в ряд на ноутбуке сжимали период до
+   * нечитаемого — там они идут двумя рядами по три, в один ряд только на
+   * широком экране.
+   */
+  extra: boolean;
   children: React.ReactNode;
 }) {
+  const cols = extra ? 'lg:grid-cols-3 xl:grid-cols-6' : wide ? 'lg:grid-cols-5' : 'lg:grid-cols-4';
   return (
     <div
       aria-busy={pending}
-      className={`${pending ? 'is-busy' : ''} grid gap-3 sm:grid-cols-2 ${wide ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
+      className={`${pending ? 'is-busy' : ''} grid gap-3 sm:grid-cols-2 ${cols}`}
     >
       {children}
     </div>

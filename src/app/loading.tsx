@@ -5,7 +5,7 @@ export default function Loading() {
   return (
     <div className="flex flex-col gap-5" aria-busy="true" aria-label="Сводка загружается">
       <HeadingSkeleton />
-      <FiltersSkeleton />
+      <FiltersSkeleton fields={6} />
       <TilesSkeleton />
       <CardSkeleton rows={6} />
       <div className="grid gap-5 lg:grid-cols-2">

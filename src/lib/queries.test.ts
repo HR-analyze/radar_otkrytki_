@@ -481,6 +481,56 @@ test('конкурс считается по утреннему замеру, и
   );
 });
 
+test('сводка по замеру: на 08:00 и на 16:00 — свои статусы, без замера — итог дня', async () => {
+  const { saveShowcaseEdits } = await import('./showcase-store');
+  const day = '2026-08-29';
+  await saveShowcaseEdits([
+    // Утром полная, в 16:00 — половина: итог красный, утро зелёное.
+    { date: day, shopCode: 'М8', fill: 1, afternoonFill: 0.5 },
+    // Только 16:00: утреннего замера нет вовсе.
+    { date: day, shopCode: 'М10', fill: null, afternoonFill: 0.99 },
+    // Только утро: в 16:00 не мерили.
+    { date: day, shopCode: 'М12', fill: 0.5, afternoonFill: null },
+  ]);
+
+  const one = { from: day, to: day, criterion: 'showcase' as const };
+  const cells = async (slot?: 'morning' | 'afternoon') => {
+    const { rows } = await q.radar({ ...one, slot });
+    const at = (code: string) => rows.find((r) => r.shop.code === code)?.cells[day]?.status;
+    return { М8: at('М8'), М10: at('М10'), М12: at('М12') };
+  };
+
+  assert.deepEqual(await cells(), { М8: 'red', М10: 'green', М12: 'red' }, 'итог — худший замер');
+  assert.deepEqual(
+    await cells('morning'),
+    { М8: 'green', М10: undefined, М12: 'red' },
+    'на 08:00: лавка без утреннего замера — без данных, а не итог под чужой подписью',
+  );
+  assert.deepEqual(
+    await cells('afternoon'),
+    { М8: 'red', М10: 'green', М12: undefined },
+    'на 16:00: лавка, где в 16:00 не мерили, — без данных',
+  );
+
+  // Плитки и среднее наполнение — тем же замером, что и радар.
+  const m8 = { ...one, shop: 'М8' };
+  assert.equal((await q.shopTotals({ ...m8, slot: 'morning' })).green, 1);
+  assert.equal((await q.shopTotals({ ...m8, slot: 'afternoon' })).red, 1);
+  assert.equal((await q.showcaseStats({ ...m8, slot: 'morning' })).avg, 1);
+  assert.equal((await q.showcaseStats({ ...m8, slot: 'afternoon' })).avg, 0.5);
+  assert.equal((await q.showcaseStats(m8)).avg, 0.5, 'без замера — итог дня');
+
+  // Фильтр «Статус» на сводке берёт лавки у радара — и замер тоже его.
+  const green = async (slot: 'morning' | 'afternoon') =>
+    (await q.bestShops({ ...one, status: 'green', slot }, 80)).map((r) => r.shop.code);
+  assert.ok((await green('morning')).includes('М8'), 'утром М8 зелёная');
+  assert.ok(!(await green('afternoon')).includes('М8'), 'в 16:00 М8 красная');
+
+  // Конкурс фильтр не трогает: он и так по утреннему замеру.
+  const { rows } = await q.contest({ from: day, to: day });
+  assert.equal(rows.find((r) => r.shop.code === 'М8')?.cells[day]?.status, 'green');
+});
+
 test('закрытая лавка уходит из списков, но не из прошлых дней', async () => {
   // М15 закрыта с 14.09.2026 (см. shopClosures). Проверяем оба конца правила:
   // в справочнике за будущие дни её нет, за август — есть.
