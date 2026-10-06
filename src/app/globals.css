@@ -5,6 +5,10 @@
   --color-radar-yellow: #eab308;
   --color-radar-red: #dc2626;
   --color-radar-neutral: #94a3b8;
+  /* Шесть фильтров в один ряд (сводка, радар) — только отсюда: уже обрезались
+     период и подписи. Именованный, а не min-[1400px]: произвольный брейкпоинт
+     Tailwind ставит в CSS раньше lg:, и lg:grid-cols-3 его перебивал. */
+  --breakpoint-wide: 87.5rem;
 }
 
 /*
@@ -241,6 +245,13 @@ select {
   background-position: right 1.05rem center, right 0.75rem center;
   background-size: 0.3rem 0.3rem, 0.3rem 0.3rem;
   background-repeat: no-repeat;
+}
+
+/* Выключенное поле должно и выглядеть выключенным: правила выше задают цвет и
+   курсор явно и перебивают системную серость, поэтому возвращаем её руками. */
+select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* Поле с крестиком сброса (см. ClearButton): освобождаем справа место под

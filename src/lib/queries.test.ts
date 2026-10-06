@@ -543,6 +543,12 @@ test('сводка по замеру: на 08:00 и на 16:00 — свои ст
   // Конкурс фильтр не трогает: он и так по утреннему замеру.
   const { rows } = await q.contest({ from: day, to: day });
   assert.equal(rows.find((r) => r.shop.code === 'М8')?.cells[day]?.status, 'green');
+
+  // Карточка лавки и её балл — по среднему: у М14 100% и 90% — это 95% 🟢.
+  const [m14] = await q.shopHistory('М14', day, day);
+  assert.equal(m14.fill, 0.95, 'итог дня в карточке — среднее');
+  assert.deepEqual(m14.fillSlots, { morning: 1, afternoon: 0.9 });
+  assert.equal(m14.criteria.find((c) => c.criterion === 'showcase')?.status, 'green');
 });
 
 test('закрытая лавка уходит из списков, но не из прошлых дней', async () => {

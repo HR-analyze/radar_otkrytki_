@@ -3,7 +3,8 @@ import { resolveParams } from '@/lib/params';
 import { listRegions, listShops, radar } from '@/lib/queries';
 import { Filters } from '@/components/Filters';
 import { plural } from '@/lib/plural';
-import { SLOT_TIME, StatusLegend } from '@/components/Status';
+import { SLOT_TIME, STATUS_FILTER_TITLE, StatusLegend } from '@/components/Status';
+import { findShops } from '@/lib/shops';
 import { RadarTable, type RadarSort } from '@/components/RadarTable';
 import { DEFAULT_CRITERION } from '@/lib/types';
 
@@ -85,13 +86,15 @@ export default async function RadarPage({
 
       {dates.length === 0 || rows.length === 0 ? (
         <div className="surface p-8 text-center text-sm muted">
-          {/* Критерий выбран всегда, поэтому «ничего не нашлось» — это либо
-              поиск по лавке, либо пустой критерий за период. */}
-          {p.shop
-            ? `По запросу «${p.shop}» лавок не нашлось. Попробуйте код (М17) или часть названия.`
-            : slotTime
-              ? `Замер на ${slotTime} за период не вносили. Возьми итог дня или другой замер, расширь период или сними фильтр по статусу.`
-              : `За период по критерию «${criterionTitle}» оценок нет. Возьми другой критерий, расширь период или сними фильтр по статусу.`}
+          {emptyText({
+            shop: p.shop,
+            shopFound: !p.shop || findShops(shops, p.shop).length > 0,
+            // Дни с оценками есть, а строк нет — всех отсёк фильтр «Статус»:
+            // radar() убирает лавку, только если в ней нет дня в этом статусе.
+            byStatus: dates.length > 0 && p.status && p.status !== 'all' ? STATUS_FILTER_TITLE[p.status] : null,
+            slotTime,
+            criterionTitle,
+          })}
         </div>
       ) : (
         <>
@@ -103,6 +106,36 @@ export default async function RadarPage({
       )}
     </div>
   );
+}
+
+/**
+ * Почему радар пуст — словами, по настоящей причине. Раньше на всё был один
+ * ответ, и с фильтром «Витрина» он врал: «замер на 16:00 не вносили», когда
+ * замеры были, а всех отсёк фильтр по статусу, — и РМ шёл вносить заново.
+ */
+function emptyText({
+  shop,
+  shopFound,
+  byStatus,
+  slotTime,
+  criterionTitle,
+}: {
+  shop?: string;
+  shopFound: boolean;
+  byStatus: string | null;
+  slotTime: string | null;
+  criterionTitle: string;
+}): string {
+  if (!shopFound) {
+    return `По запросу «${shop}» лавок не нашлось. Попробуйте код (М17) или часть названия.`;
+  }
+  const what = slotTime ? `замеру на ${slotTime}` : `критерию «${criterionTitle}»`;
+  if (byStatus) return `По ${what} лавок под фильтром «${byStatus}» нет. Сними фильтр по статусу.`;
+  const where = shop ? ` у «${shop}»` : '';
+  if (slotTime) {
+    return `Замер на ${slotTime}${where} за период не вносили. Возьми итог дня или другой замер, или расширь период.`;
+  }
+  return `За период по критерию «${criterionTitle}»${where} оценок нет. Возьми другой критерий или расширь период.`;
 }
 
 /** Первое значение параметра: в адресе он может оказаться повторённым. */

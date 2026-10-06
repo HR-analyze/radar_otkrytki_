@@ -1,7 +1,7 @@
 'use client';
 
 import type { KeyboardEvent } from 'react';
-import { averagePercent } from '@/lib/day-fill';
+import { dayStatusOf } from '@/lib/day-fill';
 import { plural } from '@/lib/plural';
 import { formatDay, formatMoment } from '@/lib/time';
 import type { Status } from '@/lib/types';
@@ -22,21 +22,6 @@ export const FIELD_STYLE = {
   color: 'var(--text)',
 } as const;
 
-/** Пока правка летит на сервер, статус считаем на месте — по тем же порогам. */
-export function statusOf(
-  value: string,
-  thresholds: { green: number; yellow: number },
-): Status {
-  if (value === '') return 'no_data';
-  const percent = Number(value);
-  if (!Number.isFinite(percent)) return 'no_data';
-
-  const share = percent / 100;
-  if (share >= thresholds.green) return 'green';
-  if (share >= thresholds.yellow) return 'yellow';
-  return 'red';
-}
-
 /**
  * Замеры наполнения за день. Утренний был всегда, второй — в 16:00: витрину,
  * полную с утра и пустую после обеда, одним замером не поймать.
@@ -47,26 +32,6 @@ export const FILL_SLOTS = [
 ] as const satisfies readonly { field: EditField; label: string; title: string }[];
 
 export type FillField = (typeof FILL_SLOTS)[number]['field'];
-
-/**
- * Статус итога дня, пока правка летит на сервер: среднее набранных замеров.
- * Та же формула, что у сервера (averagePercent — общая, см. dayFill), иначе
- * статус в строке менялся бы в момент сохранения. Пустой замер в среднее не
- * входит: набран один — статус по нему.
- */
-export function dayStatusOf(
-  values: readonly string[],
-  thresholds: { green: number; yellow: number },
-): Status {
-  const numbers = values
-    .filter((v) => v !== '')
-    // Запятая — как на сервере: «95,5» там принимается, значит и здесь число.
-    .map((v) => Number(v.replace(',', '.')))
-    .filter(Number.isFinite);
-  if (numbers.length === 0) return 'no_data';
-  const day = numbers.length === 1 ? numbers[0] : averagePercent(numbers[0], numbers[1]);
-  return statusOf(String(day), thresholds);
-}
 
 /**
  * Оба замера и статус итога — одна группа полей, общая для дневного и
@@ -91,6 +56,8 @@ export function FillInputs({
   onKeyDown: (field: FillField, e: KeyboardEvent<HTMLInputElement>) => void;
   register: (field: FillField, el: HTMLInputElement | null) => void;
 }) {
+  // Пока правка летит на сервер, статус итога считаем на месте — той же
+  // формулой, что и сервер (см. day-fill.ts), чтобы он не менялся при сохранении.
   const status = dayStatusOf(
     FILL_SLOTS.map((slot) => values[slot.field]),
     thresholds,

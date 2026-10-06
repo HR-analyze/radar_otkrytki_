@@ -3,7 +3,7 @@ import path from 'node:path';
 import { loadConfig } from './config';
 import { getMeta, manualDbWritable, openManualDb, setMeta } from './manual-db';
 import { showcaseAuditWriter, type ShowcaseEditSource } from './showcase-audit';
-import { averagePercent } from './day-fill';
+import { dayFill } from './day-fill';
 import { normalizeFill, statusForFill } from './status';
 import type { CriterionStatusRow, ShowcaseRow } from './types';
 
@@ -408,16 +408,10 @@ function round(fill: number): number {
 }
 
 /**
- * Итог дня по двум замерам, доля 0–1 — их среднее: утром 100%, в 16:00 50% —
- * это 75%. Незаполненный замер итог не трогает: если в 16:00 не мерили, итог
- * равен утреннему как есть, и наоборот. Формула среднего (до целого процента,
- * половинка вверх) — в day-fill.ts: по ней же превью статуса в редакторе.
+ * Итог дня по двум замерам — среднее (см. day-fill.ts). Живёт там, а не здесь:
+ * формулу зовёт и редактор в браузере, а этот модуль тянет базу и диск.
  */
-export function dayFill(morning: number | null, afternoon: number | null): number | null {
-  if (morning == null) return afternoon;
-  if (afternoon == null) return morning;
-  return averagePercent(morning * 100, afternoon * 100) / 100;
-}
+export { dayFill };
 
 /**
  * Витрины в том виде, в каком их ждёт дашборд: строки наполнения плюс статусы

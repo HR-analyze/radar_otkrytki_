@@ -11,9 +11,9 @@ import {
   readShowcase,
   saveShowcaseEdits,
   showcaseEditHint,
-  dayFill,
   type ShowcaseEdit,
 } from '@/lib/showcase-store';
+import { dayFill } from '@/lib/day-fill';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

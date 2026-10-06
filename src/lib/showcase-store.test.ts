@@ -273,10 +273,38 @@ test('в закоммиченном сиде репозитория лежит �
 
 test.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-test('среднее замеров — одна формула у сервера и у превью в редакторе', async () => {
-  const { averagePercent } = await import('./day-fill');
-  // Превью в браузере считает в процентах, сервер — в долях; ответ один.
-  for (const [m, a] of [[95, 94], [95, 50], [33, 34], [85, 84], [100, 0], [29, 58]]) {
-    assert.equal(store.dayFill(m / 100, a / 100), averagePercent(m, a) / 100, `${m}% и ${a}%`);
+test('превью статуса в редакторе совпадает с тем, что сервер поставит после сохранения', async () => {
+  const { dayStatusOf } = await import('./day-fill');
+  const { loadConfig } = await import('./config');
+  const { statusForFill } = await import('./status');
+  const config = loadConfig();
+  const cfg = config.criteria.showcase;
+  assert.equal(cfg.kind, 'percent');
+  const thresholds = { green: cfg.kind === 'percent' ? cfg.greenFrom : 0, yellow: cfg.kind === 'percent' ? cfg.yellowFrom : 0 };
+
+  // Серверный путь целиком: правка → база → итог дня → статус.
+  const day = '2026-09-20';
+  const cases: [string, string][] = [
+    ['100', '90'], // среднее 95% 🟢, худший дал бы 90% 🟡
+    ['95', '94'], // 94,5 → 95
+    ['85', '84'],
+    ['94,5', ''], // одиночный дробный замер: сохранится как 95%
+    ['', '84.6'],
+    ['84.4', ''],
+    ['50', ''],
+    ['', ''],
+  ];
+  for (const [i, [m, a]] of cases.entries()) {
+    const shopCode = `М${i + 1}`;
+    const num = (v: string) => (v === '' ? null : Number(v.replace(',', '.')) / 100);
+    await store.saveShowcaseEdits([{ date: day, shopCode, fill: num(m), afternoonFill: num(a) }]);
+    const row = store
+      .showcaseRowsFromStore(await store.readShowcase())
+      .showcase.find((s) => s.date === day && s.shopCode === shopCode);
+    const server = row ? statusForFill(row.fill, config) : 'no_data';
+    assert.equal(dayStatusOf([m, a], thresholds), server, `утро «${m}», 16:00 «${a}»`);
   }
+
+  assert.equal(dayStatusOf(['100', '90'], thresholds), 'green', 'итог — среднее, не худший');
+  assert.equal(dayStatusOf(['150', '50'], thresholds), 'red', 'сервер не примет 150 — в итог не входит');
 });

@@ -28,7 +28,7 @@ export function HeadingSkeleton() {
 /** Панель фильтров: пять полей в ряд, как в Filters. */
 export function FiltersSkeleton({ fields = 5 }: { fields?: number }) {
   // Та же раскладка, что у настоящей панели (см. FilterGrid в Filters).
-  const cols = fields > 5 ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-5';
+  const cols = fields > 5 ? 'lg:grid-cols-3 wide:grid-cols-6' : 'lg:grid-cols-5';
   return (
     <div className="surface p-3">
       <div className={`grid gap-3 sm:grid-cols-2 ${cols}`}>

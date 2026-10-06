@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
-import { dayFill, type ShowcaseStore } from './showcase-store';
+import { dayFill } from './day-fill';
+import type { ShowcaseStore } from './showcase-store';
 
 /**
  * Наполнение витрин таблицей для Excel: одна строка — лавка за день, оба замера

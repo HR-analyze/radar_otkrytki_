@@ -285,16 +285,26 @@ export function Filters({
           label="Витрина"
           onClear={active.slot ? () => apply({ slot: 'all' }) : undefined}
         >
-          <select
-            value={state.slot ?? 'all'}
-            onChange={(e) => apply({ slot: e.target.value })}
-            disabled={!!slotDisabled}
-            title={slotDisabled}
-          >
-            <option value="all">Итог дня (среднее 08:00 и 16:00)</option>
-            <option value="morning">{SLOT_FILTER_TITLE.morning}</option>
-            <option value="afternoon">{SLOT_FILTER_TITLE.afternoon}</option>
-          </select>
+          {slotDisabled ? (
+            /* Выключенное поле не показывает замер из ссылки: он здесь не
+               применяется, и «Наполнение на 16:00» читалось бы как действующий
+               фильтр. Причина — прямо в поле: подсказка в title на телефоне
+               не видна вовсе. */
+            <select value="off" disabled title={slotDisabled} aria-label={`Витрина: ${slotDisabled}`}>
+              <option value="off">— для витрины</option>
+            </select>
+          ) : (
+            <select
+              value={state.slot ?? 'all'}
+              onChange={(e) => apply({ slot: e.target.value })}
+              title="Итог дня — среднее замеров на 08:00 и на 16:00"
+            >
+              {/* Коротко: шесть полей в ряд, длинная подпись обрезалась. */}
+              <option value="all">Итог дня (среднее)</option>
+              <option value="morning">{SLOT_FILTER_TITLE.morning}</option>
+              <option value="afternoon">{SLOT_FILTER_TITLE.afternoon}</option>
+            </select>
+          )}
         </Field>
       )}
     </>
@@ -416,14 +426,18 @@ function FilterGrid({
   /** Есть ли поле «Лавка»: от него зависит, пять колонок или четыре. */
   wide: boolean;
   /**
-   * Есть ли поле «Витрина». Шесть полей в ряд на ноутбуке сжимали период до
-   * нечитаемого — там они идут двумя рядами по три, в один ряд только на
-   * широком экране.
+   * Есть ли поле «Витрина». Шесть полей в ряд до 1400 px обрезали период
+   * («29 августа 202…») и подписи с крестиком — там они идут двумя рядами по
+   * три, в один ряд только на широком экране.
    */
   extra: boolean;
   children: React.ReactNode;
 }) {
-  const cols = extra ? 'lg:grid-cols-3 xl:grid-cols-6' : wide ? 'lg:grid-cols-5' : 'lg:grid-cols-4';
+  const cols = extra
+    ? 'lg:grid-cols-3 wide:grid-cols-6'
+    : wide
+      ? 'lg:grid-cols-5'
+      : 'lg:grid-cols-4';
   return (
     <div
       aria-busy={pending}
