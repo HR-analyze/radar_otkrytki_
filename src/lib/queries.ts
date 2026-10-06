@@ -5,7 +5,9 @@ import {
   type ArrivalSource,
   type CriterionKey,
   type CriterionStatusRow,
+  type FillSlot,
   type RegionPeriod,
+  type ShowcaseRow,
   type Status,
   type ThresholdConfig,
 } from './types';
@@ -119,9 +121,68 @@ function ratedPeople(
 }
 
 /** Наполнение витрины по лавкам и дням — третье слагаемое формулы. */
-async function showcaseIndex(): Promise<Map<string, Status>> {
-  const snap = await loadSnapshot();
+async function showcaseIndex(slot?: FillSlot): Promise<Map<string, Status>> {
+  const snap = await snapshotFor(slot);
   return new Map(snap.showcase.map((s) => [`${s.date}|${s.shopCode}`, s.status]));
+}
+
+/* --------------------------- замер витрины ------------------------------- */
+
+/** Один замер витрины из строки снимка; null — в это время не мерили. */
+export function slotFill(s: ShowcaseRow, slot: FillSlot): number | null {
+  // Нет поля morning — строка из источника с одним замером: он и утренний.
+  if (slot === 'morning') return s.morning === undefined ? s.fill : s.morning;
+  return s.afternoon ?? null;
+}
+
+/**
+ * Снимок, в котором витрина — выбранный замер, а не итог дня.
+ *
+ * В снимке у витрины итог — худший из утра и 16:00, и по нему же стоит
+ * статус критерия «витрина» в `criteria`. Чтобы сводка могла показать
+ * «наполнение на 08:00» или «на 16:00», подменяем и строки наполнения, и
+ * статусы критерия разом — так же, как их подмешивает withShowcase в
+ * snapshot.ts. Тогда плитки, топ, анти-топ и фильтр по статусу считаются
+ * обычным кодом и разъехаться между собой не могут.
+ *
+ * Лавка, у которой этот замер пуст, выпадает из витрины за этот день: «в 16:00
+ * не мерили» — это «нет данных», а не утренние проценты под чужой подписью.
+ */
+export function withFillSlot(snap: Snapshot, slot: FillSlot, config: ThresholdConfig): Snapshot {
+  const origins = new Map(
+    snap.criteria
+      .filter((c) => c.criterion === 'showcase')
+      .map((c) => [`${c.date}|${c.shopCode}`, c.origin]),
+  );
+
+  const showcase: ShowcaseRow[] = [];
+  const criteria: CriterionStatusRow[] = [];
+  for (const s of snap.showcase) {
+    const fill = slotFill(s, slot);
+    if (fill == null) continue;
+    const status = statusForFill(fill, config);
+    showcase.push({ ...s, fill, status });
+    criteria.push({
+      date: s.date,
+      shopCode: s.shopCode,
+      criterion: 'showcase',
+      status,
+      score: null,
+      origin: origins.get(`${s.date}|${s.shopCode}`) ?? 'manual',
+    });
+  }
+
+  return {
+    ...snap,
+    showcase,
+    criteria: [...snap.criteria.filter((c) => c.criterion !== 'showcase'), ...criteria],
+  };
+}
+
+/** Снимок под фильтр «Витрина»: без замера — как есть, с итогом дня. */
+async function snapshotFor(slot: FillSlot | undefined): Promise<Snapshot> {
+  const snap = await loadSnapshot();
+  return slot ? withFillSlot(snap, slot, loadConfig()) : snap;
 }
 
 /* ------------------------------- справочники ----------------------------- */
@@ -376,6 +437,11 @@ export interface SummaryFilters {
   criterion?: CriterionKey | 'all';
   /** Оставить лавки, у которых за период есть день в этом статусе. */
   status?: Status | 'all';
+  /**
+   * Витрина по одному замеру — на 08:00 или на 16:00. Пусто — итог дня,
+   * худший из двух (см. withFillSlot).
+   */
+  slot?: FillSlot;
 }
 
 /** Выбранный критерий или null, если смотрим лавку целиком. */
@@ -428,6 +494,8 @@ export interface RadarFilters {
   status?: Status | 'all';
   /** Код или часть названия лавки: «М17», «Сухаревский», «М1» (даст М1 и М10–М19). */
   shop?: string;
+  /** Замер витрины вместо итога дня — см. SummaryFilters.slot. */
+  slot?: FillSlot;
 }
 
 export interface RadarCell {
@@ -456,13 +524,13 @@ export interface RadarRow {
 export async function radar(
   filters: RadarFilters,
 ): Promise<{ dates: string[]; rows: RadarRow[] }> {
-  const snap = await loadSnapshot();
+  const snap = await snapshotFor(filters.slot);
   const config = loadConfig();
   const onlyConfirmed = config.rules.shopAggregation.strategy === 'worstOfConfirmed';
   const wholeShop = !filters.criterion || filters.criterion === 'all';
   const byComponents = wholeShop && useComponents(config);
   const people = byComponents ? await peopleIndex() : null;
-  const fills = byComponents ? await showcaseIndex() : null;
+  const fills = byComponents ? await showcaseIndex(filters.slot) : null;
 
   const shops = await shopsMatching(filters.region, filters.shop, filters.from, filters.to);
   const allowedShops = new Set(shops.map((s) => s.code));
@@ -659,8 +727,7 @@ export async function contest(
         inRegion(s.shopCode, s.date),
     )
     .flatMap((s) => {
-      // Нет поля morning — строка из источника с одним замером: он и утренний.
-      const fill = s.morning === undefined ? s.fill : s.morning;
+      const fill = slotFill(s, 'morning');
       if (fill == null) return [];
       const status = statusForFill(fill, config);
       return pointsOf(status) == null ? [] : [{ ...s, fill, status }];
@@ -782,7 +849,7 @@ export interface ShopTotals {
  */
 export async function summaryByCriterion(f: SummaryFilters): Promise<CriterionSummary[]> {
   const { from, to } = f;
-  const snap = await loadSnapshot();
+  const snap = await snapshotFor(f.slot);
   // Фильтр «Критерий» здесь не применяется намеренно: это разрез по всем
   // шести, и сузить его до одного значило бы оставить блок с одной плиткой.
   const shops = await shopsUnderFilters(f);
@@ -843,14 +910,14 @@ export async function summaryByCriterion(f: SummaryFilters): Promise<CriterionSu
  */
 export async function shopTotals(f: SummaryFilters): Promise<ShopTotals> {
   const { from, to } = f;
-  const snap = await loadSnapshot();
+  const snap = await snapshotFor(f.slot);
   const config = loadConfig();
   // Выбран критерий — плитки считаются по нему, а не по агрегату лавки:
   // ровно так же, как ячейки радара под тем же фильтром.
   const single = singleCriterion(f);
   const byComponents = !single && useComponents(config);
   const people = byComponents ? await peopleIndex() : null;
-  const fills = byComponents ? await showcaseIndex() : null;
+  const fills = byComponents ? await showcaseIndex(f.slot) : null;
   const shops = await shopsUnderFilters(f);
   const allowed = new Set(shops.map((s) => s.code));
   const inRegion = await regionDayMatcher(f.region);
@@ -902,7 +969,7 @@ export interface AntiTopRow {
 /** Анти-топ: лавки с наибольшим числом 🔴 за период. */
 export async function antiTop(f: SummaryFilters, limit = 12): Promise<AntiTopRow[]> {
   const { from, to } = f;
-  const snap = await loadSnapshot();
+  const snap = await snapshotFor(f.slot);
   const single = singleCriterion(f);
   const shops = await shopsUnderFilters(f);
   const byCode = new Map(shops.map((s) => [s.code, s]));
@@ -968,7 +1035,7 @@ export interface BestShopRow {
  */
 export async function bestShops(f: SummaryFilters, limit = 12): Promise<BestShopRow[]> {
   const { from, to } = f;
-  const snap = await loadSnapshot();
+  const snap = await snapshotFor(f.slot);
   const single = singleCriterion(f);
   const shops = await shopsUnderFilters(f);
   const byCode = new Map(shops.map((s) => [s.code, s]));
@@ -1027,7 +1094,7 @@ export async function weakestCriteria(
   f: SummaryFilters,
 ): Promise<{ criterion: CriterionKey; red: number; total: number; share: number }[]> {
   const { from, to } = f;
-  const snap = await loadSnapshot();
+  const snap = await snapshotFor(f.slot);
   // Как и в summaryByCriterion, фильтр «Критерий» здесь не применяется: блок
   // отвечает на вопрос «какой критерий западает», а не «как дела у выбранного».
   const allowed = new Set((await shopsUnderFilters(f)).map((s) => s.code));
@@ -1062,7 +1129,7 @@ export async function showcaseStats(
   f: SummaryFilters,
 ): Promise<{ avg: number | null; min: number | null; minShop: string | null; filled: number }> {
   const { from, to } = f;
-  const snap = await loadSnapshot();
+  const snap = await snapshotFor(f.slot);
   const shops = await shopsUnderFilters(f);
   const byCode = new Map(shops.map((s) => [s.code, s]));
   const inRegion = await regionDayMatcher(f.region);

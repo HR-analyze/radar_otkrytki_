@@ -1,7 +1,7 @@
 import { listDates } from './queries';
 import { todayIso } from './time';
-import type { CriterionKey, Status } from './types';
-import { CRITERION_ORDER, DEFAULT_CRITERION } from './types';
+import type { CriterionKey, FillSlot, Status } from './types';
+import { CRITERION_ORDER, DEFAULT_CRITERION, FILL_SLOTS } from './types';
 
 export interface ResolvedParams {
   from: string;
@@ -12,6 +12,8 @@ export interface ResolvedParams {
   status?: Status | 'all';
   /** Поиск по лавке: код или часть названия. */
   shop?: string;
+  /** Замер витрины: на 08:00 или на 16:00; пусто — итог дня (худший из двух). */
+  slot?: FillSlot;
   dates: string[];
 }
 
@@ -76,6 +78,14 @@ export function resolveCriterion(
 }
 
 /**
+ * Замер витрины из URL: `morning` (на 08:00) или `afternoon` (на 16:00).
+ * Всё остальное — не ошибка, а итог дня: так страница и открывается без фильтра.
+ */
+export function resolveSlot(raw: string | undefined): FillSlot | undefined {
+  return FILL_SLOTS.includes(raw as FillSlot) ? (raw as FillSlot) : undefined;
+}
+
+/**
  * Параметры из URL с безопасными значениями по умолчанию: период — текущий
  * месяц (см. defaultRange), остальные фильтры пусты. Страница может задать
  * свой предвыбор — см. ParamDefaults.
@@ -121,6 +131,7 @@ export async function resolveParams(
     shop: one('shop')?.trim().slice(0, 40) || undefined,
     criterion,
     status,
+    slot: resolveSlot(one('slot')),
     dates,
   };
 }
