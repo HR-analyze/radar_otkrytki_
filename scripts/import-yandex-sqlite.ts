@@ -29,11 +29,10 @@ await pgTx(async c => {
       if (!Array.isArray(records)) throw new Error('Not an array: '+source+'.'+table);
       for (let i=0;i<records.length;i++) {
         const r=records[i];
-        const key = r.id != null ? String(r.id) :
-          (table==='meta' ? String(r.key) :
-           r.date!=null && r.shop_code!=null
-             ? [r.date,r.shop_code,r.field??''].join('|')
-             : r.shop_code!=null ? String(r.shop_code) : String(i));
+        // Use the row position, not an incomplete natural key: the same date
+        // can contain hundreds of attendance records for different employees.
+        // It must be impossible to drop old rows during archiving.
+        const key = String(i).padStart(12, '0');
         if (apply) {
           const result=await c.query(
             'INSERT INTO radar_pg_archive(kind,legacy_key,payload) VALUES($1,$2,$3::jsonb) ON CONFLICT DO NOTHING',
