@@ -216,7 +216,7 @@ export default async function ContestPage({
         </>
       )}
       <ContestViolations violations={violations} shops={shops} editable={editable}
-        unlocked={unlocked} tokenRequired={Boolean(process.env.RADAR_UPLOAD_TOKEN)}
+        unlocked={unlocked} tokenRequired={false}
         returnTo={`/contest?${reportQuery(p)}`} />
     </div>
   );
