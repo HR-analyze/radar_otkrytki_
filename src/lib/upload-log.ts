@@ -41,6 +41,10 @@ export function legacyUploadLogPath(): string {
 }
 
 export async function readUploadLog(): Promise<UploadLogEntry[]> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgUploadHistory } = await import('./pg-manual');
+    return pgUploadHistory();
+  }
   const db = await openManualDb();
   if (!db) return readLegacyFile().slice(0, LIMIT);
 
@@ -59,6 +63,11 @@ export async function readUploadLog(): Promise<UploadLogEntry[]> {
 /** Дописывает записи в журнал. Не роняет загрузку, если не вышло. */
 export async function appendUploadLog(entries: readonly UploadLogEntry[]): Promise<void> {
   if (entries.length === 0) return;
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgAppendUploads } = await import('./pg-manual');
+    await pgAppendUploads(entries);
+    return;
+  }
 
   try {
     const db = await openManualDb();

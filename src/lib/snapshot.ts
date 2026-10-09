@@ -131,6 +131,7 @@ function dbPath(): string {
  */
 export function storageMode(): StorageMode {
   const explicit = process.env.RADAR_STORAGE;
+  if (explicit === 'postgres') return 'snapshot'; // Source: fixture snapshot; manual data: PostgreSQL.
   if (explicit === 'sqlite' || explicit === 'snapshot') return explicit;
   if (process.env.VERCEL) return 'snapshot';
 

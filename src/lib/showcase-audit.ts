@@ -90,6 +90,10 @@ export interface ShowcaseAuditFilter {
 export async function readShowcaseAudit(
   filter: ShowcaseAuditFilter = {},
 ): Promise<ShowcaseAuditEntry[]> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgReadAudit } = await import('./pg-manual');
+    return pgReadAudit(filter);
+  }
   const db = await openManualDb();
   if (!db) return [];
 
@@ -131,6 +135,10 @@ export async function readShowcaseAudit(
 
 /** Есть ли в журнале хоть что-то: пустая лента и «журнал ещё не вёлся» — разное. */
 export async function showcaseAuditCount(): Promise<number> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgAuditCount } = await import('./pg-manual');
+    return pgAuditCount();
+  }
   const db = await openManualDb();
   if (!db) return 0;
 

@@ -80,7 +80,7 @@ export function showcaseSeedPath(): string {
 }
 
 export function canEditShowcase(): boolean {
-  return manualDbWritable();
+  return process.env.RADAR_STORAGE === 'postgres' || manualDbWritable();
 }
 
 export function showcaseEditHint(): string {
@@ -95,6 +95,10 @@ export function showcaseEditHint(): string {
  * пересобирает подмешивание. Читать все строки на каждый рендер незачем.
  */
 export async function showcaseVersion(): Promise<string> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const pg = await import('./pg-manual');
+    return pg.pgShowcaseVersion(readSeed);
+  }
   const db = await openManualDb();
   if (!db) {
     const seed = readSeed();
@@ -114,6 +118,10 @@ export async function showcaseVersion(): Promise<string> {
 }
 
 export async function readShowcase(): Promise<ShowcaseStore> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const pg = await import('./pg-manual');
+    return pg.pgReadShowcase(readSeed);
+  }
   const db = await openManualDb();
   if (!db) return { ...readSeed(), source: 'seed' };
 
@@ -173,6 +181,10 @@ export async function saveShowcaseEdits(
   edits: readonly ShowcaseEdit[],
   options: SaveShowcaseOptions = {},
 ): Promise<{ changed: number }> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const pg = await import('./pg-manual');
+    return pg.pgSaveShowcaseEdits(edits, options, readSeed);
+  }
   const now = options.now ?? new Date().toISOString();
   const db = await openManualDb();
   if (!db) {

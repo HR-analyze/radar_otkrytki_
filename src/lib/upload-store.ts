@@ -68,7 +68,9 @@ function fixturesWritable(): boolean {
 export function uploadCapability(): UploadCapability {
   const tokenRequired = Boolean(process.env.RADAR_UPLOAD_TOKEN);
 
-  if (fixturesWritable()) {
+  // RelaxDev deployments have ephemeral application files: always publish imports
+  // to GitHub for durability when manual records live in PostgreSQL.
+  if (process.env.RADAR_STORAGE !== 'postgres' && fixturesWritable()) {
     return {
       mode: 'disk',
       hint: `Файлы лягут в ${shortDir()}, дашборд обновится сразу.`,
