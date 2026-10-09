@@ -1,11 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { COOKIE, isUnlocked } from '@/lib/auth';
 import { loadConfig } from '@/lib/config';
 import { listDates, listShops } from '@/lib/queries';
 import { resolveShowcaseRange } from '@/lib/showcase-range';
 import { invalidateSnapshot } from '@/lib/snapshot';
 import { closureOf, isOpenOn, scheduleFor, statusForFill } from '@/lib/status';
 import { dateRange } from '@/lib/time';
-import { checkUploadToken } from '@/lib/upload-store';
 import {
   canEditShowcase,
   readShowcase,
@@ -68,7 +68,7 @@ export async function GET(req: Request) {
     date,
     editable: canEditShowcase(),
     hint: showcaseEditHint(),
-    tokenRequired: Boolean(process.env.RADAR_UPLOAD_TOKEN),
+    tokenRequired: false, // Manual edits use RADAR_MANAGE_PASSWORD, not the upload token.
     updatedAt: store.touched[date] ?? null,
     thresholds: {
       green: config.criteria.showcase.kind === 'percent' ? config.criteria.showcase.greenFrom : 0,
@@ -156,7 +156,7 @@ async function shopSlice(rawShop: string, rawFrom: string, rawTo: string): Promi
     to,
     editable: canEditShowcase(),
     hint: showcaseEditHint(),
-    tokenRequired: Boolean(process.env.RADAR_UPLOAD_TOKEN),
+    tokenRequired: false, // Manual edits use RADAR_MANAGE_PASSWORD, not the upload token.
     thresholds: {
       green: config.criteria.showcase.kind === 'percent' ? config.criteria.showcase.greenFrom : 0,
       yellow: config.criteria.showcase.kind === 'percent' ? config.criteria.showcase.yellowFrom : 0,
@@ -174,14 +174,14 @@ async function shopSlice(rawShop: string, rawFrom: string, rawTo: string): Promi
   });
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  if (!(await isUnlocked(req.cookies.get(COOKIE)?.value))) {
+    return NextResponse.json({ ok: false, error: 'Нужен пароль управления. Войдите заново.' }, { status: 401 });
+  }
   if (!canEditShowcase()) {
     // 503, а не 500: не сбой, а невозможность записи на этом хостинге.
     return NextResponse.json({ ok: false, error: showcaseEditHint() }, { status: 503 });
   }
-
-  const token = checkUploadToken(req);
-  if (!token.ok) return NextResponse.json({ ok: false, error: token.reason }, { status: 401 });
 
   let body: { edits?: unknown };
   try {
