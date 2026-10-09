@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { COOKIE, isUnlocked } from '@/lib/auth';
 import { listShops } from '@/lib/queries';
 import { normalizeCode } from '@/lib/shops';
-import { checkUploadToken } from '@/lib/upload-store';
 import { removeContestViolation, saveContestViolation } from '@/lib/contest-violations-store';
 
 export const runtime = 'nodejs';
@@ -12,8 +11,6 @@ async function authorize(req: NextRequest) {
   if (!(await isUnlocked(req.cookies.get(COOKIE)?.value))) {
     return NextResponse.json({ ok: false, error: 'Для внесения нарушений нужен пароль.' }, { status: 401 });
   }
-  const token = checkUploadToken(req);
-  if (!token.ok) return NextResponse.json({ ok: false, error: token.reason }, { status: 401 });
   return null;
 }
 
