@@ -29,31 +29,52 @@ async function setMeta(c: DbClient, key: string, value: string): Promise<void> {
   await c.query('INSERT INTO radar_pg_meta(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [key,value]);
 }
 
+// Bulk seed reduces hundreds of sequential remote PostgreSQL round trips to
+// three inserts. A cold RelaxDev instance must not time out while SSR renders.
+let seedTask: Promise<void> | null = null;
 export async function pgSeedShowcase(readSeed: () => Seed): Promise<void> {
-  await pgTx(async c => {
-    if (await meta(c, 'showcase_seeded')) return;
-    const seed = readSeed();
-    const stamp = (day: string) => seed.touched[day] ?? seed.updatedAt ?? new Date().toISOString();
-    for (const [date, values] of Object.entries(seed.days)) {
-      for (const [code, fill] of Object.entries(values)) {
-        await c.query('INSERT INTO radar_pg_showcase_fill(date,shop_code,fill,updated_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [date,code,fill,stamp(date)]);
+  if (!seedTask) {
+    seedTask = pgTx(async c => {
+      if (await meta(c, 'showcase_seeded')) return;
+      const seed = readSeed();
+      const stamp = (day: string) => seed.touched[day] ?? seed.updatedAt ?? new Date().toISOString();
+      const fills = (days: Seed['days']) => Object.entries(days).flatMap(([date, values]) =>
+        Object.entries(values).map(([shop_code, fill]) => ({ date, shop_code, fill, updated_at: stamp(date) })));
+      const notes = Object.entries(seed.notes || {}).flatMap(([date, values]) =>
+        Object.entries(values).map(([shop_code, note]) => ({ date, shop_code, note, updated_at: stamp(date) })));
+      const touches = Object.entries(seed.touched || {}).map(([date, updated_at]) => ({date, updated_at}));
+      const dates = new Set([...Object.keys(seed.days), ...Object.keys(seed.afternoon), ...Object.keys(seed.notes || {})]);
+      for(const date of dates) {
+        if (!touches.some(t => t.date === date)) touches.push({date, updated_at: stamp(date)});
       }
-      await c.query('INSERT INTO radar_pg_showcase_day(date,updated_at) VALUES($1,$2) ON CONFLICT DO NOTHING',[date,stamp(date)]);
-    }
-    for (const [date, values] of Object.entries(seed.afternoon)) {
-      for (const [code, fill] of Object.entries(values)) {
-        await c.query('INSERT INTO radar_pg_showcase_fill_afternoon(date,shop_code,fill,updated_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [date,code,fill,stamp(date)]);
+      const sqlFill = (table: string) =>
+        'INSERT INTO ' + table + ' (date,shop_code,fill,updated_at) ' +
+        'SELECT date,shop_code,fill,updated_at FROM jsonb_to_recordset($1::jsonb) ' +
+        'AS r(date text,shop_code text,fill double precision,updated_at text) ON CONFLICT DO NOTHING';
+      for (const [table, rows] of [
+        ['radar_pg_showcase_fill', fills(seed.days)],
+        ['radar_pg_showcase_fill_afternoon', fills(seed.afternoon)],
+      ] as const) {
+        if (rows.length) await c.query(sqlFill(table), [JSON.stringify(rows)]);
       }
-      await c.query('INSERT INTO radar_pg_showcase_day(date,updated_at) VALUES($1,$2) ON CONFLICT DO NOTHING',[date,stamp(date)]);
-    }
-    for (const [date, values] of Object.entries(seed.notes || {})) {
-      for (const [code, note] of Object.entries(values)) {
-        await c.query('INSERT INTO radar_pg_showcase_note(date,shop_code,note,updated_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [date,code,note,stamp(date)]);
-      }
-      await c.query('INSERT INTO radar_pg_showcase_day(date,updated_at) VALUES($1,$2) ON CONFLICT DO NOTHING',[date,stamp(date)]);
-    }
-    await setMeta(c,'showcase_seeded',new Date().toISOString());
-  });
+      if (notes.length) await c.query(
+        'INSERT INTO radar_pg_showcase_note(date,shop_code,note,updated_at) ' +
+        'SELECT date,shop_code,note,updated_at FROM jsonb_to_recordset($1::jsonb) ' +
+        'AS r(date text,shop_code text,note text,updated_at text) ON CONFLICT DO NOTHING',
+        [JSON.stringify(notes)],
+      );
+      if (touches.length) await c.query(
+        'INSERT INTO radar_pg_showcase_day(date,updated_at) ' +
+        'SELECT date,updated_at FROM jsonb_to_recordset($1::jsonb) ' +
+        'AS r(date text,updated_at text) ON CONFLICT DO NOTHING', [JSON.stringify(touches)],
+      );
+      await setMeta(c, 'showcase_seeded', new Date().toISOString());
+    }).catch((error: unknown) => {
+      seedTask = null;
+      throw error;
+    });
+  }
+  await seedTask;
 }
 
 export async function pgShowcaseVersion(readSeed: () => Seed): Promise<string> {
