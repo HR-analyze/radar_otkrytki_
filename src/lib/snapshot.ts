@@ -14,7 +14,7 @@ import type { DepartureRow } from './parsers/departure';
 import type { LegacyPersonStatus } from './parsers/legacy-vitriny';
 import { reconcileRegionHistory } from './roster-history';
 import { readShowcase, showcaseRowsFromStore, showcaseVersion } from './showcase-store';
-import bundledSnapshot from '../generated/snapshot.json';
+import bundledSnapshot from '../generated/snapshot-bundled';
 
 /**
  * Снимок всех данных дашборда в памяти.
