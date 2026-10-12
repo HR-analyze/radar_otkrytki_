@@ -39,7 +39,7 @@ export default async function ContestPage({
   const config = loadConfig();
   const [regions, shops] = await Promise.all([listRegions(p.from, p.to), listShops()]);
 
-  const { dates, rows, regions: regionRows, total, violations } = await contest({
+  const { dates, rows, regions: regionRows, total, violations, archive } = await contest({
     from: p.from,
     to: p.to,
     region: p.region,
@@ -139,6 +139,13 @@ export default async function ContestPage({
           <StatusLegend note="Балл за день: 🟢 +1 · 🟡 0 · 🔴 −1. Нарушение: −1 к итогу. Клик по ячейке — карточка лавки за этот день." />
 
           {/* --- Лавки --- */}
+          {archive && (
+            <p className="text-xs muted">
+              Дни {shortDate(archive.from)} — {shortDate(archive.to)} восстановлены из PDF-отчёта старого
+              сервера: цвета и баллы точные, а «Витрина» у этих дней — среднее лавки за период отчёта, процентов
+              по дням в нём нет. Заполненная в радаре витрина важнее архива.
+            </p>
+          )}
           <ContestTable rows={rows} dates={dates} from={p.from} to={p.to} />
 
           {/* --- РМ --- */}

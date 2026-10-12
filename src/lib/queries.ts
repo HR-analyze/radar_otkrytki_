@@ -34,6 +34,7 @@ import {
   type ContestScore,
 } from './contest';
 import { readContestViolations, type ContestViolation } from './contest-violations-store';
+import { contestArchiveDays } from './contest-archive';
 
 /**
  * Чтение для дашборда поверх снимка в памяти (см. snapshot.ts).
@@ -658,6 +659,11 @@ export interface ContestCell {
   fill: number;
   /** Балл дня: +1 / 0 / −1. */
   points: number;
+  /**
+   * День взят из архива конкурса, а не из базы (см. contest-archive.ts):
+   * статус и балл точные, а `fill` — среднее лавки за период отчёта.
+   */
+  archived?: true;
 }
 
 export interface ContestRow {
@@ -700,6 +706,8 @@ export async function contest(
   regions: ContestRegionRow[];
   total: ContestScore;
   violations: ContestViolation[];
+  /** Первый и последний день из архива среди показанных; null — архива в выборке нет. */
+  archive: { from: string; to: string } | null;
 }> {
   const snap = await loadSnapshot();
 
@@ -718,20 +726,22 @@ export async function contest(
   const inRegion = await regionDayMatcher(filters.region);
 
   const config = loadConfig();
-  const relevant = snap.showcase
-    .filter(
-      (s) =>
-        s.date >= filters.from &&
-        s.date <= filters.to &&
-        allowedShops.has(s.shopCode) &&
-        inRegion(s.shopCode, s.date),
-    )
-    .flatMap((s) => {
-      const fill = slotFill(s, 'morning');
-      if (fill == null) return [];
-      const status = statusForFill(fill, config);
-      return pointsOf(status) == null ? [] : [{ ...s, fill, status }];
-    });
+  const inScope = (shopCode: string, date: string) =>
+    date >= filters.from && date <= filters.to && allowedShops.has(shopCode) && inRegion(shopCode, date);
+
+  const measured = snap.showcase.flatMap((s) => {
+    if (!inScope(s.shopCode, s.date)) return [];
+    const fill = slotFill(s, 'morning');
+    if (fill == null) return [];
+    return [{ date: s.date, shopCode: s.shopCode, fill, status: statusForFill(fill, config), archived: false }];
+  });
+  // Архив — только там, где утреннего замера нет: настоящий замер важнее
+  // восстановленного из PDF (см. contest-archive.ts).
+  const measuredKeys = new Set(measured.map((s) => `${s.shopCode}|${s.date}`));
+  const archived = contestArchiveDays()
+    .filter((a) => inScope(a.shopCode, a.date) && !measuredKeys.has(`${a.shopCode}|${a.date}`))
+    .map((a) => ({ date: a.date, shopCode: a.shopCode, fill: a.fill, status: a.status as Status, archived: true }));
+  const relevant = [...measured, ...archived].filter((s) => pointsOf(s.status) != null);
 
   const dates = [...new Set(relevant.map((s) => s.date))].sort();
 
@@ -739,7 +749,12 @@ export async function contest(
   for (const s of relevant) {
     let days = byShop.get(s.shopCode);
     if (!days) byShop.set(s.shopCode, (days = new Map()));
-    days.set(s.date, { status: s.status, fill: s.fill, points: pointsOf(s.status)! });
+    days.set(s.date, {
+      status: s.status,
+      fill: s.fill,
+      points: pointsOf(s.status)!,
+      ...(s.archived && { archived: true as const }),
+    });
   }
 
   const history = regionIndexOf(snap);
@@ -815,7 +830,17 @@ export async function contest(
     regions: regionRows,
     total: sumScores(rows.map((r) => r.score)),
     violations,
+    archive: archiveRange(rows),
   };
+}
+
+function archiveRange(rows: readonly ContestRow[]): { from: string; to: string } | null {
+  const days = rows
+    .flatMap((r) => Object.entries(r.cells))
+    .filter(([, cell]) => cell.archived)
+    .map(([date]) => date)
+    .sort();
+  return days.length ? { from: days[0], to: days[days.length - 1] } : null;
 }
 
 /* ------------------------------- сводка ---------------------------------- */
