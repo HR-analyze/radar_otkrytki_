@@ -14,6 +14,10 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      # Кнопка «Загрузить» коммитит выгрузки в fixtures/ без пересборки снимка:
+      # его печёт prebuild при деплое. Тест свежести снимка иначе краснел бы
+      # после каждой загрузки с дашборда.
+      - run: npm run snapshot
       - run: npm run typecheck
       - run: npm test
       - run: npm run build

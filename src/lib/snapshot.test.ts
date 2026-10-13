@@ -39,7 +39,8 @@ test('снимок собран из тех выгрузок, что лежат 
 
 test('снимок содержит все данные, которые рисует дашборд', () => {
   const s = readSnapshot();
-  assert.equal(s.shops.length, 80);
+  // Сеть растёт (М82–М84 появились в октябре): лавок не меньше исходных 80.
+  assert.ok(s.shops.length >= 80, `лавок в снимке: ${s.shops.length}`);
   assert.ok(s.attendance.length > 300, 'отметки за 25.08');
   assert.ok(s.criteria.length > 1000, 'статусы критериев');
 

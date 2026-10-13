@@ -30,9 +30,6 @@ test('API не разрешает менять конкурс без парол�
   for (const body of [null, {}, { ...payload, reason: ' ' }, { ...payload, reason: 'x'.repeat(301) }, { ...payload, shopCode: 'М9999' }]) {
     assert.equal((await POST(await request('POST', body))).status, 400);
   }
-  process.env.RADAR_UPLOAD_TOKEN = 'upload-test';
-  try { assert.equal((await POST(await request('POST', payload))).status, 401); }
-  finally { delete process.env.RADAR_UPLOAD_TOKEN; }
 });
 
 test('новое нарушение сохраняется, повтор не удваивает штраф, РМ берётся с сервера', async () => {
@@ -40,9 +37,13 @@ test('новое нарушение сохраняется, повтор не у
   const { contest, listShops } = await import('./queries');
   const filters = { from: '2026-10-01', to: '2026-10-01', shop: 'М1' };
   assert.equal((await contest(filters)).total.points, 0);
-  for (let i = 0; i < 2; i++) {
-    assert.equal((await POST(await request('POST', { ...payload, region: 'Поддельный РМ' }))).status, 200);
-  }
+  // Код загрузки — только для Excel-выгрузок: нарушения вносятся по паролю.
+  process.env.RADAR_UPLOAD_TOKEN = 'upload-test';
+  try {
+    for (let i = 0; i < 2; i++) {
+      assert.equal((await POST(await request('POST', { ...payload, region: 'Поддельный РМ' }))).status, 200);
+    }
+  } finally { delete process.env.RADAR_UPLOAD_TOKEN; }
   const result = await contest(filters);
   assert.equal(result.total.points, -1);
   assert.equal(result.total.violations, 1);
