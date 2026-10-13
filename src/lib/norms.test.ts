@@ -43,6 +43,27 @@ test('приход глубоко за пределами утра — «дру�
   assert.equal(statusByNorm(at(after) + 1, '06:20', config), 'other_schedule');
 });
 
+test('лавка с поздним открытием и нормой 8:00: «другой график» сдвинут, норма — нет', () => {
+  // М72 Ватутинки открывается в 10:00 (shopSchedules), норма в справочнике — 8:00.
+  // Порог «другого графика» уезжает на 10:00, а норма остаётся 8:00.
+  const shift = 120;
+  assert.equal(statusByNorm(at('07:55'), '08:00', config, shift), 'green');
+  assert.equal(statusByNorm(at('08:00'), '08:00', config, shift), 'green', 'ровно в норму — не «другой график»');
+  assert.equal(statusByNorm(at('08:10'), '08:00', config, shift), 'yellow');
+  assert.equal(statusByNorm(at('08:15'), '08:00', config, shift), 'yellow');
+  assert.equal(statusByNorm(at('08:16'), '08:00', config, shift), 'red');
+  assert.equal(statusByNorm(at('10:00'), '08:00', config, shift), 'other_schedule');
+});
+
+test('проход по нормам сдвигает «другой график» лавкам из shopSchedules', () => {
+  const late: ThresholdConfig = { ...config, shopSchedules: { М72: { opensAt: '10:00', note: '' } } };
+  const row = (criterion: 'driver' | 'cook', hhmm: string) =>
+    ({ date: '2026-09-25', shopCode: 'М72', criterion, arrivalMinutes: at(hhmm), status: 'other_schedule' }) as AttendanceRow;
+  const norms = { М72: { code: 'М72', driverAt: '08:00', cookAt: ['08:00'] } as ShopNorms };
+  const out = applyShopNorms([row('driver', '08:06'), row('cook', '08:00'), row('cook', '08:20')], norms, late);
+  assert.deepEqual(out.map((r) => r.status), ['yellow', 'green', 'red']);
+});
+
 test('нормы раздаются поварам по факту прихода, а не по именам', () => {
   // Порядок в выгрузке — не порядок прихода: первым пришёл третий по списку.
   const norms = assignCookNorms([at('06:35'), at('06:28'), at('05:58')], ['06:00', '06:30']);
