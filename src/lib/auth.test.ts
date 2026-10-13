@@ -76,6 +76,9 @@ test('пароль спрашивается на вкладках, где дан
     // правка нормы перекрашивает статусы лавки за все дни.
     '/settings',
     '/api/norms',
+    // «Конкурс» закрыт с 13.10.2026 целиком — и страница, и PDF, и нарушения.
+    '/contest',
+    '/api/contest/report',
     '/api/contest/violations',
   ];
   for (const p of managed) {
@@ -84,7 +87,7 @@ test('пароль спрашивается на вкладках, где дан
 
   // Сам радар открыт: цифры смотрит вся команда.
   // «/showcases» — проверка, что закрывается путь, а не любая строка с ним внутри.
-  for (const p of ['/', '/radar', '/contest', '/shop/М1', '/api/upload', '/showcases']) {
+  for (const p of ['/', '/radar', '/shop/М1', '/api/upload', '/showcases', '/contests']) {
     assert.equal(isManaged(p), false, `${p} под паролем быть не должен`);
   }
 });
