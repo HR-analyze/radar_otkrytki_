@@ -5,6 +5,7 @@ import { parseDeliveryTimes } from './parsers/delivery';
 import { parseDepartures } from './parsers/departure';
 import { parseLegacyVitriny } from './parsers/legacy-vitriny';
 import { parseRoster } from './parsers/roster';
+import { parseShowcaseSheets, type ShowcaseSheetCell } from './parsers/showcase-sheets';
 import { plural } from './plural';
 import { isIgnoredRole } from './status';
 import { formatDuration, shortDate } from './time';
@@ -44,15 +45,27 @@ export interface UploadInspection {
    */
   unknownRoles: { role: string; rows: number }[];
   /**
-   * Наполнение витрин из книги «Все данные» — только у kind='legacy'. Роут
-   * загрузки применяет их в базу ручных данных тем же способом, что и
-   * правка на вкладке «Витрины» (см. saveShowcaseEdits).
+   * Наполнение витрин — у kind='legacy' (книга «Все данные») и 'showcase'
+   * (Google-таблица). Роут загрузки применяет их в базу ручных данных тем же
+   * способом, что и правка на вкладке «Витрины» (см. saveShowcaseEdits):
+   * поле, которого нет, в базе не трогается.
    */
-  showcase: { date: string; shopCode: string; fill: number }[];
+  showcase: ShowcaseUploadEdit[];
   /** Что парсер пропустил или посчитал странным — короткими фразами для UI. */
   notes: string[];
   /** Предупреждения парсера целиком — для логов и отладки. */
   warnings: string[];
+}
+
+export interface ShowcaseUploadEdit {
+  date: string;
+  shopCode: string;
+  /** Замер на 08:00, доля 0–1. */
+  fill?: number;
+  /** Замер на 16:00, доля 0–1. */
+  afternoonFill?: number;
+  /** Комментарий дня — текст, который вписали в ячейку вместо числа. */
+  note?: string;
 }
 
 export type InspectResult =
@@ -98,6 +111,8 @@ export function canonicalFixtureName(
 ): string {
   const ext = extensionOf(originalName);
   if (kind === 'legacy') return `vitriny.${ext}`;
+  // В fixtures/ не кладётся: имя нужно только журналу загрузок.
+  if (kind === 'showcase') return `vitriny-google.${ext}`;
   if (kind === 'delivery') return `vremya-postavki.${ext}`;
   if (kind === 'roster') return `spravochnik-lavok.${ext}`;
   if (kind === 'departure') {
@@ -159,6 +174,7 @@ export function inspectUpload(
     const byName = detectFixtureKind(sheetNames);
     const kind = byName === 'attendance' ? detectFixtureKind(sheetNames, peekGrid(buffer)) : byName;
 
+    if (kind === 'showcase') return inspectShowcaseBook(displayName, buffer);
     if (kind === 'legacy') return inspectLegacy(displayName, buffer, config);
     if (kind === 'delivery') return inspectDelivery(displayName, buffer);
     if (kind === 'roster') return inspectRoster(displayName, buffer);
@@ -427,6 +443,99 @@ function inspectLegacy(name: string, buffer: Buffer, config: ThresholdConfig): I
       warnings: parsed.warnings,
     },
   };
+}
+
+/** Сколько строк про ячейки показывать в панели: дальше — «и ещё N». */
+const MAX_CELL_NOTES = 40;
+
+/**
+ * Книга витрин из Google-таблицы (см. parsers/showcase-sheets.ts).
+ *
+ * В fixtures/ она не кладётся: снимок её не читает, а коммит на каждую
+ * заливку перезапускал бы деплой ради данных, которые и так уходят в базу.
+ * Поэтому в панели — не «сохранён как», а что именно радар понял из ячеек:
+ * каждая ячейка с текстом названа поимённо, чтобы её можно было сверить.
+ */
+function inspectShowcaseBook(name: string, buffer: Buffer): InspectResult {
+  const parsed = parseShowcaseSheets(buffer);
+  const edits = showcaseEditsFromCells(parsed.cells);
+
+  if (edits.length === 0) {
+    return {
+      ok: false,
+      originalName: name,
+      error:
+        'Листы «Витрины 0800» / «Витрины 1600» есть, но заполненных ячеек в них не нашлось.' +
+        (parsed.warnings.length ? ` ${parsed.warnings.slice(0, 3).join('; ')}` : ''),
+    };
+  }
+
+  const count = (slot: ShowcaseSheetCell['slot']) =>
+    parsed.cells.filter((c) => c.slot === slot && c.fill != null).length;
+  const morning = count('morning');
+  const afternoon = count('afternoon');
+  const values = (n: number) => `${n} ${plural(n, 'значение', 'значения', 'значений')}`;
+  const shops = new Set(edits.map((e) => e.shopCode)).size;
+
+  const texts = parsed.cells.filter((c) => c.text);
+  const lines = [
+    ...texts.map(
+      (c) =>
+        `${c.cell} · ${c.shopCode} · ${shortDate(c.date)}: «${c.text}» → ` +
+        (c.fill == null ? 'процента нет, только комментарий' : `${Math.round(c.fill * 100)}% и комментарий`),
+    ),
+    ...parsed.warnings,
+  ];
+
+  return {
+    ok: true,
+    file: {
+      originalName: name,
+      kind: 'showcase',
+      fileName: canonicalFixtureName('showcase', parsed.dates, name),
+      summary:
+        `Витрины из Google-таблицы · ${describeDates(parsed.dates)} · ` +
+        `${shops} ${plural(shops, 'лавка', 'лавки', 'лавок')}: ` +
+        `на 08:00 — ${values(morning)}, на 16:00 — ${values(afternoon)}`,
+      dates: parsed.dates,
+      rows: morning + afternoon,
+      shops,
+      unknownRoles: [],
+      showcase: edits,
+      notes: [
+        'Значения уходят в базу, как правка на вкладке «Витрины»; пустые ячейки ничего не затирают. ' +
+          'Сам файл в репозиторий не кладётся.',
+        ...(texts.length
+          ? [
+              `В ${texts.length} ${plural(texts.length, 'ячейке', 'ячейках', 'ячейках')} текст вместо числа — ` +
+                'процент взят, только если он однозначен (со знаком «%» или первым словом), текст сохранён комментарием дня:',
+            ]
+          : []),
+        ...lines.slice(0, MAX_CELL_NOTES),
+        ...(lines.length > MAX_CELL_NOTES ? [`…и ещё ${lines.length - MAX_CELL_NOTES}`] : []),
+      ],
+      warnings: parsed.warnings,
+    },
+  };
+}
+
+/**
+ * Ячейки листов → правки базы: одна на лавку и день, оба замера вместе.
+ * Тексты обоих замеров сливаются в один комментарий дня — он в базе один.
+ */
+export function showcaseEditsFromCells(cells: readonly ShowcaseSheetCell[]): ShowcaseUploadEdit[] {
+  const byKey = new Map<string, ShowcaseUploadEdit & { texts: string[] }>();
+  for (const c of cells) {
+    const key = `${c.date}|${c.shopCode}`;
+    let edit = byKey.get(key);
+    if (!edit) byKey.set(key, (edit = { date: c.date, shopCode: c.shopCode, texts: [] }));
+    if (c.fill != null) {
+      if (c.slot === 'morning') edit.fill = c.fill;
+      else edit.afternoonFill = c.fill;
+    }
+    if (c.text) edit.texts.push(c.slot === 'afternoon' ? `16:00: ${c.text}` : c.text);
+  }
+  return [...byKey.values()].map(({ texts, ...edit }) => (texts.length ? { ...edit, note: texts.join('; ') } : edit));
 }
 
 function inspectRoster(name: string, buffer: Buffer): InspectResult {

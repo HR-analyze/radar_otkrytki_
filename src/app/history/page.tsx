@@ -20,6 +20,7 @@ export const dynamic = 'force-dynamic';
 const KIND_TITLE: Record<string, string> = {
   attendance: 'Выгрузка отметок',
   legacy: 'Книга «Витрины»',
+  showcase: 'Витрины из Google-таблицы',
   delivery: 'Журнал отгрузок',
   roster: 'Справочник лавок',
 };
