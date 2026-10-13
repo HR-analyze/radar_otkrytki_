@@ -207,6 +207,12 @@ export interface ThresholdConfig {
     otherSchedule: {
       enabled: boolean;
       after: string;
+      /**
+       * Своя граница для отдельных критериев — перекрывает `after`. Водитель и
+       * повара оцениваются по норме лавки, и их утреннее опоздание до 10:00 —
+       * опоздание, а не другая смена (решение заказчика 13.10.2026).
+       */
+      afterByCriterion?: Partial<Record<CriterionKey, string>>;
       confirmed: boolean;
       note: string;
     };

@@ -1,6 +1,6 @@
 import { isOtherSchedule, scheduleShift } from './status';
 import { parseClock } from './time';
-import type { AttendanceRow, ShopNorms, Status, ThresholdConfig } from './types';
+import type { AttendanceRow, CriterionKey, ShopNorms, Status, ThresholdConfig } from './types';
 
 /**
  * Пересчёт статусов по нормативам конкретной лавки.
@@ -51,12 +51,13 @@ export function statusByNorm(
   normAt: string,
   config: ThresholdConfig,
   shift = 0,
+  criterion?: CriterionKey,
 ): Status {
   if (minutes == null) return 'red'; // п.5.1 ТЗ: нет отметки → красный, без исключений
 
   // п.5.0: «другой график» проверяется раньше остальных правил — иначе выход
   // во вторую смену считался бы гигантским опозданием первой.
-  if (isOtherSchedule(minutes, config, shift)) return 'other_schedule';
+  if (isOtherSchedule(minutes, config, shift, criterion)) return 'other_schedule';
 
   const norm = parseClock(normAt);
   if (minutes <= norm) return 'green';
@@ -123,7 +124,10 @@ export function applyShopNorms(
     if (row.criterion !== 'driver') return;
     const normAt = byCode[row.shopCode]?.driverAt;
     if (!normAt) return;
-    out[i] = { ...row, status: statusByNorm(row.arrivalMinutes, normAt, config, scheduleShift(config, row.shopCode)) };
+    out[i] = {
+      ...row,
+      status: statusByNorm(row.arrivalMinutes, normAt, config, scheduleShift(config, row.shopCode), 'driver'),
+    };
   });
 
   for (const [, group] of groupCooks(out)) {
@@ -144,6 +148,7 @@ export function applyShopNorms(
           normAt,
           config,
           scheduleShift(config, out[rowIndex].shopCode),
+          'cook',
         ),
       };
     });

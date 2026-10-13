@@ -84,10 +84,12 @@ test('нет отметки → красный, без исключений (п.
 });
 
 test('«другой график» срабатывает раньше пороговой таблицы (п.5.0 ТЗ)', () => {
-  assert.equal(statusForTime(at(8, 1), 'cook', config), 'other_schedule');
-  assert.equal(statusForTime(at(7, 59), 'cook', config), 'red', '7:59 — ещё опоздание');
-  assert.equal(statusForTime(at(8, 0), 'cook', config), 'other_schedule', 'смена «с 8» — не опоздание');
+  // Граница 08:00 — у кассиров, бариста и ЗД; у водителя и поваров своя, 10:00.
+  assert.equal(statusForTime(at(8, 1), 'cashier', config), 'other_schedule');
+  assert.equal(statusForTime(at(7, 59), 'cashier', config), 'red', '7:59 — ещё опоздание');
+  assert.equal(statusForTime(at(8, 0), 'cashier', config), 'other_schedule', 'смена «с 8» — не опоздание');
   assert.equal(statusForTime(at(9, 15), 'cashier', config), 'other_schedule');
+  assert.equal(statusForTime(at(10, 0), 'cook', config), 'other_schedule');
 });
 
 test('расчёт прихода = уход − 30 мин (пример из ТЗ: уход 07:40 → приход 07:10)', () => {
@@ -411,9 +413,14 @@ test('порог «другой график» едет вместе с откр
   // график». Иначе такие лавки просто исчезали бы из аналитики.
   const config = loadConfig();
 
-  assert.equal(statusForTime(parseClock('09:00'), 'cook', config, 'М1'), 'other_schedule');
-  assert.notEqual(statusForTime(parseClock('09:00'), 'cook', config, 'М71'), 'other_schedule');
-  assert.equal(statusForTime(parseClock('10:30'), 'cook', config, 'М71'), 'other_schedule');
+  assert.equal(statusForTime(parseClock('09:00'), 'cashier', config, 'М1'), 'other_schedule');
+  assert.notEqual(statusForTime(parseClock('09:00'), 'cashier', config, 'М71'), 'other_schedule');
+  assert.equal(statusForTime(parseClock('10:30'), 'cashier', config, 'М71'), 'other_schedule');
+
+  // У поваров граница 10:00 и сдвигается так же: у М71 — 12:00.
+  assert.equal(statusForTime(parseClock('09:00'), 'cook', config, 'М1'), 'red');
+  assert.notEqual(statusForTime(parseClock('11:00'), 'cook', config, 'М71'), 'other_schedule');
+  assert.equal(statusForTime(parseClock('12:00'), 'cook', config, 'М71'), 'other_schedule');
 });
 
 test('сдвиг считается из времени открытия, а не зашит числом', () => {
@@ -466,4 +473,15 @@ test('закрытая лавка исчезает с даты закрытия,
 
   // Остальные лавки закрытие не задевает.
   assert.equal(isOpenOn(config, 'М1', '2026-09-14'), true);
+});
+
+test('«другой график»: кассир — с 08:00, водитель и повара — с 10:00', () => {
+  const config = loadConfig();
+  const at = (h: number, m = 0) => h * 60 + m;
+  // Смена «с 8» есть у кассиров: приход в 08:30 — не опоздание к 07:00.
+  assert.equal(statusForTime(at(8, 30), 'cashier', config), 'other_schedule');
+  // Водитель и повара по сетевым порогам (лавка без нормы): до 10:00 — опоздание.
+  assert.equal(statusForTime(at(8, 30), 'cook', config), 'red');
+  assert.equal(statusForTime(at(9, 59), 'driver', config), 'red');
+  assert.equal(statusForTime(at(10, 0), 'cook', config), 'other_schedule');
 });
