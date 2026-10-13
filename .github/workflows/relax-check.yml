@@ -1,0 +1,23 @@
+name: RelaxDev PostgreSQL migration checks
+on:
+  push:
+    branches: [relax-migration]
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # Кнопка «Загрузить» коммитит выгрузки в fixtures/ без пересборки снимка:
+      # его печёт prebuild при деплое. Тест свежести снимка иначе краснел бы
+      # после каждой загрузки с дашборда.
+      - run: npm run snapshot
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

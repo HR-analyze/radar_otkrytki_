@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as XLSX from 'xlsx';
 import { loadConfig } from './config';
-import { githubTargetFromEnv } from './connectors/github';
+import { commitFixtures, githubTargetFromEnv } from './connectors/github';
 import {
   canonicalFixtureName,
   inspectUpload,
@@ -216,4 +216,66 @@ test('репозиторий для коммита берётся из окру�
   assert.equal(explicit?.owner, 'команда');
   assert.equal(explicit?.repo, 'радар');
   assert.equal(explicit?.branch, 'data');
+});
+
+test('разовый 502 от GitHub не роняет загрузку: запрос повторяется', async (t) => {
+  const calls: string[] = [];
+  let blobFailures = 1;
+  t.mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET';
+    const p = String(url).replace(/^.*\/repos\/o\/r/, '');
+    calls.push(`${method} ${p}`);
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+
+    if (p.startsWith('/git/ref/')) return json({ object: { sha: 'head' } });
+    if (p.startsWith('/git/commits/')) return json({ tree: { sha: 'tree0' } });
+    if (p === '/git/blobs') {
+      if (blobFailures-- > 0) return json({ message: 'Server Error' }, 502);
+      return json({ sha: 'blob1' });
+    }
+    if (p.startsWith('/contents/')) return json([]);
+    if (p === '/git/trees') return json({ sha: 'tree1' });
+    if (p === '/git/commits') return json({ sha: 'c1', html_url: 'https://github.com/o/r/commit/c1' });
+    if (p.startsWith('/git/refs/')) return json({});
+    return json({ message: 'Not Found' }, 404);
+  });
+
+  const target = { owner: 'o', repo: 'r', branch: 'main', dir: 'fixtures', token: 'x' };
+  const result = await commitFixtures(target, [{ name: 'a.xls', buffer: Buffer.from('a') }], 'm');
+
+  assert.equal(result.sha, 'c1');
+  assert.equal(calls.filter((c) => c === 'POST /git/blobs').length, 2, 'блоб отправлен повторно');
+});
+
+test('ошибка 4xx от GitHub не повторяется', async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return new Response(JSON.stringify({ message: 'Bad credentials' }), { status: 401 });
+  });
+
+  const target = { owner: 'o', repo: 'r', branch: 'main', dir: 'fixtures', token: 'x' };
+  await assert.rejects(
+    commitFixtures(target, [{ name: 'a.xls', buffer: Buffer.from('a') }], 'm'),
+    /не принял токен/,
+  );
+  assert.equal(calls, 1);
+});
+
+test('сбой журнала в PostgreSQL не роняет уже сохранённую загрузку', async () => {
+  const { appendUploadLog } = await import('./upload-log');
+  const env = { storage: process.env.RADAR_STORAGE, url: process.env.DATABASE_URL };
+  process.env.RADAR_STORAGE = 'postgres';
+  delete process.env.DATABASE_URL; // база недоступна — журнал записать нельзя
+  try {
+    await appendUploadLog([
+      { at: '2026-10-13T07:00:00Z', originalName: 'a.xls', fileName: 'a.xls', kind: 'attendance',
+        summary: '', dates: [], rows: 0, mode: 'github' },
+    ]);
+  } finally {
+    if (env.storage === undefined) delete process.env.RADAR_STORAGE;
+    else process.env.RADAR_STORAGE = env.storage;
+    if (env.url !== undefined) process.env.DATABASE_URL = env.url;
+  }
 });

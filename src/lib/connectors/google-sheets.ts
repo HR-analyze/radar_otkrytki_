@@ -1,4 +1,5 @@
-import { google } from 'googleapis';
+// Только нужный API, а не весь googleapis (типы всех API Google — сотни МБ памяти при сборке).
+import { sheets as sheetsApi } from 'googleapis/build/src/apis/sheets';
 import { getJwt } from './google-auth';
 import type { RawFill } from '../etl/showcase-job';
 import { isoDate } from '../time';
@@ -15,7 +16,7 @@ export async function readShowcaseSheet(
   sheetName: string,
   range: string,
 ): Promise<RawFill[]> {
-  const sheets = google.sheets({ version: 'v4', auth: getJwt() });
+  const sheets = sheetsApi({ version: 'v4', auth: getJwt() });
 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,

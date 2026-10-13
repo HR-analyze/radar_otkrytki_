@@ -41,6 +41,10 @@ export function legacyUploadLogPath(): string {
 }
 
 export async function readUploadLog(): Promise<UploadLogEntry[]> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgUploadHistory } = await import('./pg-manual');
+    return pgUploadHistory();
+  }
   const db = await openManualDb();
   if (!db) return readLegacyFile().slice(0, LIMIT);
 
@@ -61,6 +65,12 @@ export async function appendUploadLog(entries: readonly UploadLogEntry[]): Promi
   if (entries.length === 0) return;
 
   try {
+    if (process.env.RADAR_STORAGE === 'postgres') {
+      const { pgAppendUploads } = await import('./pg-manual');
+      await pgAppendUploads(entries);
+      return;
+    }
+
     const db = await openManualDb();
     if (!db) return;
 
@@ -68,6 +78,7 @@ export async function appendUploadLog(entries: readonly UploadLogEntry[]): Promi
     insert(db, entries);
   } catch {
     // Журнал — удобство, а не данные: его отказ не должен ронять загрузку файла.
+    // Иначе маршрут ответит 502 на уже закоммиченные файлы, и их зальют повторно.
   }
 }
 

@@ -120,6 +120,10 @@ export async function reconcileRegionHistory(
   seed: readonly RegionPeriod[],
   today = todayIso(),
 ): Promise<RegionPeriod[] | null> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgReconcileRegions } = await import('./pg-manual');
+    return pgReconcileRegions(current, seed, today);
+  }
   const db = await openManualDb();
   if (!db) return null;
 

@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { COOKIE, isUnlocked } from '@/lib/auth';
 import { loadConfig } from '@/lib/config';
 import { yellowStep, normsEnabled } from '@/lib/norms';
 import { parseCookTimes, parseNormTime } from '@/lib/parsers/shop-norms';
@@ -13,7 +14,6 @@ import {
   saveNormsEdits,
   type ShopNormsEdit,
 } from '@/lib/shop-norms-store';
-import { checkUploadToken } from '@/lib/upload-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,7 +48,7 @@ export async function GET() {
     note: config.rules.shopNorms?.note ?? '',
     editable: canEditNorms(),
     hint: normsEditHint(),
-    tokenRequired: Boolean(process.env.RADAR_UPLOAD_TOKEN),
+    tokenRequired: false, // Manual edits use RADAR_MANAGE_PASSWORD, not the upload token.
     updatedAt: store.updatedAt,
     shops: codes
       .map((code) => {
@@ -70,14 +70,14 @@ export async function GET() {
   });
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  if (!(await isUnlocked(req.cookies.get(COOKIE)?.value))) {
+    return NextResponse.json({ ok: false, error: 'Нужен пароль управления. Войдите заново.' }, { status: 401 });
+  }
   if (!canEditNorms()) {
     // 503, а не 500: не сбой, а невозможность записи на этом хостинге.
     return NextResponse.json({ ok: false, error: normsEditHint() }, { status: 503 });
   }
-
-  const token = checkUploadToken(req);
-  if (!token.ok) return NextResponse.json({ ok: false, error: token.reason }, { status: 401 });
 
   let body: { edits?: unknown; reset?: unknown };
   try {

@@ -39,7 +39,8 @@ test('снимок собран из тех выгрузок, что лежат 
 
 test('снимок содержит все данные, которые рисует дашборд', () => {
   const s = readSnapshot();
-  assert.equal(s.shops.length, 80);
+  // Сеть растёт (М82–М84 появились в октябре): лавок не меньше исходных 80.
+  assert.ok(s.shops.length >= 80, `лавок в снимке: ${s.shops.length}`);
   assert.ok(s.attendance.length > 300, 'отметки за 25.08');
   assert.ok(s.criteria.length > 1000, 'статусы критериев');
 
@@ -55,7 +56,17 @@ test('снимок содержит все данные, которые рису
   // Легаси остаётся только там, где выгрузка день не закрыла: сейчас это
   // водитель за 19–24.08 (в табеле водителей нет).
   assert.ok(s.legacyPeople.length > 0, 'легаси-статусы людей');
-  assert.ok(s.shops.every((x) => x.region), 'у каждой лавки есть РМ');
+  // Лавка без РМ допустима, только если РМ ей не назначен и в справочнике:
+  // новую лавку (М84 в октябре) открывают раньше, чем закрепляют за РМ.
+  // Если же справочник РМ называет, а в снимок он не доехал — это сбой сборки.
+  const roster = parseRoster(
+    fs.readFileSync(path.join(process.cwd(), 'fixtures', 'spravochnik-lavok.xlsx')),
+  );
+  const assigned = new Set(roster.rows.filter((r) => r.manager).map((r) => r.shopCode));
+  const lost = s.shops.filter((x) => !x.region && assigned.has(x.code)).map((x) => x.code);
+  assert.deepEqual(lost, [], 'РМ есть в справочнике, но не попал в снимок');
+  const withRegion = s.shops.filter((x) => x.region).length;
+  assert.ok(withRegion >= 80, `РМ проставлен у ${withRegion} лавок из ${s.shops.length}`);
 });
 
 test('даты в снимке — корректные и непрерывные', () => {

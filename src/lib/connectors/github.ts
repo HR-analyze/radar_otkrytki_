@@ -137,26 +137,58 @@ function encodePath(p: string): string {
   return p.split('/').map(encodeURIComponent).join('/');
 }
 
+/**
+ * Паузы перед повторами, если GitHub ответил 5xx или соединение оборвалось.
+ *
+ * Такие сбои у GitHub бывают на больших блобах (выгрузка отметок — 4 МБ, в
+ * base64 ещё на треть больше) и проходят через секунды. Повторять безопасно:
+ * блобы и деревья адресуются содержимым, лишний коммит без ссылки на него
+ * ничего не меняет, а PATCH ветки на тот же sha — не-операция. Сумма пауз
+ * держится далеко от `maxDuration` маршрута загрузки.
+ */
+const RETRY_DELAYS_MS = [1000, 3000, 6000];
+
 async function api<T>(
   target: GithubTarget,
   path: string,
   options: { method?: string; body?: unknown } = {},
 ): Promise<T> {
-  const res = await fetch(`${API}/repos/${target.owner}/${target.repo}${path}`, {
-    method: options.method ?? 'GET',
-    headers: {
-      Authorization: `Bearer ${target.token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      'User-Agent': 'radar-otkrytki',
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-    cache: 'no-store',
-  });
+  const body = options.body ? JSON.stringify(options.body) : undefined;
 
-  if (!res.ok) throw new Error(await describeFailure(res, target));
-  return (await res.json()) as T;
+  for (let attempt = 0; ; attempt++) {
+    const retryIn = RETRY_DELAYS_MS[attempt];
+    let res: Response;
+    try {
+      res = await fetch(`${API}/repos/${target.owner}/${target.repo}${path}`, {
+        method: options.method ?? 'GET',
+        headers: {
+          Authorization: `Bearer ${target.token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'radar-otkrytki',
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body,
+        cache: 'no-store',
+      });
+    } catch (e) {
+      if (retryIn === undefined) throw e;
+      await sleep(retryIn);
+      continue;
+    }
+
+    if (res.ok) return (await res.json()) as T;
+    if (res.status >= 500 && retryIn !== undefined) {
+      await res.body?.cancel();
+      await sleep(retryIn);
+      continue;
+    }
+    throw new Error(await describeFailure(res, target));
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Ошибки GitHub переводятся в то, что человеку делать: чинить их будет он. */
@@ -184,6 +216,12 @@ async function describeFailure(res: Response, target: GithubTarget): Promise<str
   }
   if (res.status === 409 || res.status === 422) {
     return `В ветку ${where} параллельно запушили что-то ещё. Повторите загрузку. ${detail}`.trim();
+  }
+  if (res.status >= 500) {
+    return (
+      `GitHub временно не отвечает (${res.status}), несколько повторов не помогли. ` +
+      `Это сбой на стороне GitHub, не файла — повторите загрузку через пару минут. ${detail}`.trim()
+    );
   }
   return `GitHub ответил ${res.status}. ${detail}`.trim();
 }

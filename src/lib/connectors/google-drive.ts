@@ -1,4 +1,5 @@
-import { google } from 'googleapis';
+// Только нужный API, а не весь googleapis (типы всех API Google — сотни МБ памяти при сборке).
+import { drive as driveApi } from 'googleapis/build/src/apis/drive';
 import { getJwt } from './google-auth';
 
 /**
@@ -15,7 +16,7 @@ export async function findLatestFile(
   folderId: string,
   namePattern: string,
 ): Promise<DriveFile | null> {
-  const drive = google.drive({ version: 'v3', auth: getJwt() });
+  const drive = driveApi({ version: 'v3', auth: getJwt() });
 
   const res = await drive.files.list({
     q: `'${folderId}' in parents and name contains '${escapeQuery(namePattern)}' and trashed = false`,
@@ -32,7 +33,7 @@ export async function findLatestFile(
 }
 
 export async function downloadFile(fileId: string): Promise<Buffer> {
-  const drive = google.drive({ version: 'v3', auth: getJwt() });
+  const drive = driveApi({ version: 'v3', auth: getJwt() });
   const res = await drive.files.get(
     { fileId, alt: 'media', supportsAllDrives: true },
     { responseType: 'arraybuffer' },

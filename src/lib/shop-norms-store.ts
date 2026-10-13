@@ -46,7 +46,7 @@ function seedPath(): string {
 }
 
 export function canEditNorms(): boolean {
-  return manualDbWritable();
+  return process.env.RADAR_STORAGE === 'postgres' || manualDbWritable();
 }
 
 export function normsEditHint(): string {
@@ -70,6 +70,24 @@ export function readNormsSeed(): ShopNorms[] {
 }
 
 export async function readNorms(): Promise<ShopNormsStore> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const byCode: Record<string, ShopNorms> = {};
+    for (const value of readNormsSeed()) byCode[value.code] = value;
+    const { pgNormsOverrides } = await import('./pg-manual');
+    const rows = await pgNormsOverrides();
+    let updatedAt: string | null = null;
+    for (const r of rows) {
+      const base = byCode[r.shop_code];
+      byCode[r.shop_code] = {
+        code: r.shop_code, name: base?.name ?? r.shop_code, driverAt: r.driver_at,
+        cookAt: parseCookJson(r.cook_shifts), departureAt: base?.departureAt ?? null,
+        rawDriver: base?.rawDriver ?? null, rawCook: base?.rawCook ?? null,
+        rawDeparture: base?.rawDeparture ?? null, source: 'manual', warnings: [],
+      };
+      if (!updatedAt || r.updated_at > updatedAt) updatedAt = r.updated_at;
+    }
+    return { byCode, updatedAt, hasEdits: rows.length > 0 };
+  }
   const byCode: Record<string, ShopNorms> = {};
   for (const n of readNormsSeed()) byCode[n.code] = n;
 
@@ -115,6 +133,10 @@ export async function saveNormsEdits(
   edits: readonly ShopNormsEdit[],
   now = new Date().toISOString(),
 ): Promise<{ changed: number }> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgSaveNorms } = await import('./pg-manual');
+    return pgSaveNorms(edits, now);
+  }
   const db = await openManualDb();
   if (!db) {
     throw new Error(
@@ -155,6 +177,10 @@ export async function saveNormsEdits(
 
 /** Убирает правку: лавка возвращается к норме из справочника. */
 export async function resetNorms(shopCode: string): Promise<boolean> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgResetNorm } = await import('./pg-manual');
+    return pgResetNorm(shopCode);
+  }
   const db = await openManualDb();
   if (!db) return false;
   return db.prepare(`DELETE FROM shop_norms WHERE shop_code = ?`).run(shopCode).changes > 0;
@@ -165,6 +191,10 @@ export async function resetNorms(shopCode: string): Promise<boolean> {
  * пересчитывает статусы. Читать все строки на каждый рендер незачем.
  */
 export async function normsVersion(): Promise<string> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgNormsVersion } = await import('./pg-manual');
+    return pgNormsVersion();
+  }
   const db = await openManualDb();
   if (!db) return 'seed';
 

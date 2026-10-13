@@ -18,6 +18,10 @@ const M25: ContestViolation = {
 };
 
 export async function readContestViolations(): Promise<ContestViolation[]> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgViolations } = await import('./pg-manual');
+    return [{ ...M25 }, ...(await pgViolations()).map(r => ({ ...r, fixed: false }))];
+  }
   const db = await openManualDb();
   if (!db) return [{ ...M25 }];
   const rows = db.prepare(`
@@ -33,6 +37,10 @@ export async function saveContestViolation(
   if (!/^[0-9a-f-]{36}$/i.test(entry.id) || !entry.shopCode || !entry.region ||
       !entry.reason.trim() || entry.reason.length > 300) {
     throw new Error('Нужны лавка, РМ и причина нарушения (до 300 символов).');
+  }
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgAddViolation } = await import('./pg-manual');
+    return pgAddViolation(entry);
   }
   const db = await openManualDb();
   if (!db) throw new Error('На этом хостинге нет базы для сохранения нарушений.');
@@ -53,6 +61,10 @@ export async function saveContestViolation(
 
 export async function removeContestViolation(id: string): Promise<void> {
   if (id === M25.id) throw new Error('Постоянный штраф М25 закреплён и не снимается.');
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgRemoveViolation } = await import('./pg-manual');
+    return pgRemoveViolation(id);
+  }
   const db = await openManualDb();
   if (!db) throw new Error('На этом хостинге нет базы для сохранения нарушений.');
   db.prepare(`DELETE FROM contest_violations WHERE id = ?`).run(id);

@@ -14,7 +14,7 @@ import type { DepartureRow } from './parsers/departure';
 import type { LegacyPersonStatus } from './parsers/legacy-vitriny';
 import { reconcileRegionHistory } from './roster-history';
 import { readShowcase, showcaseRowsFromStore, showcaseVersion } from './showcase-store';
-import bundledSnapshot from '../generated/snapshot.json';
+import bundledSnapshot from '../generated/snapshot-bundled';
 
 /**
  * Снимок всех данных дашборда в памяти.
@@ -131,6 +131,7 @@ function dbPath(): string {
  */
 export function storageMode(): StorageMode {
   const explicit = process.env.RADAR_STORAGE;
+  if (explicit === 'postgres') return 'snapshot'; // Source: fixture snapshot; manual data: PostgreSQL.
   if (explicit === 'sqlite' || explicit === 'snapshot') return explicit;
   if (process.env.VERCEL) return 'snapshot';
 

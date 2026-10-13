@@ -56,8 +56,11 @@ test('за один день счётчики — точные, не усред�
   const day = '2026-08-25';
   const t = await q.shopTotals({ from: day, to: day });
   assert.equal(t.days, 1);
-  assert.equal(t.green + t.yellow + t.red, 80, 'все 80 лавок распределены по статусам');
-  assert.equal(t.total, 80);
+  // 25.08 в сети было 80 лавок — все они распределены по статусам. Лавки,
+  // открытые позже (М82–М84), в тот день статуса не имеют, но в число лавок
+  // под фильтром входят: оно берётся из нынешнего справочника.
+  assert.equal(t.green + t.yellow + t.red, 80, 'все 80 лавок того дня распределены по статусам');
+  assert.equal(t.total, (await q.listShops()).length);
 });
 
 test('за период счётчики усреднены по дням и не вырождаются в «все красные»', async () => {
@@ -312,11 +315,12 @@ test('фильтр по лавке складывается с фильтром 
 });
 
 test('сумма по критерию не превышает числа лавок под фильтром', async () => {
+  const shops = (await q.listShops()).length;
   for (const range of [['2026-08-25', '2026-08-25'], [ALL.from, ALL.to]] as const) {
     for (const s of await q.summaryByCriterion({ from: range[0], to: range[1] })) {
       assert.ok(
-        s.green + s.yellow + s.red + s.missing === 80,
-        `${s.criterion}: ${s.green}+${s.yellow}+${s.red}+${s.missing} ≠ 80`,
+        s.green + s.yellow + s.red + s.missing === shops,
+        `${s.criterion}: ${s.green}+${s.yellow}+${s.red}+${s.missing} ≠ ${shops}`,
       );
     }
   }

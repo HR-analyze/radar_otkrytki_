@@ -128,7 +128,11 @@ export function ContestTable({
                     key={d}
                     status={cell.status}
                     href={`/shop/${encodeURIComponent(r.shop.code)}?from=${d}&to=${d}`}
-                    title={`${r.shop.name} · ${shortDate(d)} · ${STATUS_TEXT[cell.status]} · витрина ${Math.round(cell.fill * 100)}% · ${formatPoints(cell.points)}`}
+                    title={`${r.shop.name} · ${shortDate(d)} · ${STATUS_TEXT[cell.status]} · ${
+                      cell.archived
+                        ? `из архивного отчёта, витрина в среднем за его период ${Math.round(cell.fill * 100)}%`
+                        : `витрина ${Math.round(cell.fill * 100)}%`
+                    } · ${formatPoints(cell.points)}`}
                   />
                 );
               })}
