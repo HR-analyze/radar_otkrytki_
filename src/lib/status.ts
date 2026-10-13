@@ -333,19 +333,10 @@ export function scheduleShift(config: ThresholdConfig, shopCode?: string): numbe
  * отметке этого не меняют. Минуты берутся без секунд, поэтому строгое
  * «позже 08:00» пропускало 08:00:55 — кассира, выходящего к восьми по своему
  * графику, радар красил как опоздавшего на час (решение заказчика 23.09.2026).
- *
- * У водителя и поваров граница своя — 10:00 (`afterByCriterion`, 13.10.2026):
- * их утреннее опоздание до 10:00 красится, а смена «с 8» есть у кассиров.
  */
-export function isOtherSchedule(
-  minutes: number,
-  config: ThresholdConfig,
-  shift = 0,
-  criterion?: CriterionKey,
-): boolean {
+export function isOtherSchedule(minutes: number, config: ThresholdConfig, shift = 0): boolean {
   const other = config.rules.otherSchedule;
-  const after = (criterion && other.afterByCriterion?.[criterion]) || other.after;
-  return other.enabled && minutes >= parseClock(after) + shift;
+  return other.enabled && minutes >= parseClock(other.after) + shift;
 }
 
 /**
@@ -368,7 +359,7 @@ export function statusForTime(
   // п.5.0: правило «другой график» выполняется раньше остальных. Для лавки с
   // особым графиком порог едет вместе с открытием: приход в 09:00 в лавке,
   // открывающейся в 10:00, — это рано, а не «другой график».
-  if (isOtherSchedule(minutes, config, shift, criterion)) return 'other_schedule';
+  if (isOtherSchedule(minutes, config, shift)) return 'other_schedule';
 
   const cfg = config.criteria[criterion];
   if (!cfg || cfg.kind !== 'time') return 'no_data';

@@ -43,46 +43,6 @@ test('приход глубоко за пределами утра — «дру�
   assert.equal(statusByNorm(at(after) + 1, '06:20', config), 'other_schedule');
 });
 
-test('лавка с поздним открытием и нормой 8:00: «другой график» сдвинут, норма — нет', () => {
-  // М72 Ватутинки открывается в 10:00 (shopSchedules), норма в справочнике — 8:00.
-  // Порог «другого графика» уезжает на 10:00, а норма остаётся 8:00.
-  const shift = 120;
-  assert.equal(statusByNorm(at('07:55'), '08:00', config, shift), 'green');
-  assert.equal(statusByNorm(at('08:00'), '08:00', config, shift), 'green', 'ровно в норму — не «другой график»');
-  assert.equal(statusByNorm(at('08:10'), '08:00', config, shift), 'yellow');
-  assert.equal(statusByNorm(at('08:15'), '08:00', config, shift), 'yellow');
-  assert.equal(statusByNorm(at('08:16'), '08:00', config, shift), 'red');
-  assert.equal(statusByNorm(at('10:00'), '08:00', config, shift), 'other_schedule');
-  // У водителя и поваров «другой график» с 10:00, у М72 — со сдвигом, с 12:00.
-  assert.equal(statusByNorm(at('11:59'), '08:00', config, shift, 'driver'), 'red');
-  assert.equal(statusByNorm(at('12:00'), '08:00', config, shift, 'driver'), 'other_schedule');
-});
-
-test('водитель и повара: опоздание до 10:00 — красное, с 10:00 — другая смена', () => {
-  // Решение заказчика 13.10.2026: норма → +15 мин 🟡 → 🔴 до 09:59, дальше — другой график.
-  for (const criterion of ['driver', 'cook'] as const) {
-    assert.equal(statusByNorm(at('06:30'), '06:30', config, 0, criterion), 'green');
-    assert.equal(statusByNorm(at('06:45'), '06:30', config, 0, criterion), 'yellow');
-    assert.equal(statusByNorm(at('08:10'), '06:30', config, 0, criterion), 'red', 'раньше это было серым');
-    assert.equal(statusByNorm(at('09:59'), '06:30', config, 0, criterion), 'red');
-    assert.equal(statusByNorm(at('10:00'), '06:30', config, 0, criterion), 'other_schedule');
-    assert.equal(statusByNorm(at('17:00'), '06:30', config, 0, criterion), 'other_schedule', 'вечерняя смена');
-  }
-});
-
-test('проход по нормам сдвигает «другой график» лавкам из shopSchedules', () => {
-  const late: ThresholdConfig = { ...config, shopSchedules: { М72: { opensAt: '10:00', note: '' } } };
-  const row = (criterion: 'driver' | 'cook', hhmm: string) =>
-    ({ date: '2026-09-25', shopCode: 'М72', criterion, arrivalMinutes: at(hhmm), status: 'other_schedule' }) as AttendanceRow;
-  const norms = { М72: { code: 'М72', driverAt: '08:00', cookAt: ['08:00'] } as ShopNorms };
-  const out = applyShopNorms(
-    [row('driver', '08:06'), row('cook', '08:00'), row('cook', '08:20'), row('cook', '11:00'), row('cook', '12:30')],
-    norms,
-    late,
-  );
-  assert.deepEqual(out.map((r) => r.status), ['yellow', 'green', 'red', 'red', 'other_schedule']);
-});
-
 test('нормы раздаются поварам по факту прихода, а не по именам', () => {
   // Порядок в выгрузке — не порядок прихода: первым пришёл третий по списку.
   const norms = assignCookNorms([at('06:35'), at('06:28'), at('05:58')], ['06:00', '06:30']);

@@ -356,7 +356,7 @@ function statusOf(
   config: ThresholdConfig,
 ): Status {
   return normAt
-    ? statusByNorm(row.arrivalMinutes, normAt, config, scheduleShift(config, row.shopCode), criterion)
+    ? statusByNorm(row.arrivalMinutes, normAt, config, 0)
     : statusForTime(row.arrivalMinutes, criterion, config, row.shopCode);
 }
 

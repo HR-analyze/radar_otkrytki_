@@ -4,7 +4,7 @@ import { yellowStep, normsEnabled } from '@/lib/norms';
 import { areNormsStale, isSnapshotStale, isWritable } from '@/lib/snapshot';
 import { readNorms } from '@/lib/shop-norms-store';
 import { listClosures, listSchedules, scheduleShift } from '@/lib/status';
-import { CRITERION_ORDER, type CriterionKey, type ThresholdConfig } from '@/lib/types';
+import { CRITERION_ORDER, type ThresholdConfig } from '@/lib/types';
 import { plural } from '@/lib/plural';
 
 export const dynamic = 'force-dynamic';
@@ -209,8 +209,7 @@ export default async function SettingsPage() {
             title="Другой график"
             value={
               config.rules.otherSchedule.enabled
-                ? `приход в ${config.rules.otherSchedule.after} и позже → нейтральный статус, из агрегатов исключается` +
-                  otherScheduleExceptions(config)
+                ? `приход в ${config.rules.otherSchedule.after} и позже → нейтральный статус, из агрегатов исключается`
                 : 'выключено'
             }
             note={config.rules.otherSchedule.note}
@@ -377,15 +376,4 @@ function shiftClock(clock: string, shift: number): string {
   const [h, m] = clock.split(':').map(Number);
   const total = h * 60 + m + shift;
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
-
-/** «; водитель, повара — с 10:00»: у части критериев граница своя. */
-function otherScheduleExceptions(config: ThresholdConfig): string {
-  const byTime = new Map<string, string[]>();
-  for (const [key, at] of Object.entries(config.rules.otherSchedule.afterByCriterion ?? {})) {
-    if (!at) continue;
-    const title = config.criteria[key as CriterionKey]?.title ?? key;
-    byTime.set(at, [...(byTime.get(at) ?? []), title]);
-  }
-  return [...byTime].map(([at, titles]) => `; ${titles.join(', ')} — с ${at}`).join('');
 }

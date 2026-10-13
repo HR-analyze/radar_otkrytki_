@@ -1,6 +1,6 @@
 import { isOtherSchedule, scheduleShift } from './status';
 import { parseClock } from './time';
-import type { AttendanceRow, CriterionKey, ShopNorms, Status, ThresholdConfig } from './types';
+import type { AttendanceRow, ShopNorms, Status, ThresholdConfig } from './types';
 
 /**
  * Пересчёт статусов по нормативам конкретной лавки.
@@ -38,28 +38,24 @@ export function yellowStep(config: ThresholdConfig): number {
 /**
  * Статус по норме: минуты прихода против «ЧЧ:ММ» норматива.
  *
- * `shift` — сдвиг лавки с поздним открытием (scheduleShift), и двигает он
- * только порог «другого графика». Саму норму не сдвигаем: справочник уже
- * записан в местном времени лавки (у М72 там стоит 8:00).
- *
- * До 13.10.2026 сюда приходил ноль и для порога: у М71 и М72 (норма 8:00,
- * открытие в 10:00) «другой график» начинался в 8:00 вместе с нормой, и всё
- * от 8:00 — даже приход ровно в норму — уходило в серое вместо 🟢/🟡/🔴.
+ * `shift` — сдвиг для лавки с другим временем открытия. Норма из справочника
+ * уже учитывает поздний график (у М72 в справочнике стоит 8:00), поэтому
+ * сдвигать её второй раз нельзя — сюда он приходит нулём. Аргумент оставлен
+ * явным, чтобы это решение было видно на месте вызова, а не подразумевалось.
  */
 export function statusByNorm(
   minutes: number | null,
   normAt: string,
   config: ThresholdConfig,
   shift = 0,
-  criterion?: CriterionKey,
 ): Status {
   if (minutes == null) return 'red'; // п.5.1 ТЗ: нет отметки → красный, без исключений
 
   // п.5.0: «другой график» проверяется раньше остальных правил — иначе выход
   // во вторую смену считался бы гигантским опозданием первой.
-  if (isOtherSchedule(minutes, config, shift, criterion)) return 'other_schedule';
+  if (isOtherSchedule(minutes, config, shift)) return 'other_schedule';
 
-  const norm = parseClock(normAt);
+  const norm = parseClock(normAt) + shift;
   if (minutes <= norm) return 'green';
   if (minutes <= norm + yellowStep(config)) return 'yellow';
   return 'red';
@@ -118,16 +114,15 @@ export function applyShopNorms(
 
   const out = [...rows];
 
-  // Сдвиг за поздний график двигает только порог «другого графика», норму —
-  // нет: она уже в местном времени лавки (см. statusByNorm).
+  // Норма из справочника уже записана в местном времени лавки, поэтому сдвиг
+  // за поздний график к ней не применяется — см. statusByNorm.
+  const shiftFor = (code: string): number => (byCode[code] ? 0 : scheduleShift(config, code));
+
   out.forEach((row, i) => {
     if (row.criterion !== 'driver') return;
     const normAt = byCode[row.shopCode]?.driverAt;
     if (!normAt) return;
-    out[i] = {
-      ...row,
-      status: statusByNorm(row.arrivalMinutes, normAt, config, scheduleShift(config, row.shopCode), 'driver'),
-    };
+    out[i] = { ...row, status: statusByNorm(row.arrivalMinutes, normAt, config, shiftFor(row.shopCode)) };
   });
 
   for (const [, group] of groupCooks(out)) {
@@ -143,13 +138,7 @@ export function applyShopNorms(
       if (!normAt) return;
       out[rowIndex] = {
         ...out[rowIndex],
-        status: statusByNorm(
-          out[rowIndex].arrivalMinutes,
-          normAt,
-          config,
-          scheduleShift(config, out[rowIndex].shopCode),
-          'cook',
-        ),
+        status: statusByNorm(out[rowIndex].arrivalMinutes, normAt, config, 0),
       };
     });
   }
