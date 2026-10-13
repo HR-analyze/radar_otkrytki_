@@ -262,3 +262,20 @@ test('ошибка 4xx от GitHub не повторяется', async (t) => {
   );
   assert.equal(calls, 1);
 });
+
+test('сбой журнала в PostgreSQL не роняет уже сохранённую загрузку', async () => {
+  const { appendUploadLog } = await import('./upload-log');
+  const env = { storage: process.env.RADAR_STORAGE, url: process.env.DATABASE_URL };
+  process.env.RADAR_STORAGE = 'postgres';
+  delete process.env.DATABASE_URL; // база недоступна — журнал записать нельзя
+  try {
+    await appendUploadLog([
+      { at: '2026-10-13T07:00:00Z', originalName: 'a.xls', fileName: 'a.xls', kind: 'attendance',
+        summary: '', dates: [], rows: 0, mode: 'github' },
+    ]);
+  } finally {
+    if (env.storage === undefined) delete process.env.RADAR_STORAGE;
+    else process.env.RADAR_STORAGE = env.storage;
+    if (env.url !== undefined) process.env.DATABASE_URL = env.url;
+  }
+});

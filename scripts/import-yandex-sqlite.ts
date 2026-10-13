@@ -7,7 +7,7 @@
  * Manager periods are archived only because overlapping live intervals need review.
  */
 import fs from 'node:fs';
-import { pgRows, pgTx } from '../src/lib/postgres';
+import { pgTx } from '../src/lib/postgres';
 
 type R = Record<string, unknown>;
 type ExportData = { version: 1; manual: Record<string, R[]>; radar: Record<string, R[]> };
@@ -23,7 +23,8 @@ const stats: Record<string, number> = {};
 let collisions = 0;
 let archived = 0;
 
-await pgTx(async c => {
+// No top-level await: tsx runs this file as CommonJS (package.json has no "type": "module").
+pgTx(async c => {
   for (const source of ['manual', 'radar'] as const) {
     for (const [table, records] of Object.entries(data[source])) {
       if (!Array.isArray(records)) throw new Error('Not an array: '+source+'.'+table);
@@ -69,7 +70,12 @@ await pgTx(async c => {
       }
     }
   }
-  if (!apply) await c.query('ROLLBACK'); // Safety: no persistent writes.
+  if (!apply) await c.query('ROLLBACK'); // Safety: no persistent writes, schema included.
+}, { schemaInTx: true }).then(() => {
+  console.log(JSON.stringify({mode:apply?'applied':'dry-run',oldRows:stats,archived,conflictsKeptOnRelax:collisions},null,2));
+  console.log('Next: review radar_pg_archive, especially region_periods and collisions, before switching traffic.');
+  process.exit(0); // The pg pool would otherwise keep the process alive.
+}, (e: unknown) => {
+  console.error(e);
+  process.exit(1);
 });
-console.log(JSON.stringify({mode:apply?'applied':'dry-run',oldRows:stats,archived,conflictsKeptOnRelax:collisions},null,2));
-console.log('Next: review radar_pg_archive, especially region_periods and collisions, before switching traffic.');

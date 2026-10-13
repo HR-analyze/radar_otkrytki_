@@ -63,13 +63,14 @@ export async function readUploadLog(): Promise<UploadLogEntry[]> {
 /** Дописывает записи в журнал. Не роняет загрузку, если не вышло. */
 export async function appendUploadLog(entries: readonly UploadLogEntry[]): Promise<void> {
   if (entries.length === 0) return;
-  if (process.env.RADAR_STORAGE === 'postgres') {
-    const { pgAppendUploads } = await import('./pg-manual');
-    await pgAppendUploads(entries);
-    return;
-  }
 
   try {
+    if (process.env.RADAR_STORAGE === 'postgres') {
+      const { pgAppendUploads } = await import('./pg-manual');
+      await pgAppendUploads(entries);
+      return;
+    }
+
     const db = await openManualDb();
     if (!db) return;
 
@@ -77,6 +78,7 @@ export async function appendUploadLog(entries: readonly UploadLogEntry[]): Promi
     insert(db, entries);
   } catch {
     // Журнал — удобство, а не данные: его отказ не должен ронять загрузку файла.
+    // Иначе маршрут ответит 502 на уже закоммиченные файлы, и их зальют повторно.
   }
 }
 

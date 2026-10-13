@@ -71,13 +71,22 @@ export async function pgRows<T extends Row = Row>(sql: string, values: unknown[]
   return result.rows as T[];
 }
 
-export async function pgTx<T>(fn: (c: DbClient) => Promise<T>): Promise<T> {
-  await ensurePg();
+/**
+ * `schemaInTx`: create the schema inside this transaction instead of before it.
+ * DDL in PostgreSQL is transactional, so a dry-run that rolls back leaves a
+ * fresh database untouched (scripts/import-yandex-sqlite.ts).
+ */
+export async function pgTx<T>(
+  fn: (c: DbClient) => Promise<T>,
+  options: { schemaInTx?: boolean } = {},
+): Promise<T> {
+  if (!options.schemaInTx) await ensurePg();
   const c = await getPool().connect();
   try {
     await c.query('BEGIN');
     // Serialize manual edits, seed and legacy imports in one database.
     await c.query('SELECT pg_advisory_xact_lock(117730026)');
+    if (options.schemaInTx) await c.query(SCHEMA);
     const result = await fn(c);
     await c.query('COMMIT');
     return result;
