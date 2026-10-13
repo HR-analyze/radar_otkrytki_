@@ -41,6 +41,24 @@ export interface ShopNormsEdit {
   cookAt: string[];
 }
 
+/**
+ * Содержимое `fixtures/shop-norms.json` из разобранного справочника. Одно на
+ * двоих: `npm run norms:build` и загрузку справочника кнопкой с дашборда —
+ * иначе файл, собранный руками и с сайта, однажды разошёлся бы по формату.
+ */
+export function normsSeedJson(norms: readonly ShopNorms[], source: string, builtAt = new Date()): string {
+  const seed = {
+    $comment:
+      'Нормативы открытия по лавкам. Собирается из справочника «Лавки»: npm run norms:build ' +
+      'или загрузкой справочника кнопкой на дашборде. ' +
+      'Правки с сайта сюда не попадают — они живут в базе ручных данных (см. shop-norms-store.ts).',
+    source,
+    builtAt: builtAt.toISOString().slice(0, 10),
+    norms: [...norms].sort((a, b) => a.code.localeCompare(b.code, 'ru', { numeric: true })),
+  };
+  return JSON.stringify(seed, null, 2) + '\n';
+}
+
 function seedPath(): string {
   return process.env.RADAR_SHOP_NORMS_PATH ?? path.join(process.cwd(), SHOP_NORMS_SEED_PATH);
 }

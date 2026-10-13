@@ -6,6 +6,9 @@ import { parseDepartures } from './parsers/departure';
 import { parseLegacyVitriny } from './parsers/legacy-vitriny';
 import { parseRoster } from './parsers/roster';
 import { parseShowcaseSheets, type ShowcaseSheetCell } from './parsers/showcase-sheets';
+import { parseShopNorms } from './parsers/shop-norms';
+import { normsSeedJson, readNormsSeed } from './shop-norms-store';
+import type { ShopNorms } from './types';
 import { plural } from './plural';
 import { isIgnoredRole } from './status';
 import { formatDuration, shortDate } from './time';
@@ -51,6 +54,11 @@ export interface UploadInspection {
    * поле, которого нет, в базе не трогается.
    */
   showcase: ShowcaseUploadEdit[];
+  /**
+   * Файлы, которые кладутся рядом с загруженным, — у справочника норм это
+   * разобранный shop-norms.json: снимок читает нормы из него.
+   */
+  extraFiles?: { fileName: string; buffer: Buffer }[];
   /** Что парсер пропустил или посчитал странным — короткими фразами для UI. */
   notes: string[];
   /** Предупреждения парсера целиком — для логов и отладки. */
@@ -113,6 +121,8 @@ export function canonicalFixtureName(
   if (kind === 'legacy') return `vitriny.${ext}`;
   // В fixtures/ не кладётся: имя нужно только журналу загрузок.
   if (kind === 'showcase') return `vitriny-google.${ext}`;
+  // Тот же стебель, что у прежнего normy-lavok.csv: новый справочник его вытесняет.
+  if (kind === 'norms') return `normy-lavok.${ext}`;
   if (kind === 'delivery') return `vremya-postavki.${ext}`;
   if (kind === 'roster') return `spravochnik-lavok.${ext}`;
   if (kind === 'departure') {
@@ -134,7 +144,9 @@ export function canonicalFixtureName(
 
 /** Тот же файл, но с другим расширением: vitriny.xls рядом с vitriny.xlsx. */
 export function isSupersededBy(existingName: string, newName: string): boolean {
-  const stem = (n: string) => n.replace(/\.(xls|xlsx)$/i, '').toLowerCase();
+  // csv — ради справочника норм: прежний normy-lavok.csv вытесняется загруженным
+  // normy-lavok.xlsx, иначе в fixtures/ лежали бы два исходника одних норм.
+  const stem = (n: string) => n.replace(/\.(xls|xlsx|csv)$/i, '').toLowerCase();
   return existingName !== newName && stem(existingName) === stem(newName);
 }
 
@@ -175,6 +187,7 @@ export function inspectUpload(
     const kind = byName === 'attendance' ? detectFixtureKind(sheetNames, peekGrid(buffer)) : byName;
 
     if (kind === 'showcase') return inspectShowcaseBook(displayName, buffer);
+    if (kind === 'norms') return inspectNorms(displayName, buffer);
     if (kind === 'legacy') return inspectLegacy(displayName, buffer, config);
     if (kind === 'delivery') return inspectDelivery(displayName, buffer);
     if (kind === 'roster') return inspectRoster(displayName, buffer);
@@ -536,6 +549,93 @@ export function showcaseEditsFromCells(cells: readonly ShowcaseSheetCell[]): Sho
     if (c.text) edit.texts.push(c.slot === 'afternoon' ? `16:00: ${c.text}` : c.text);
   }
   return [...byKey.values()].map(({ texts, ...edit }) => (texts.length ? { ...edit, note: texts.join('; ') } : edit));
+}
+
+/**
+ * Справочник нормативов лавок (лист «Лавки»): приезд водителя, тайминг
+ * поваров, выезд с РЦ.
+ *
+ * Кладётся в fixtures/ вместе с пересобранным shop-norms.json — так же, как
+ * `npm run norms:build`, — и действует со следующей сборки снимка. В панели —
+ * не просто «принято», а что именно поменяется по сравнению с действующими
+ * нормами: справочник правят руками, и опечатку в часе видно сразу.
+ *
+ * Правки с вкладки «Пороги» главнее справочника: лавки с ними роут перечислит
+ * отдельно (см. normsOverrideNote).
+ */
+function inspectNorms(name: string, buffer: Buffer): InspectResult {
+  const { norms, warnings } = parseShopNorms(buffer);
+  if (norms.length === 0) {
+    return { ok: false, originalName: name, error: 'Справочник норм опознан, но лавок в нём не нашлось.' };
+  }
+
+  const fileName = canonicalFixtureName('norms', [], name);
+  const { lines: changes, changed } = normsChanges(readNormsSeed(), norms);
+  const count = (pick: (n: ShopNorms) => boolean) => norms.filter(pick).length;
+  const shops = (n: number) => `${n} ${plural(n, 'лавка', 'лавки', 'лавок')}`;
+
+  const lines = [
+    ...changes,
+    ...warnings,
+    ...norms.flatMap((n) => n.warnings.map((w) => `${n.code}: ${w}`)),
+  ];
+
+  return {
+    ok: true,
+    file: {
+      originalName: name,
+      kind: 'norms',
+      fileName,
+      summary:
+        `Нормы лавок · ${shops(norms.length)}: приезд водителя у ${count((n) => !!n.driverAt)}, ` +
+        `повара у ${count((n) => n.cookAt.length > 0)}, выезд с РЦ у ${count((n) => !!n.departureAt)}`,
+      dates: [],
+      rows: norms.length,
+      shops: norms.length,
+      unknownRoles: [],
+      showcase: [],
+      extraFiles: [{ fileName: 'shop-norms.json', buffer: Buffer.from(normsSeedJson(norms, fileName), 'utf8') }],
+      notes: [
+        changes.length === 0
+          ? 'Нормы совпадают с теми, по которым радар считает сейчас, — ничего не поменяется.'
+          : `Поменяется у ${shops(changed)} — действует со следующей сборки снимка:`,
+        ...lines.slice(0, MAX_CELL_NOTES),
+        ...(lines.length > MAX_CELL_NOTES ? [`…и ещё ${lines.length - MAX_CELL_NOTES}`] : []),
+      ],
+      warnings,
+    },
+  };
+}
+
+/**
+ * «М13: повара 06:30 → 06:20» — по строке на лавку, где норма меняется, и
+ * строка про лавки, которых в новом справочнике нет. `changed` — сколько
+ * лавок затронуто.
+ */
+export function normsChanges(
+  before: readonly ShopNorms[],
+  after: readonly ShopNorms[],
+): { lines: string[]; changed: number } {
+  const old = new Map(before.map((n) => [n.code, n]));
+  const fields: [string, (n: ShopNorms) => string][] = [
+    ['водитель', (n) => n.driverAt ?? '—'],
+    ['повара', (n) => (n.cookAt.length ? n.cookAt.join(', ') : '—')],
+    ['выезд с РЦ', (n) => n.departureAt ?? '—'],
+  ];
+
+  const out: string[] = [];
+  for (const n of after) {
+    const o = old.get(n.code);
+    const diff = fields
+      .filter(([, get]) => !o || get(o) !== get(n))
+      .filter(([, get]) => o || get(n) !== '—')
+      .map(([title, get]) => (o ? `${title} ${get(o)} → ${get(n)}` : `${title} ${get(n)}`));
+    if (diff.length) out.push(`${n.code}${o ? '' : ' (новая)'}: ${diff.join(', ')}`);
+  }
+  const gone = before.filter((o) => !after.some((n) => n.code === o.code)).map((o) => o.code);
+  const changed = out.length + gone.length;
+  if (gone.length) out.push(`Нет в справочнике — нормы снимутся: ${gone.join(', ')}`);
+  return { lines: out, changed };
 }
 
 function inspectRoster(name: string, buffer: Buffer): InspectResult {

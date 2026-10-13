@@ -11,9 +11,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseShopNorms } from '../src/lib/parsers/shop-norms';
-import { SHOP_NORMS_SEED_PATH } from '../src/lib/shop-norms-store';
+import { normsSeedJson, SHOP_NORMS_SEED_PATH } from '../src/lib/shop-norms-store';
 
-const source = process.argv[2] ?? path.join('fixtures', 'normy-lavok.csv');
+// Справочник, загруженный кнопкой с дашборда, лежит как normy-lavok.xlsx и
+// вытесняет прежний CSV — берём тот, что есть.
+const source =
+  process.argv[2] ??
+  ['normy-lavok.xlsx', 'normy-lavok.csv'].map((f) => path.join('fixtures', f)).find((f) => fs.existsSync(f)) ??
+  path.join('fixtures', 'normy-lavok.csv');
 
 const { norms, warnings } = parseShopNorms(fs.readFileSync(source));
 if (norms.length === 0) {
@@ -21,16 +26,7 @@ if (norms.length === 0) {
   process.exit(1);
 }
 
-const seed = {
-  $comment:
-    'Нормативы открытия по лавкам. Собирается из справочника «Лавки»: npm run norms:build. ' +
-    'Правки с сайта сюда не попадают — они живут в data/manual.db (см. shop-norms-store.ts).',
-  source: path.basename(source),
-  builtAt: new Date().toISOString().slice(0, 10),
-  norms: [...norms].sort((a, b) => a.code.localeCompare(b.code, 'ru', { numeric: true })),
-};
-
-fs.writeFileSync(SHOP_NORMS_SEED_PATH, JSON.stringify(seed, null, 2) + '\n', 'utf8');
+fs.writeFileSync(SHOP_NORMS_SEED_PATH, normsSeedJson(norms, path.basename(source)), 'utf8');
 
 const noDriver = norms.filter((n) => !n.driverAt).map((n) => n.code);
 const noCook = norms.filter((n) => n.cookAt.length === 0).map((n) => n.code);

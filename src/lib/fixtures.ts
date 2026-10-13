@@ -28,8 +28,19 @@ export const SUPPORTED = /\.(xls|xlsx)$/i;
  * 'showcase' — книга витрин из Google-таблицы (листы «Витрины 0800/1600»).
  * Её значения идут прямо в базу ручных данных, в fixtures/ она не кладётся и
  * снимком не читается.
+ *
+ * 'norms' — справочник нормативов лавок (лист «Лавки»: приезд водителя,
+ * тайминг поваров, выезд с РЦ). Лежит в fixtures/ как normy-lavok.xlsx рядом
+ * с разобранным shop-norms.json; снимок читает только второй.
  */
-export type FixtureKind = 'legacy' | 'delivery' | 'roster' | 'departure' | 'attendance' | 'showcase';
+export type FixtureKind =
+  | 'legacy'
+  | 'delivery'
+  | 'roster'
+  | 'departure'
+  | 'attendance'
+  | 'showcase'
+  | 'norms';
 
 /** Сколько строк читать для опознания: заголовок плюс запас на «шапку». */
 const PEEK_ROWS = 30;
@@ -57,8 +68,20 @@ export function detectFixtureKind(
   if (names.includes(LEGACY_SHEET)) return 'legacy';
   if (names.includes(DELIVERY_SHEET)) return 'delivery';
   if (names.includes(ROSTER_SHEET)) return 'roster';
+  if (grid && looksLikeNorms(grid)) return 'norms';
   if (grid && looksLikeDeparture(grid)) return 'departure';
   return 'attendance';
+}
+
+/**
+ * Справочник нормативов: лист «Лавки» назван так же, как бывает назван лист
+ * любой выгрузки, — узнаём по шапке. В первой строке рядом стоят «время
+ * приезда водителя» и «количество поваров» — в выгрузках 1С такой шапки нет.
+ * Шапка — именно первая строка: так её читает parseShopNorms.
+ */
+function looksLikeNorms(grid: readonly unknown[][]): boolean {
+  const head = (grid[0] ?? []).map((c) => String(c ?? '').toLowerCase());
+  return head.some((c) => c.includes('водител')) && head.some((c) => c.includes('повар'));
 }
 
 /** Первые строки первого листа — для опознания по содержимому. */
@@ -171,6 +194,10 @@ export function readFixtures(dir: string): FixtureSet {
         continue;
       }
       roster = { name, buffer };
+    } else if (kind === 'norms') {
+      // Справочник лежит здесь как исходник shop-norms.json: снимок берёт
+      // нормы из разобранного JSON (см. shop-norms-store.ts), не отсюда.
+      continue;
     } else if (kind === 'showcase') {
       warnings.push(`${name}: книга витрин в fixtures/ не нужна — её загружают кнопкой, значения уходят в базу`);
       continue;

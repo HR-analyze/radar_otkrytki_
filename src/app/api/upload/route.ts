@@ -131,7 +131,7 @@ export async function POST(req: Request) {
       ok: true,
       mode: saved.mode,
       visible: saved.visible,
-      notes: [...saved.notes, ...showcase.notes],
+      notes: [...saved.notes, ...showcase.notes, ...(await normsOverrideNote(accepted.map((a) => a.inspection)))],
       commitUrl: saved.commitUrl,
       files: results,
     });
@@ -194,6 +194,31 @@ async function importShowcase(
       notes: [`Наполнение витрин из книги сохранить не вышло: ${e instanceof Error ? e.message : String(e)}`],
       saved: false,
     };
+  }
+}
+
+/**
+ * Правка с вкладки «Пороги» главнее справочника: у таких лавок новая таблица
+ * не подействует. Называем их поимённо — иначе загрузку справочника легко
+ * принять за неработающую.
+ */
+async function normsOverrideNote(files: readonly UploadInspection[]): Promise<string[]> {
+  if (!files.some((f) => f.kind === 'norms')) return [];
+  try {
+    const { readNorms } = await import('@/lib/shop-norms-store');
+    const manual = Object.values((await readNorms()).byCode)
+      .filter((n) => n.source === 'manual')
+      .map((n) => n.code)
+      .sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }));
+    return manual.length === 0
+      ? []
+      : [
+          `У ${manual.length} ${plural(manual.length, 'лавки', 'лавок', 'лавок')} нормы правили руками на вкладке «Пороги» — ` +
+            `для них остаётся ручная правка, а не справочник: ${manual.join(', ')}. ` +
+            'Чтобы лавка поехала по справочнику, сбросьте её правку на «Порогах».',
+        ];
+  } catch {
+    return [];
   }
 }
 
