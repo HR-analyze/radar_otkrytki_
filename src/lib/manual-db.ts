@@ -103,6 +103,22 @@ function migrate(db: BetterSqlite3.Database): void {
       PRIMARY KEY (date, shop_code)
     );
 
+    -- Фото витрины: от 1 до 5 снимков на лавку за день (см. showcase-photos.ts).
+    -- Байты лежат прямо в базе: она и так вне git и переживает деплой, а
+    -- отдельная папка с файлами — второе место, которое легко забыть в бэкапе.
+    -- id не переиспользуется (AUTOINCREMENT): адрес фото кэшируется навсегда.
+    CREATE TABLE IF NOT EXISTS showcase_photo (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      date       TEXT NOT NULL,
+      shop_code  TEXT NOT NULL,
+      mime       TEXT NOT NULL,
+      size       INTEGER NOT NULL,
+      data       BLOB NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS showcase_photo_cell ON showcase_photo (date, shop_code);
+
     -- Когда день трогали последний раз — для вкладки «История».
     CREATE TABLE IF NOT EXISTS showcase_day (
       date       TEXT PRIMARY KEY,

@@ -14,6 +14,7 @@ import {
   dayFill,
   type ShowcaseEdit,
 } from '@/lib/showcase-store';
+import { photoCounts } from '@/lib/showcase-photos';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -61,6 +62,7 @@ export async function GET(req: Request) {
   // Лавки на этот день: закрытая в список заполнения не попадает, но её
   // прошлые дни открываются как прежде (см. shopClosures).
   const shops = await listShops(date);
+  const photos = await photoCounts({ date });
 
   return NextResponse.json({
     ok: true,
@@ -94,6 +96,7 @@ export async function GET(req: Request) {
       afternoonPercent: toPercent(afternoon[s.code]),
       status: statusForFill(dayFill(values[s.code] ?? null, afternoon[s.code] ?? null), config),
       note: notes[s.code] ?? '',
+      photos: photos[`${date}|${s.code}`] ?? 0,
     })),
   });
 }
@@ -132,6 +135,7 @@ async function shopSlice(rawShop: string, rawFrom: string, rawTo: string): Promi
     );
   }
 
+  const photos = await photoCounts({ shopCode: shop.code, from, to });
   const days = dateRange(from, to)
     .filter((date) => isOpenOn(config, shop.code, date))
     .map((date) => {
@@ -143,6 +147,7 @@ async function shopSlice(rawShop: string, rawFrom: string, rawTo: string): Promi
         afternoonPercent: toPercent(afternoon),
         status: statusForFill(dayFill(fill, afternoon), config),
         note: store.notes[date]?.[shop.code] ?? '',
+        photos: photos[`${date}|${shop.code}`] ?? 0,
         updatedAt: store.touched[date] ?? null,
       };
     })

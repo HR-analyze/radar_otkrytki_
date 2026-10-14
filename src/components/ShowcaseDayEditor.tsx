@@ -5,6 +5,7 @@ import { plural } from '@/lib/plural';
 import { shiftDate } from '@/lib/showcase-range';
 import type { Status } from '@/lib/types';
 import { ClearButton } from './ClearButton';
+import { ShowcasePhotos } from './ShowcasePhotos';
 import {
   EmptyFilter,
   FILL_SLOTS,
@@ -48,6 +49,8 @@ interface ShopRow {
   status: Status;
   /** Короткая пометка: «не привезли ягоды», «витрину чинили». */
   note: string;
+  /** Сколько фото витрины приложено (0–5), см. ShowcasePhotos. */
+  photos: number;
 }
 
 interface DayData {
@@ -121,6 +124,13 @@ export function ShowcaseDayEditor({
   );
 
   const edits = useShowcaseEdits(applySaved);
+
+  /** Окно фото сообщает, сколько их стало, — значок в строке обновляется без перезагрузки дня. */
+  const setPhotoCount = useCallback((code: string, photos: number) => {
+    setData((prev) =>
+      prev ? { ...prev, shops: prev.shops.map((s) => (s.code === code ? { ...s, photos } : s)) } : prev,
+    );
+  }, []);
   const { reset, setError } = edits;
 
   const load = useCallback(
@@ -384,6 +394,7 @@ export function ShowcaseDayEditor({
                     }}
                   />
 
+
                   {/* Комментарий: поле без рамки, пока пустое, — восемьдесят
                       строк с рамками превратили бы список в решётку. Рамка
                       появляется, когда в поле что-то есть или на нём фокус. */}
@@ -405,6 +416,16 @@ export function ShowcaseDayEditor({
                     title={noteOf(shop) || 'Комментарий к лавке за этот день'}
                     aria-label={`Комментарий, ${shop.code}`}
                     className="showcase-note order-1 min-w-0 flex-1 basis-40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-xs"
+                  />
+
+                  {/* Фото — последним в разметке: Tab идёт утро → 16:00 →
+                      комментарий → фото, а на экране значок справа (order-3). */}
+                  <ShowcasePhotos
+                    date={date}
+                    shopCode={shop.code}
+                    count={shop.photos ?? 0}
+                    readOnly={readOnly}
+                    onCount={(n) => setPhotoCount(shop.code, n)}
                   />
                 </li>
               );
