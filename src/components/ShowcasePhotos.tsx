@@ -18,6 +18,13 @@ import { FIELD_STYLE, humanDate } from './showcase-ui';
  * Отправляется по одному файлу за запрос: один большой запрос с пятью
  * снимками рвётся на плохой связи целиком, а так доезжает хотя бы часть, и
  * видно, какая именно.
+ *
+ * Добавить фото можно тремя путями, кроме кнопки выбора файла:
+ *  · вставить из буфера (Ctrl+V / ⌘V), пока окно открыто, — скриншот или
+ *    снимок, скопированный из мессенджера;
+ *  · перетащить файлы в окно;
+ *  · перетащить файлы прямо на значок «📷» в строке — окно откроется само и
+ *    сразу начнёт загрузку.
  */
 
 /** Столько же, сколько принимает сервер (MAX_PHOTOS в showcase-photos.ts). */
@@ -46,6 +53,9 @@ export function ShowcasePhotos({
   onCount: (count: number) => void;
 }) {
   const [open, setOpen] = useState(false);
+  /** Файлы, брошенные на значок в строке: окно откроется и отправит их само. */
+  const [dropped, setDropped] = useState<File[]>([]);
+  const [over, setOver] = useState(false);
 
   // Без фото и без права добавлять — значок ни о чём, только шум в строке.
   if (readOnly && count === 0) return <span className="order-3 w-16 shrink-0" />;
@@ -55,14 +65,35 @@ export function ShowcasePhotos({
       <button
         type="button"
         onClick={() => setOpen(true)}
+        onDragOver={(e) => {
+          if (readOnly || !hasFiles(e.dataTransfer)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          if (readOnly || !hasFiles(e.dataTransfer)) return;
+          e.preventDefault();
+          setOver(false);
+          setDropped([...e.dataTransfer.files]);
+          setOpen(true);
+        }}
         title={
           count > 0
             ? `Фото витрины: ${count} из ${MAX_PHOTOS}`
             : `Добавить фото витрины — от 1 до ${MAX_PHOTOS}`
         }
         aria-label={`Фото витрины, ${shopCode}, ${date}: ${count} из ${MAX_PHOTOS}`}
-        className="order-3 w-16 shrink-0 rounded-lg border px-2 py-1.5 text-xs tabular-nums"
-        style={{ ...FIELD_STYLE, opacity: count > 0 ? 1 : 0.6 }}
+        className="order-3 w-16 shrink-0 rounded-lg border px-2 py-1.5 text-xs tabular-nums transition-[box-shadow,opacity]"
+        style={{
+          ...FIELD_STYLE,
+          opacity: count > 0 || over ? 1 : 0.6,
+          ...(over && {
+            borderColor: 'var(--focus)',
+            boxShadow: '0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent)',
+          }),
+        }}
       >
         📷 {count > 0 ? `${count}/${MAX_PHOTOS}` : '+'}
       </button>
@@ -71,8 +102,12 @@ export function ShowcasePhotos({
           date={date}
           shopCode={shopCode}
           readOnly={readOnly}
+          initialFiles={dropped}
           onCount={onCount}
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setOpen(false);
+            setDropped([]);
+          }}
         />
       )}
     </>
@@ -83,12 +118,15 @@ function PhotosDialog({
   date,
   shopCode,
   readOnly,
+  initialFiles,
   onCount,
   onClose,
 }: {
   date: string;
   shopCode: string;
   readOnly: boolean;
+  /** Брошенные на значок в строке — отправляются, как только загрузится список. */
+  initialFiles: File[];
   onCount: (count: number) => void;
   onClose: () => void;
 }) {
@@ -97,6 +135,12 @@ function PhotosDialog({
   const [photos, setPhotos] = useState<Photo[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Над окном тащат файлы — показываем, куда бросать. */
+  const [dragging, setDragging] = useState(false);
+  // dragenter/dragleave приходят от каждого вложенного элемента: без счётчика
+  // подсветка мигала бы, пока курсор едет по фотографиям.
+  const dragDepth = useRef(0);
+  const pending = useRef(initialFiles);
 
   useDialog(true, dialogRef);
 
@@ -141,8 +185,18 @@ function PhotosDialog({
     onCountRef.current(next.length);
   }
 
-  async function upload(selected: File[]) {
+  async function upload(all: File[]) {
     setError(null);
+    // Из проводника вместе с фото легко прихватить PDF или архив — их не
+    // шлём вовсе, а говорим сразу, без похода на сервер.
+    const selected = all.filter((f) => f.type.startsWith('image/') || f.type === '');
+    if (selected.length < all.length) {
+      setError(
+        selected.length === 0
+          ? 'Это не фото — подойдут JPEG, PNG или WebP.'
+          : `Не фото пропущено: ${all.length - selected.length}.`,
+      );
+    }
     if (selected.length === 0) return;
     if (selected.length > left) {
       setError(
@@ -193,6 +247,37 @@ function PhotosDialog({
     }
   }
 
+  // Брошенное на значок в строке — отправляем, как только известно, сколько
+  // места осталось: лимит пять на день, а список ещё грузился.
+  const uploadRef = useRef(upload);
+  useEffect(() => {
+    uploadRef.current = upload;
+  });
+  useEffect(() => {
+    if (photos == null || pending.current.length === 0) return;
+    const files = pending.current;
+    pending.current = [];
+    void uploadRef.current(files);
+  }, [photos]);
+
+  // Вставка из буфера: пока окно открыто, Ctrl+V кладёт снимок сюда.
+  const canAddRef = useRef(false);
+  useEffect(() => {
+    canAddRef.current = !readOnly && photos != null && !busy;
+  });
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = [...(e.clipboardData?.files ?? [])];
+      if (files.length === 0) return;
+      e.preventDefault();
+      if (canAddRef.current) void uploadRef.current(files);
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, []);
+
+  const canAdd = !readOnly && photos != null && left > 0 && !busy;
+
   return createPortal(
     /* Через портал в body — как окно загрузки выгрузок: внутри строки списка
        position: fixed обрезался бы родителем с overflow: hidden. */
@@ -200,15 +285,60 @@ function PhotosDialog({
       className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto p-4 sm:p-8"
       style={{ background: 'color-mix(in srgb, #0f172a 55%, transparent)' }}
       onClick={() => !busy && onClose()}
+      // Бросок ловим на всём затемнении, а не только на окне: промах мимо окна
+      // иначе открыл бы фото в браузере вместо радара.
+      onDragEnter={(e) => {
+        if (!hasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        dragDepth.current += 1;
+        setDragging(true);
+      }}
+      onDragOver={(e) => {
+        if (!hasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = canAdd ? 'copy' : 'none';
+      }}
+      onDragLeave={() => {
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) setDragging(false);
+      }}
+      onDrop={(e) => {
+        if (!hasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        dragDepth.current = 0;
+        setDragging(false);
+        if (canAdd) void upload([...e.dataTransfer.files]);
+      }}
     >
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="photos-title"
-        className="surface w-full max-w-2xl p-5"
+        className="surface relative w-full max-w-2xl p-5"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Подсветка поверх окна, пока над ним тащат файлы. pointer-events
+            выключены: иначе слой сам ловил бы dragleave и мигал. */}
+        {dragging && !readOnly && (
+          <div
+            className="pointer-events-none absolute inset-2 z-10 flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed text-center"
+            style={{
+              borderColor: canAdd ? 'var(--focus)' : 'var(--red)',
+              background: `color-mix(in srgb, var(--surface) 88%, ${canAdd ? 'var(--focus)' : 'var(--red)'})`,
+            }}
+          >
+            <span className="text-3xl">{canAdd ? '📥' : '⛔'}</span>
+            <span className="text-sm font-medium">
+              {canAdd
+                ? 'Отпустите, чтобы добавить'
+                : left <= 0
+                  ? `Уже ${MAX_PHOTOS} из ${MAX_PHOTOS} — удалите лишнее`
+                  : 'Подождите, идёт отправка…'}
+            </span>
+            {canAdd && <span className="text-xs muted">можно ещё {left} из {MAX_PHOTOS}</span>}
+          </div>
+        )}
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id="photos-title" className="text-lg font-semibold">
@@ -273,6 +403,9 @@ function PhotosDialog({
             >
               <span className="text-2xl">＋</span>
               <span>Добавить фото</span>
+              <span className="px-2 text-center text-xs muted">
+                или перетащите сюда / вставьте Ctrl+V
+              </span>
               <span className="text-xs muted">ещё {left} из {MAX_PHOTOS}</span>
               <input
                 ref={fileRef}
@@ -293,7 +426,7 @@ function PhotosDialog({
           {busy ??
             (readOnly
               ? 'Просмотр: добавлять и удалять фото здесь нельзя.'
-              : `От 1 до ${MAX_PHOTOS} фото на лавку за день. Можно выбрать несколько сразу; перед отправкой они ужимаются, так что и с мобильного интернета уходят быстро. Клик по фото — открыть в полном размере.`)}
+              : `От 1 до ${MAX_PHOTOS} фото на лавку за день. Выбрать файлы, перетащить их в окно или на значок 📷 в строке, вставить скриншот через Ctrl+V — как удобнее. Перед отправкой фото ужимаются, так что и с мобильного интернета уходят быстро. Клик по фото — открыть в полном размере.`)}
         </p>
       </div>
     </div>,
@@ -332,6 +465,11 @@ async function shrink(file: File): Promise<Blob> {
   } catch {
     return file;
   }
+}
+
+/** Тащат именно файлы, а не выделенный текст или ссылку со страницы. */
+function hasFiles(dt: DataTransfer | null): boolean {
+  return !!dt && [...dt.types].includes('Files');
 }
 
 function jpegName(name: string): string {
