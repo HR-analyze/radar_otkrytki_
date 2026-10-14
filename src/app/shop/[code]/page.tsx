@@ -17,6 +17,7 @@ import { RATING_COMPONENT_TITLE } from '@/lib/rating';
 import { plural } from '@/lib/plural';
 import { ShopSwitcher } from '@/components/ShopFilter';
 import { Hint } from '@/components/Hint';
+import { photosByDate, type ShowcasePhoto } from '@/lib/showcase-photos';
 
 /**
  * Колонки списка сотрудников. Одна константа на заголовок и на строки —
@@ -29,6 +30,47 @@ const PEOPLE_GRID =
 const ROLE_CRITERIA: CriterionKey[] = ['driver', 'cook', 'cashier', 'barista', 'hallDeputy'];
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Фото витрины за день — сразу под плашками критериев, рядом с процентом
+ * наполнения: снимок подтверждает цифру, и смотреть их нужно вместе.
+ * Клик открывает фото в полном размере в новой вкладке. Добавляют и удаляют
+ * их на вкладке «Витрины» (кнопка 📷 в строке лавки).
+ */
+function ShowcasePhotoStrip({
+  shopCode,
+  date,
+  photos,
+}: {
+  shopCode: string;
+  date: string;
+  photos: ShowcasePhoto[];
+}) {
+  return (
+    <div className="mt-3">
+      <p className="text-xs muted">📷 Фото витрины · {photos.length}</p>
+      <div className="mt-1.5 flex flex-wrap gap-2">
+        {photos.map((photo, i) => (
+          <a
+            key={photo.id}
+            href={`/api/showcase/photos/${photo.id}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Открыть в полном размере"
+          >
+            <img
+              src={`/api/showcase/photos/${photo.id}`}
+              alt={`Витрина ${shopCode}, ${shortDate(date)}, фото ${i + 1}`}
+              loading="lazy"
+              className="h-24 w-32 rounded-lg border object-cover transition-opacity hover:opacity-85 sm:h-28 sm:w-36"
+              style={{ borderColor: 'var(--border)' }}
+            />
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const SOURCE_LABEL: Record<ShopDayPerson['arrivalSource'], string> = {
   mark: 'реальная отметка',
@@ -52,9 +94,10 @@ export default async function ShopPage({
   const shop = await getShop(decodeURIComponent(code));
   if (!shop) notFound();
 
-  const [history, shops] = await Promise.all([
+  const [history, shops, photos] = await Promise.all([
     shopHistory(shop.code, p.from, p.to),
     listShops(p.from),
+    photosByDate(shop.code, p.from, p.to),
   ]);
   const schedule = scheduleFor(config, shop.code);
   const shift = scheduleShift(config, shop.code);
@@ -179,6 +222,10 @@ export default async function ShopPage({
                 );
               })}
             </div>
+
+            {photos[day.date]?.length > 0 && (
+              <ShowcasePhotoStrip shopCode={shop.code} date={day.date} photos={photos[day.date]} />
+            )}
 
             {/* Как сложился общий результат: та же формула, что на листе
                 заказчика — (водитель + сотрудники + витрина) / 3. */}

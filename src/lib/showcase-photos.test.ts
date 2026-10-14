@@ -89,3 +89,14 @@ test('мусорный id — просто «нет такого фото», а 
   assert.equal(await photos.readPhoto('abc'), null);
   assert.equal(await photos.deletePhoto('-1'), null);
 });
+
+test('карточка лавки получает фото по дням периода', async () => {
+  const byDate = await photos.photosByDate('М12', '2026-10-01', '2026-10-31');
+  assert.deepEqual(Object.keys(byDate), ['2026-10-14', '2026-10-15']);
+  assert.equal(byDate['2026-10-14'].length, 5);
+  // Старые — первыми, чужая лавка в выборку не попадает.
+  const ids = byDate['2026-10-14'].map((p) => Number(p.id));
+  assert.deepEqual(ids, [...ids].sort((a, b) => a - b));
+  assert.ok(byDate['2026-10-14'].every((p) => p.shopCode === 'М12'));
+  assert.deepEqual(await photos.photosByDate('М12', '2026-11-01', '2026-11-30'), {});
+});

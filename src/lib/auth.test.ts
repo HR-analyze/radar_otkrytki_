@@ -66,6 +66,16 @@ test('крон-роуты и страница входа паролем не з�
   }
 });
 
+test('фото витрины смотрят все, а список и загрузка — под паролем', () => {
+  // Файл фото показывает открытая карточка лавки.
+  assert.equal(isPublic('/api/showcase/photos/42'), true);
+  // Загрузка и список — без id; мусор после id — не файл фото.
+  for (const p of ['/api/showcase/photos', '/api/showcase/photos/', '/api/showcase/photos/42/x', '/api/showcase/photos/abc']) {
+    assert.equal(isPublic(p), false, `${p} не должен открываться без пароля`);
+    assert.equal(isManaged(p), true, `${p} должен быть под паролем`);
+  }
+});
+
 test('пароль спрашивается на вкладках, где данные правят', () => {
   const managed = [
     '/showcase',

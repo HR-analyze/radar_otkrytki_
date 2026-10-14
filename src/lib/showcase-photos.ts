@@ -84,6 +84,38 @@ export async function listPhotos(date: string, shopCode: string): Promise<Showca
 }
 
 /**
+ * Фото одной лавки за период, по дням — для карточки лавки: там снимки
+ * стоят прямо у дня, рядом с процентом наполнения. Без байтов.
+ */
+export async function photosByDate(
+  shopCode: string,
+  from: string,
+  to: string,
+): Promise<Record<string, ShowcasePhoto[]>> {
+  let rows: PhotoRow[];
+  if (usePg()) {
+    const { pgRows } = await import('./postgres');
+    rows = await pgRows<PhotoRow>(
+      'SELECT id::text AS id,date,shop_code,mime,size,created_at FROM radar_pg_showcase_photo ' +
+        'WHERE shop_code=$1 AND date BETWEEN $2 AND $3 ORDER BY date,id',
+      [shopCode, from, to],
+    );
+  } else {
+    const db = await openManualDb();
+    if (!db) return {};
+    rows = db
+      .prepare(
+        `SELECT CAST(id AS TEXT) AS id, date, shop_code, mime, size, created_at FROM showcase_photo
+         WHERE shop_code = ? AND date BETWEEN ? AND ? ORDER BY date, id`,
+      )
+      .all(shopCode, from, to) as PhotoRow[];
+  }
+  const out: Record<string, ShowcasePhoto[]> = {};
+  for (const r of rows) (out[r.date] ??= []).push(fromRow(r));
+  return out;
+}
+
+/**
  * Сколько фото у каждой лавки — для значка «📷 3» в строке редактора.
  * Ключ — «дата|лавка». Фильтр — либо один день, либо одна лавка за период:
  * ровно те два разреза, что у редактора витрин.

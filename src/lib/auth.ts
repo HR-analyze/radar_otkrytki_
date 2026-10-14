@@ -51,9 +51,21 @@ export function passwordSet(): boolean {
  */
 export function isPublic(pathname: string): boolean {
   return (
-    pathname === '/login' || pathname === '/api/login' || pathname.startsWith('/api/cron/')
+    pathname === '/login' ||
+    pathname === '/api/login' ||
+    pathname.startsWith('/api/cron/') ||
+    PHOTO_FILE.test(pathname)
   );
 }
+
+/**
+ * Файл фото витрины — /api/showcase/photos/<id>. Его показывает карточка
+ * лавки, а она открыта всем, как и процент наполнения на ней же: закрой файл
+ * паролем — у всех без входа вместо снимков будут битые картинки. Удаление
+ * по тому же адресу проверяет пароль само (см. роут), список и загрузка —
+ * /api/showcase/photos без id — остаются под паролем.
+ */
+const PHOTO_FILE = /^\/api\/showcase\/photos\/\d+$/;
 
 /** Нужен ли для пути пароль. */
 export function isManaged(pathname: string): boolean {

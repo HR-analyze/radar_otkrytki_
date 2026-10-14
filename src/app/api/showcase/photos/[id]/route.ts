@@ -9,12 +9,14 @@ export const dynamic = 'force-dynamic';
 /** Одно фото витрины: GET — сам файл для <img>, DELETE — убрать. */
 
 /**
+ * Смотреть фото может любой, кто видит карточку лавки (см. isPublic в auth.ts);
+ * удалить — только с паролем, это проверяет DELETE ниже.
+ *
  * Кэш — только с проверкой на каждом показе (no-cache + ETag). Не immutable:
- * удалённое фото иначе оставалось бы в кэше браузера, а после смены пароля
- * открывалось бы мимо proxy. Сам снимок под id не меняется, поэтому повторный
- * показ — это короткий ответ 304 без байтов.
+ * удалённое фото иначе оставалось бы в кэше браузера. Сам снимок под id не
+ * меняется, поэтому повторный показ — это короткий ответ 304 без байтов.
  */
-const CACHE = { 'Cache-Control': 'private, no-cache', Vary: 'Cookie' } as const;
+const CACHE = { 'Cache-Control': 'private, no-cache' } as const;
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
