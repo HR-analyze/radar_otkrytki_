@@ -8,10 +8,25 @@ export const dynamic = 'force-dynamic';
 
 /** Одно фото витрины: GET — сам файл для <img>, DELETE — убрать. */
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+/**
+ * Кэш — только с проверкой на каждом показе (no-cache + ETag). Не immutable:
+ * удалённое фото иначе оставалось бы в кэше браузера, а после смены пароля
+ * открывалось бы мимо proxy. Сам снимок под id не меняется, поэтому повторный
+ * показ — это короткий ответ 304 без байтов.
+ */
+const CACHE = { 'Cache-Control': 'private, no-cache', Vary: 'Cookie' } as const;
+
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const photo = await readPhoto(id);
-  if (!photo) return NextResponse.json({ ok: false, error: 'Фото не найдено' }, { status: 404 });
+  if (!photo) {
+    return NextResponse.json({ ok: false, error: 'Фото не найдено' }, { status: 404, headers: CACHE });
+  }
+
+  const etag = `"photo-${photo.id}"`;
+  if (req.headers.get('if-none-match') === etag) {
+    return new Response(null, { status: 304, headers: { ...CACHE, ETag: etag } });
+  }
 
   const ext = photo.mime.split('/')[1].replace('jpeg', 'jpg');
   return new Response(new Uint8Array(photo.data), {
@@ -20,9 +35,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       'Content-Type': photo.mime,
       'Content-Length': String(photo.data.length),
       'X-Content-Type-Options': 'nosniff',
-      // id не переиспользуется, а фото не правится — только удаляется целиком.
-      // private: вкладка под паролем, общим кэшам прокси снимок не отдаём.
-      'Cache-Control': 'private, max-age=31536000, immutable',
+      ...CACHE,
+      ETag: etag,
       'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(
         `${photo.shopCode}_${photo.date}_${photo.id}.${ext}`,
       )}`,

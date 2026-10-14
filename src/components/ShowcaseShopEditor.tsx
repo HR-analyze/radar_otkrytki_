@@ -478,13 +478,6 @@ export function ShowcaseShopEditor({
                     }}
                   />
 
-                  <ShowcasePhotos
-                    date={day.date}
-                    shopCode={code}
-                    count={day.photos ?? 0}
-                    readOnly={readOnly}
-                    onCount={(n) => setPhotoCount(day.date, n)}
-                  />
 
                   <input
                     value={noteOf(day)}
@@ -509,6 +502,16 @@ export function ShowcaseShopEditor({
                     title={noteOf(day) || 'Комментарий к лавке за этот день'}
                     aria-label={`Комментарий, ${code}, ${day.date}`}
                     className="showcase-note order-1 min-w-0 flex-1 basis-40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-xs"
+                  />
+
+                  {/* Фото — последним в разметке: Tab не должен застревать
+                      между 16:00 и комментарием (см. дневной редактор). */}
+                  <ShowcasePhotos
+                    date={day.date}
+                    shopCode={code}
+                    count={day.photos ?? 0}
+                    readOnly={readOnly}
+                    onCount={(n) => setPhotoCount(day.date, n)}
                   />
                 </li>
               );

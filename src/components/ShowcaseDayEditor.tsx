@@ -394,13 +394,6 @@ export function ShowcaseDayEditor({
                     }}
                   />
 
-                  <ShowcasePhotos
-                    date={date}
-                    shopCode={shop.code}
-                    count={shop.photos ?? 0}
-                    readOnly={readOnly}
-                    onCount={(n) => setPhotoCount(shop.code, n)}
-                  />
 
                   {/* Комментарий: поле без рамки, пока пустое, — восемьдесят
                       строк с рамками превратили бы список в решётку. Рамка
@@ -423,6 +416,16 @@ export function ShowcaseDayEditor({
                     title={noteOf(shop) || 'Комментарий к лавке за этот день'}
                     aria-label={`Комментарий, ${shop.code}`}
                     className="showcase-note order-1 min-w-0 flex-1 basis-40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-xs"
+                  />
+
+                  {/* Фото — последним в разметке: Tab идёт утро → 16:00 →
+                      комментарий → фото, а на экране значок справа (order-3). */}
+                  <ShowcasePhotos
+                    date={date}
+                    shopCode={shop.code}
+                    count={shop.photos ?? 0}
+                    readOnly={readOnly}
+                    onCount={(n) => setPhotoCount(shop.code, n)}
                   />
                 </li>
               );
