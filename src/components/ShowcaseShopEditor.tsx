@@ -12,6 +12,7 @@ import {
 import { todayIso } from '@/lib/time';
 import type { Status } from '@/lib/types';
 import { ClearButton } from './ClearButton';
+import { ShowcasePhotos } from './ShowcasePhotos';
 import {
   EmptyFilter,
   FILL_SLOTS,
@@ -54,6 +55,8 @@ interface DayRow {
   /** Статус итога дня — среднего двух замеров. */
   status: Status;
   note: string;
+  /** Сколько фото витрины приложено (0–5), см. ShowcasePhotos. */
+  photos: number;
   updatedAt: string | null;
 }
 
@@ -150,6 +153,13 @@ export function ShowcaseShopEditor({
   }, []);
 
   const edits = useShowcaseEdits(applySaved);
+
+  /** Окно фото сообщает, сколько их стало, — значок в строке обновляется без перезагрузки. */
+  const setPhotoCount = useCallback((date: string, photos: number) => {
+    setData((prev) =>
+      prev ? { ...prev, days: prev.days.map((d) => (d.date === date ? { ...d, photos } : d)) } : prev,
+    );
+  }, []);
   const { reset, setError } = edits;
 
   const load = useCallback(
@@ -466,6 +476,14 @@ export function ShowcaseShopEditor({
                         focusAt(i - 1, field);
                       }
                     }}
+                  />
+
+                  <ShowcasePhotos
+                    date={day.date}
+                    shopCode={code}
+                    count={day.photos ?? 0}
+                    readOnly={readOnly}
+                    onCount={(n) => setPhotoCount(day.date, n)}
                   />
 
                   <input

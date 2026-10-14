@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS radar_pg_showcase_note (
   date TEXT NOT NULL, shop_code TEXT NOT NULL, note TEXT NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY(date, shop_code));
 CREATE TABLE IF NOT EXISTS radar_pg_showcase_day (date TEXT PRIMARY KEY, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS radar_pg_showcase_photo (
+  id BIGSERIAL PRIMARY KEY, date TEXT NOT NULL, shop_code TEXT NOT NULL,
+  mime TEXT NOT NULL, size INTEGER NOT NULL, data BYTEA NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS radar_pg_showcase_photo_cell ON radar_pg_showcase_photo(date, shop_code);
 CREATE TABLE IF NOT EXISTS radar_pg_showcase_audit (
   id BIGSERIAL PRIMARY KEY, at TEXT NOT NULL, date TEXT NOT NULL, shop_code TEXT NOT NULL,
   field TEXT NOT NULL, old_value TEXT, new_value TEXT, source TEXT NOT NULL,

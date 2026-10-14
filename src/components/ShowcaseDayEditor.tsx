@@ -5,6 +5,7 @@ import { plural } from '@/lib/plural';
 import { shiftDate } from '@/lib/showcase-range';
 import type { Status } from '@/lib/types';
 import { ClearButton } from './ClearButton';
+import { ShowcasePhotos } from './ShowcasePhotos';
 import {
   EmptyFilter,
   FILL_SLOTS,
@@ -48,6 +49,8 @@ interface ShopRow {
   status: Status;
   /** Короткая пометка: «не привезли ягоды», «витрину чинили». */
   note: string;
+  /** Сколько фото витрины приложено (0–5), см. ShowcasePhotos. */
+  photos: number;
 }
 
 interface DayData {
@@ -121,6 +124,13 @@ export function ShowcaseDayEditor({
   );
 
   const edits = useShowcaseEdits(applySaved);
+
+  /** Окно фото сообщает, сколько их стало, — значок в строке обновляется без перезагрузки дня. */
+  const setPhotoCount = useCallback((code: string, photos: number) => {
+    setData((prev) =>
+      prev ? { ...prev, shops: prev.shops.map((s) => (s.code === code ? { ...s, photos } : s)) } : prev,
+    );
+  }, []);
   const { reset, setError } = edits;
 
   const load = useCallback(
@@ -382,6 +392,14 @@ export function ShowcaseDayEditor({
                         focusAt(i - 1, field);
                       }
                     }}
+                  />
+
+                  <ShowcasePhotos
+                    date={date}
+                    shopCode={shop.code}
+                    count={shop.photos ?? 0}
+                    readOnly={readOnly}
+                    onCount={(n) => setPhotoCount(shop.code, n)}
                   />
 
                   {/* Комментарий: поле без рамки, пока пустое, — восемьдесят
