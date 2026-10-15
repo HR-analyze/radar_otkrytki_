@@ -12,9 +12,14 @@ import { FIELD_STYLE, humanDate } from './showcase-ui';
  * общее для обоих редакторов — дневного и полавочного: ключ, как и у
  * процентов, «дата + лавка».
  *
- * Снимок с телефона весит 3–8 МБ, а на точке часто мобильный интернет. Перед
- * отправкой фото ужимается здесь же, в браузере, до 1600 px по длинной
- * стороне — это 200–500 КБ, и на витрине по-прежнему видно каждую полку.
+ * Картинка хранится такой, какой её загрузили: скриншот или фото до 3 МБ в
+ * JPEG, PNG или WebP уходит на сервер байт в байт, без пережатия и обрезки.
+ * Ужимается только тяжёлое — снимок с камеры на 3–8 МБ: до 2560 px по длинной
+ * стороне, пропорции те же. На точке часто мобильный интернет, а мелкий текст
+ * ценников на 2560 px ещё читается.
+ *
+ * Превью тоже не обрезает: картинка вписывается целиком, длинный скриншот
+ * с телефона показывается длинным, а не срезанным до прямоугольника.
  * Отправляется по одному файлу за запрос: один большой запрос с семью
  * снимками рвётся на плохой связи целиком, а так доезжает хотя бы часть, и
  * видно, какая именно.
@@ -29,8 +34,11 @@ import { FIELD_STYLE, humanDate } from './showcase-ui';
 
 /** Столько же, сколько принимает сервер (MAX_PHOTOS в showcase-photos.ts). */
 const MAX_PHOTOS = 7;
-const MAX_SIDE = 1600;
-const JPEG_QUALITY = 0.82;
+const MAX_SIDE = 2560;
+/** Качество по убыванию: если файл всё ещё тяжелее лимита — следующая ступень. */
+const JPEG_QUALITY = [0.88, 0.75, 0.6];
+/** До этого размера JPEG/PNG/WebP не трогаем — столько же хранит сервер. */
+const KEEP_AS_IS_BYTES = 3 * 1024 * 1024;
 
 interface Photo {
   id: string;
@@ -376,8 +384,10 @@ function PhotosDialog({
                   src={`/api/showcase/photos/${p.id}`}
                   alt={`Витрина ${shopCode}, ${humanDate(date)}, фото ${i + 1}`}
                   loading="lazy"
-                  className="aspect-[4/3] w-full rounded-lg border object-cover"
-                  style={{ borderColor: 'var(--border)' }}
+                  // object-contain: картинка целиком, в своих пропорциях — поля
+                  // по краям вместо срезанных краёв самого снимка.
+                  className="aspect-[4/3] w-full rounded-lg border object-contain"
+                  style={{ borderColor: 'var(--border)', background: 'var(--neutral-soft)' }}
                 />
               </a>
               {!readOnly && (
@@ -427,7 +437,7 @@ function PhotosDialog({
           {busy ??
             (readOnly
               ? 'Просмотр: добавлять и удалять фото здесь нельзя.'
-              : `От 1 до ${MAX_PHOTOS} фото на лавку за день. Выбрать файлы, перетащить их в окно или на значок 📷 в строке, вставить скриншот через Ctrl+V — как удобнее. Перед отправкой фото ужимаются, так что и с мобильного интернета уходят быстро. Клик по фото — открыть в полном размере.`)}
+              : `От 1 до ${MAX_PHOTOS} фото на лавку за день. Выбрать файлы, перетащить их в окно или на значок 📷 в строке, вставить скриншот через Ctrl+V — как удобнее. Картинка сохраняется как есть, без обрезки; ужимаются только тяжёлые фото с камеры (больше 3 МБ). Клик по фото — открыть в полном размере.`)}
         </p>
       </div>
     </div>,
@@ -436,11 +446,13 @@ function PhotosDialog({
 }
 
 /**
- * Ужимает снимок до MAX_SIDE по длинной стороне и перекодирует в JPEG.
- * Не получилось (браузер не умеет формат, например HEIC на компьютере) —
- * уходит исходный файл, а сервер честно скажет, что не принял.
+ * Готовит файл к отправке. Обычный скриншот или фото до 3 МБ уходит как есть —
+ * «какой загрузили, такой и лежит». Тяжёлое ужимается до MAX_SIDE по длинной
+ * стороне в JPEG, пропорции сохраняются. Не получилось открыть — уходит
+ * исходник, а сервер честно скажет, если не принял.
  */
 async function shrink(file: File): Promise<Blob> {
+  if (/^image\/(jpeg|png|webp)$/.test(file.type) && file.size <= KEEP_AS_IS_BYTES) return file;
   try {
     // createImageBitmap по умолчанию учитывает поворот из EXIF — иначе
     // снимки с телефона ложились бы на бок.
@@ -456,10 +468,11 @@ async function shrink(file: File): Promise<Blob> {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close();
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY),
-    );
-    // Маленький скриншот перекодирование может и раздуть — тогда шлём как есть.
+    let blob: Blob | null = null;
+    for (const quality of JPEG_QUALITY) {
+      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+      if (!blob || blob.size <= KEEP_AS_IS_BYTES) break;
+    }
     return blob && (blob.size < file.size || !/^image\/(jpeg|png|webp)$/.test(file.type))
       ? blob
       : file;

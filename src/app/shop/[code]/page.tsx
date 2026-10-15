@@ -62,8 +62,11 @@ function ShowcasePhotoStrip({
               src={`/api/showcase/photos/${photo.id}`}
               alt={`Витрина ${shopCode}, ${shortDate(date)}, фото ${i + 1}`}
               loading="lazy"
-              className="h-24 w-32 rounded-lg border object-cover transition-opacity hover:opacity-85 sm:h-28 sm:w-36"
-              style={{ borderColor: 'var(--border)' }}
+              // Высота общая, ширина — своя у каждого снимка: картинка
+              // показывается целиком, в тех пропорциях, в каких её загрузили.
+              // Слишком широкую панораму сдерживает max-w и object-contain.
+              className="h-28 w-auto max-w-[18rem] rounded-lg border object-contain transition-opacity hover:opacity-85 sm:h-36"
+              style={{ borderColor: 'var(--border)', background: 'var(--neutral-soft)' }}
             />
           </a>
         ))}
