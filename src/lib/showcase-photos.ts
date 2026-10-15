@@ -17,6 +17,11 @@ import { openManualDb } from './manual-db';
  * ~1600 px по длинной стороне (см. ShowcasePhotos.tsx), сюда доезжает
  * 200–500 КБ. Сервер всё равно проверяет размер и сам формат по первым
  * байтам: файлу с расширением .jpg верить на слово нельзя.
+ *
+ * Формат на входе — любой картиночный. Что браузер умеет открыть, он сам
+ * перекодирует в JPEG. Что не умеет (HEIC с айфона в Chrome, TIFF) — приходит
+ * как есть, и в JPEG его переводит сервер: см. normalizePhoto. Хранится всегда
+ * JPEG, PNG или WebP — то, что покажет любой браузер.
  */
 
 /**
@@ -24,8 +29,16 @@ import { openManualDb } from './manual-db';
  * Было 5 — по просьбе с 15.10.2026 стало 7: на больших лавках не хватало.
  */
 export const MAX_PHOTOS = 7;
-/** Потолок на один файл после сжатия в браузере — с запасом на PNG-скриншот. */
+/** Потолок на один хранимый файл — с запасом на PNG-скриншот. */
 export const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+/**
+ * Потолок на присланный файл. Больше хранимого: HEIC или TIFF, которые
+ * браузер не открыл, приходят несжатыми, и ужимает их уже сервер. Под него же
+ * поднят лимит тела запроса в next.config.ts (proxyClientMaxBodySize).
+ */
+export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+/** Длинная сторона после пережатия на сервере — та же, что в браузере. */
+const MAX_SIDE = 1600;
 
 export type PhotoMime = 'image/jpeg' | 'image/png' | 'image/webp';
 
@@ -44,6 +57,66 @@ export interface PhotoFile {
 }
 
 const usePg = (): boolean => process.env.RADAR_STORAGE === 'postgres';
+
+/** Файл не картинка или картинка, которую не открыть. Текст — для человека. */
+export class PhotoFormatError extends Error {}
+
+/**
+ * Приводит присланный файл к тому, что можно хранить и показывать.
+ *
+ *  · JPEG / PNG / WebP не больше MAX_PHOTO_BYTES — как есть: браузер уже ужал.
+ *  · Всё остальное (HEIC, AVIF, TIFF, GIF, крупный PNG…) — в JPEG до 1600 px
+ *    по длинной стороне, с поворотом по EXIF и белым фоном вместо прозрачного.
+ *
+ * HEIC с айфона — особый случай: это кодек HEVC, а в сборку sharp он не входит
+ * (патенты), sharp читает только AVIF-разновидность HEIF. Такой файл сначала
+ * разворачивает heic-convert (libheif в WebAssembly), потом ужимает sharp.
+ *
+ * SVG не принимаем: это не снимок, а документ, который может тянуть внешние
+ * ресурсы. Браузер растрирует его сам, сюда SVG доходит, только если не смог.
+ */
+export async function normalizePhoto(data: Buffer): Promise<PhotoFile> {
+  const mime = sniffImage(data);
+  if (mime && data.length <= MAX_PHOTO_BYTES) return { mime, data };
+  if (looksLikeSvg(data)) {
+    throw new PhotoFormatError('SVG не подходит — пришлите снимок или скриншот (PNG, JPEG, HEIC…)');
+  }
+
+  const { default: sharp } = await import('sharp');
+  const toJpeg = (input: Buffer) =>
+    sharp(input, { animated: false, limitInputPixels: 100_000_000 })
+      .rotate()
+      .resize({ width: MAX_SIDE, height: MAX_SIDE, fit: 'inside', withoutEnlargement: true })
+      .flatten({ background: '#ffffff' })
+      .jpeg({ quality: 82, mozjpeg: true })
+      .toBuffer();
+
+  try {
+    return { mime: 'image/jpeg', data: await toJpeg(data) };
+  } catch {
+    // Не открылось — возможно, HEIC на HEVC. Ниже — вторая попытка.
+  }
+  if (isHeif(data)) {
+    try {
+      const { default: convert } = await import('heic-convert');
+      const jpeg = Buffer.from(await convert({ buffer: data, format: 'JPEG', quality: 0.9 }));
+      return { mime: 'image/jpeg', data: await toJpeg(jpeg) };
+    } catch {
+      throw new PhotoFormatError('HEIC не удалось открыть — файл повреждён или это не фото');
+    }
+  }
+  throw new PhotoFormatError('Не удалось открыть картинку — формат не распознан');
+}
+
+/** HEIF/HEIC/AVIF: контейнер ISO BMFF, в байтах 4–8 — «ftyp». */
+function isHeif(data: Uint8Array): boolean {
+  return data.length >= 12 && String.fromCharCode(...data.subarray(4, 8)) === 'ftyp';
+}
+
+function looksLikeSvg(data: Uint8Array): boolean {
+  const head = Buffer.from(data.subarray(0, 512)).toString('utf8').trimStart().toLowerCase();
+  return head.startsWith('<svg') || (head.startsWith('<?xml') && head.includes('<svg'));
+}
 
 /**
  * Формат по сигнатуре файла, а не по заголовку из браузера: заголовок шлёт

@@ -3,11 +3,12 @@ import { COOKIE, isUnlocked } from '@/lib/auth';
 import { canEditShowcase, showcaseEditHint } from '@/lib/showcase-store';
 import {
   MAX_PHOTOS,
-  MAX_PHOTO_BYTES,
+  MAX_UPLOAD_BYTES,
+  PhotoFormatError,
   PhotoLimitError,
   addPhotos,
   listPhotos,
-  sniffImage,
+  normalizePhoto,
   type PhotoFile,
 } from '@/lib/showcase-photos';
 
@@ -48,6 +49,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: showcaseEditHint() }, { status: 503 });
   }
 
+  // Файл по одному на запрос (так шлёт окно фото); тело заметно больше лимита
+  // proxy обрежет, и разбор формы упал бы с невнятной ошибкой. Отвечаем по-людски
+  // раньше, по заголовку.
+  const length = Number(req.headers.get('content-length') ?? 0);
+  if (length > MAX_UPLOAD_BYTES + 1024 * 1024) {
+    return NextResponse.json(
+      { ok: false, error: `Файл больше ${MAX_UPLOAD_BYTES / 1024 / 1024} МБ — такой не принимается` },
+      { status: 413 },
+    );
+  }
+
   let form: FormData;
   try {
     form = await req.formData();
@@ -68,21 +80,19 @@ export async function POST(req: NextRequest) {
 
   const files: PhotoFile[] = [];
   for (const f of raw) {
-    if (f.size > MAX_PHOTO_BYTES) {
+    if (f.size > MAX_UPLOAD_BYTES) {
       return NextResponse.json(
-        { ok: false, error: `«${f.name}» больше ${MAX_PHOTO_BYTES / 1024 / 1024} МБ` },
+        { ok: false, error: `«${f.name}» больше ${MAX_UPLOAD_BYTES / 1024 / 1024} МБ` },
         { status: 413 },
       );
     }
-    const data = Buffer.from(await f.arrayBuffer());
-    const mime = sniffImage(data);
-    if (!mime) {
-      return NextResponse.json(
-        { ok: false, error: `«${f.name}» — не фото: принимаются JPEG, PNG и WebP` },
-        { status: 415 },
-      );
+    // Любой картиночный формат: что не JPEG/PNG/WebP, сервер переводит в JPEG.
+    try {
+      files.push(await normalizePhoto(Buffer.from(await f.arrayBuffer())));
+    } catch (e) {
+      if (!(e instanceof PhotoFormatError)) throw e;
+      return NextResponse.json({ ok: false, error: `«${f.name}»: ${e.message}` }, { status: 415 });
     }
-    files.push({ mime, data });
   }
 
   try {

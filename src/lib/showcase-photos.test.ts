@@ -100,3 +100,31 @@ test('карточка лавки получает фото по дням пер
   assert.ok(byDate['2026-10-14'].every((p) => p.shopCode === 'М12'));
   assert.deepEqual(await photos.photosByDate('М12', '2026-11-01', '2026-11-30'), {});
 });
+
+test('любой картиночный формат приводится к JPEG, а не картинка — отказ', async () => {
+  const sharp = (await import('sharp')).default;
+  const base = sharp({ create: { width: 3000, height: 2000, channels: 3, background: '#2e86c1' } });
+
+  // TIFF и GIF браузер обычно не ужимает — это делает сервер.
+  for (const format of ['tiff', 'gif', 'avif'] as const) {
+    const input = await base.clone().toFormat(format).toBuffer();
+    const out = await photos.normalizePhoto(input);
+    assert.equal(out.mime, 'image/jpeg', format);
+    const meta = await sharp(out.data).metadata();
+    assert.equal(Math.max(meta.width!, meta.height!), 1600, `${format}: длинная сторона 1600`);
+  }
+
+  // Уже ужатый JPEG проходит как есть, байт в байт.
+  assert.equal((await photos.normalizePhoto(JPEG)).data, JPEG);
+
+  // Крупный PNG-скриншот, который браузер не ужал, — тоже пережимается.
+  const bigPng = await sharp({ create: { width: 4000, height: 3000, channels: 3, background: '#000' } })
+    .png({ compressionLevel: 0 })
+    .toBuffer();
+  assert.ok(bigPng.length > photos.MAX_PHOTO_BYTES);
+  assert.equal((await photos.normalizePhoto(bigPng)).mime, 'image/jpeg');
+
+  for (const junk of [Buffer.from('<html>не фото</html>'), Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>')]) {
+    await assert.rejects(photos.normalizePhoto(junk), photos.PhotoFormatError);
+  }
+});

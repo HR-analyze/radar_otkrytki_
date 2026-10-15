@@ -30,6 +30,15 @@ import { FIELD_STYLE, humanDate } from './showcase-ui';
 /** Столько же, сколько принимает сервер (MAX_PHOTOS в showcase-photos.ts). */
 const MAX_PHOTOS = 7;
 const MAX_SIDE = 1600;
+/** Столько принимает сервер (MAX_UPLOAD_BYTES): HEIC/TIFF он ужимает сам. */
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+/**
+ * Картинки, у которых браузер не всегда знает тип (на Windows у HEIC он
+ * пустой): узнаём по расширению. Им же расширен accept, иначе проводник
+ * Windows прятал бы .heic из окна выбора.
+ */
+const IMAGE_EXT = /\.(jpe?g|jfif|png|webp|gif|bmp|heic|heif|avif|tiff?|ico)$/i;
+const ACCEPT = 'image/*,.heic,.heif,.avif,.tif,.tiff,.bmp,.jfif';
 const JPEG_QUALITY = 0.82;
 
 interface Photo {
@@ -189,11 +198,11 @@ function PhotosDialog({
     setError(null);
     // Из проводника вместе с фото легко прихватить PDF или архив — их не
     // шлём вовсе, а говорим сразу, без похода на сервер.
-    const selected = all.filter((f) => f.type.startsWith('image/') || f.type === '');
+    const selected = all.filter((f) => f.type.startsWith('image/') || IMAGE_EXT.test(f.name));
     if (selected.length < all.length) {
       setError(
         selected.length === 0
-          ? 'Это не фото — подойдут JPEG, PNG или WebP.'
+          ? 'Это не картинка — подойдёт фото или скриншот любого формата.'
           : `Не фото пропущено: ${all.length - selected.length}.`,
       );
     }
@@ -215,7 +224,16 @@ function PhotosDialog({
         const body = new FormData();
         body.append('date', date);
         body.append('shop', shopCode);
-        body.append('files', await shrink(file), jpegName(file.name));
+        const blob = await shrink(file);
+        // Не ужалось (браузер не открыл формат) и слишком велико — не шлём:
+        // сервер всё равно откажет, а по мобильной связи это долгий отказ.
+        if (blob.size > MAX_UPLOAD_BYTES) {
+          throw new Error(
+            `«${file.name}» весит ${Math.round(blob.size / 1024 / 1024)} МБ — больше ${MAX_UPLOAD_BYTES / 1024 / 1024} МБ не принимается.`,
+          );
+        }
+        // Имя — по тому, что реально уходит: пережатое — .jpg, исходник — как был.
+        body.append('files', blob, blob === file ? file.name : jpegName(file.name));
 
         const res = await fetch('/api/showcase/photos', { method: 'POST', body });
         const data = (await res.json()) as { ok: boolean; photos?: Photo[]; error?: string };
@@ -411,7 +429,7 @@ function PhotosDialog({
               <input
                 ref={fileRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/*"
+                accept={ACCEPT}
                 multiple
                 disabled={!!busy}
                 onChange={(e) => void upload([...(e.target.files ?? [])])}
@@ -442,20 +460,20 @@ function PhotosDialog({
  */
 async function shrink(file: File): Promise<Blob> {
   try {
-    // createImageBitmap по умолчанию учитывает поворот из EXIF — иначе
-    // снимки с телефона ложились бы на бок.
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    const bitmap = await decode(file);
+    const [w, h] =
+      'naturalWidth' in bitmap ? [bitmap.naturalWidth, bitmap.naturalHeight] : [bitmap.width, bitmap.height];
+    const scale = Math.min(1, MAX_SIDE / Math.max(w, h));
     const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
     const ctx = canvas.getContext('2d');
     if (!ctx) return file;
     // Белый фон: прозрачный PNG в JPEG иначе становится чёрным.
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close();
+    if ('close' in bitmap) bitmap.close();
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY),
     );
@@ -471,6 +489,29 @@ async function shrink(file: File): Promise<Blob> {
 /** Тащат именно файлы, а не выделенный текст или ссылку со страницы. */
 function hasFiles(dt: DataTransfer | null): boolean {
   return !!dt && [...dt.types].includes('Files');
+}
+
+/**
+ * Открывает картинку средствами браузера. createImageBitmap быстрее и сам
+ * учитывает поворот из EXIF (иначе снимки с телефона ложились бы на бок), но
+ * берёт не всё: SVG, ICO и часть BMP открывает только обычный <img>.
+ * Не открылось ни так, ни так — бросаем, и файл уходит на сервер как есть.
+ */
+async function decode(file: File): Promise<ImageBitmap | HTMLImageElement> {
+  try {
+    return await createImageBitmap(file);
+  } catch {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      if (!img.naturalWidth) throw new Error('пустая картинка');
+      return img;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
 }
 
 function jpegName(name: string): string {
