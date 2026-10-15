@@ -8,14 +8,14 @@ import { FIELD_STYLE, humanDate } from './showcase-ui';
 /**
  * Фото витрины в строке редактора: значок «📷 2/5» и окно со снимками.
  *
- * К лавке за день прикладывают от 1 до 5 фото (см. showcase-photos.ts). Окно
+ * К лавке за день прикладывают от 1 до 7 фото (см. showcase-photos.ts). Окно
  * общее для обоих редакторов — дневного и полавочного: ключ, как и у
  * процентов, «дата + лавка».
  *
  * Снимок с телефона весит 3–8 МБ, а на точке часто мобильный интернет. Перед
  * отправкой фото ужимается здесь же, в браузере, до 1600 px по длинной
  * стороне — это 200–500 КБ, и на витрине по-прежнему видно каждую полку.
- * Отправляется по одному файлу за запрос: один большой запрос с пятью
+ * Отправляется по одному файлу за запрос: один большой запрос с семью
  * снимками рвётся на плохой связи целиком, а так доезжает хотя бы часть, и
  * видно, какая именно.
  *
@@ -28,7 +28,7 @@ import { FIELD_STYLE, humanDate } from './showcase-ui';
  */
 
 /** Столько же, сколько принимает сервер (MAX_PHOTOS в showcase-photos.ts). */
-const MAX_PHOTOS = 5;
+const MAX_PHOTOS = 7;
 const MAX_SIDE = 1600;
 const JPEG_QUALITY = 0.82;
 
@@ -248,7 +248,7 @@ function PhotosDialog({
   }
 
   // Брошенное на значок в строке — отправляем, как только известно, сколько
-  // места осталось: лимит пять на день, а список ещё грузился.
+  // места осталось: лимит на день, а список ещё грузился.
   const uploadRef = useRef(upload);
   useEffect(() => {
     uploadRef.current = upload;
@@ -387,10 +387,11 @@ function PhotosDialog({
                   disabled={!!busy}
                   title="Удалить фото"
                   aria-label={`Удалить фото ${i + 1}`}
-                  className="absolute top-1.5 right-1.5 rounded-md border px-2 py-0.5 text-xs disabled:opacity-40"
-                  style={FIELD_STYLE}
+                  /* Тёмный кружок с белым крестиком читается на любом снимке —
+                     и на белой витрине, и на тёмном холодильнике. */
+                  className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-slate-900/65 text-sm leading-none text-white shadow transition-colors hover:bg-[var(--red)] disabled:opacity-40"
                 >
-                  🗑
+                  ✕
                 </button>
               )}
             </figure>

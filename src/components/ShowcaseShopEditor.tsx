@@ -55,7 +55,7 @@ interface DayRow {
   /** Статус итога дня — среднего двух замеров. */
   status: Status;
   note: string;
-  /** Сколько фото витрины приложено (0–5), см. ShowcasePhotos. */
+  /** Сколько фото витрины приложено (0–7), см. ShowcasePhotos. */
   photos: number;
   updatedAt: string | null;
 }

@@ -49,7 +49,7 @@ interface ShopRow {
   status: Status;
   /** Короткая пометка: «не привезли ягоды», «витрину чинили». */
   note: string;
-  /** Сколько фото витрины приложено (0–5), см. ShowcasePhotos. */
+  /** Сколько фото витрины приложено (0–7), см. ShowcasePhotos. */
   photos: number;
 }
 

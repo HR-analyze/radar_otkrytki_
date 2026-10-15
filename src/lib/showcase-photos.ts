@@ -1,7 +1,7 @@
 import { openManualDb } from './manual-db';
 
 /**
- * Фото витрины: к лавке за день можно приложить от 1 до 5 снимков.
+ * Фото витрины: к лавке за день можно приложить от 1 до 7 снимков.
  *
  * Процент наполнения — это чья-то оценка «на глаз», и спор «да там было
  * пусто» / «да всё стояло» без снимка решить нечем. Фото — подтверждение
@@ -19,8 +19,11 @@ import { openManualDb } from './manual-db';
  * байтам: файлу с расширением .jpg верить на слово нельзя.
  */
 
-/** Больше пяти на лавку за день не нужно: витрина, холодильник, пара крупных планов. */
-export const MAX_PHOTOS = 5;
+/**
+ * Потолок на лавку за день: витрина целиком, холодильники, крупные планы полок.
+ * Было 5 — по просьбе с 15.10.2026 стало 7: на больших лавках не хватало.
+ */
+export const MAX_PHOTOS = 7;
 /** Потолок на один файл после сжатия в браузере — с запасом на PNG-скриншот. */
 export const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 
@@ -67,7 +70,7 @@ export async function listPhotos(date: string, shopCode: string): Promise<Showca
     const { pgRows } = await import('./postgres');
     const rows = await pgRows<PhotoRow>(
       'SELECT id::text AS id,date,shop_code,mime,size,created_at FROM radar_pg_showcase_photo ' +
-        'WHERE date=$1 AND shop_code=$2 ORDER BY id',
+        'WHERE date=$1 AND shop_code=$2 ORDER BY radar_pg_showcase_photo.id',
       [date, shopCode],
     );
     return rows.map(fromRow);
@@ -77,7 +80,7 @@ export async function listPhotos(date: string, shopCode: string): Promise<Showca
   const rows = db
     .prepare(
       `SELECT CAST(id AS TEXT) AS id, date, shop_code, mime, size, created_at FROM showcase_photo
-       WHERE date = ? AND shop_code = ? ORDER BY id`,
+       WHERE date = ? AND shop_code = ? ORDER BY showcase_photo.id`,
     )
     .all(date, shopCode) as PhotoRow[];
   return rows.map(fromRow);
@@ -97,7 +100,7 @@ export async function photosByDate(
     const { pgRows } = await import('./postgres');
     rows = await pgRows<PhotoRow>(
       'SELECT id::text AS id,date,shop_code,mime,size,created_at FROM radar_pg_showcase_photo ' +
-        'WHERE shop_code=$1 AND date BETWEEN $2 AND $3 ORDER BY date,id',
+        'WHERE shop_code=$1 AND date BETWEEN $2 AND $3 ORDER BY date,radar_pg_showcase_photo.id',
       [shopCode, from, to],
     );
   } else {
@@ -106,7 +109,7 @@ export async function photosByDate(
     rows = db
       .prepare(
         `SELECT CAST(id AS TEXT) AS id, date, shop_code, mime, size, created_at FROM showcase_photo
-         WHERE shop_code = ? AND date BETWEEN ? AND ? ORDER BY date, id`,
+         WHERE shop_code = ? AND date BETWEEN ? AND ? ORDER BY date, showcase_photo.id`,
       )
       .all(shopCode, from, to) as PhotoRow[];
   }
@@ -167,7 +170,7 @@ export class PhotoLimitError extends Error {}
 
 /**
  * Добавляет фото. Лимит проверяется в той же транзакции, что и вставка: два
- * телефона, одновременно досылающие по три снимка, вместе пятёрку не превысят.
+ * телефона, одновременно досылающие по три снимка, вместе лимит не превысят.
  */
 export async function addPhotos(
   date: string,
@@ -271,6 +274,9 @@ export async function deletePhoto(id: string): Promise<ShowcasePhoto | null> {
   return row ? fromRow(row) : null;
 }
 
+// В запросах id отдаётся строкой (id::text / CAST), а сортируется по столбцу
+// таблицы с полным именем: голое «ORDER BY id» взяло бы строковый псевдоним, и
+// фото № 10 встало бы раньше № 2.
 type PhotoRow = {
   id: string;
   date: string;
