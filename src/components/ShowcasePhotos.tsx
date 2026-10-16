@@ -12,11 +12,11 @@ import { FIELD_STYLE, humanDate } from './showcase-ui';
  * общее для обоих редакторов — дневного и полавочного: ключ, как и у
  * процентов, «дата + лавка».
  *
- * Картинка хранится такой, какой её загрузили: скриншот или фото до 3 МБ в
- * JPEG, PNG или WebP уходит на сервер байт в байт, без пережатия и обрезки.
- * Ужимается только тяжёлое — снимок с камеры на 3–8 МБ: до 2560 px по длинной
- * стороне, пропорции те же. На точке часто мобильный интернет, а мелкий текст
- * ценников на 2560 px ещё читается.
+ * Картинка хранится в том виде и пропорциях, в каких её загрузили: файл до 900 КБ в
+ * JPEG, PNG или WebP уходит на сервер байт в байт. Тяжелее — перекодируется в
+ * JPEG (до 2560 px по длинной стороне, пропорции те же, без обрезки), пока не
+ * влезет в 900 КБ: столько пропускает прокси перед RelaxDev (см. KEEP_AS_IS_BYTES).
+ * Мелкий текст ценников на таком размере ещё читается.
  *
  * Превью тоже не обрезает: картинка вписывается целиком, длинный скриншот
  * с телефона показывается длинным, а не срезанным до прямоугольника.
@@ -38,7 +38,14 @@ const MAX_SIDE = 2560;
 /** Качество по убыванию: если файл всё ещё тяжелее лимита — следующая ступень. */
 const JPEG_QUALITY = [0.88, 0.75, 0.6];
 /** До этого размера JPEG/PNG/WebP не трогаем — столько же хранит сервер. */
-const KEEP_AS_IS_BYTES = 3 * 1024 * 1024;
+/**
+ * Потолок на один запрос — 900 КБ, с запасом под 1 МБ. На RelaxDev перед
+ * радаром стоит прокси, который по умолчанию режет тело запроса больше 1 МБ
+ * (у nginx — client_max_body_size). Когда здесь стояло 3 МБ, широкий кадр с
+ * камеры в PNG (1–2 МБ) упирался в этот лимит и молча не загружался, хотя
+ * мелкие скриншоты проходили.
+ */
+const KEEP_AS_IS_BYTES = 900 * 1024;
 
 interface Photo {
   id: string;
@@ -197,11 +204,15 @@ function PhotosDialog({
     setError(null);
     // Из проводника вместе с фото легко прихватить PDF или архив — их не
     // шлём вовсе, а говорим сразу, без похода на сервер.
-    const selected = all.filter((f) => f.type.startsWith('image/') || f.type === '');
+    // Тип из буфера или проводника бывает пустым или «octet-stream» — тогда
+    // судим по расширению; настоящий формат проверит shrink по байтам.
+    const selected = all.filter(
+      (f) => f.type.startsWith('image/') || f.type === '' || IMAGE_EXT.test(f.name),
+    );
     if (selected.length < all.length) {
       setError(
         selected.length === 0
-          ? 'Это не фото — подойдут JPEG, PNG или WebP.'
+          ? 'Это не картинка — подойдёт фото или скриншот.'
           : `Не фото пропущено: ${all.length - selected.length}.`,
       );
     }
@@ -223,10 +234,12 @@ function PhotosDialog({
         const body = new FormData();
         body.append('date', date);
         body.append('shop', shopCode);
-        body.append('files', await shrink(file), jpegName(file.name));
+        const ready = await shrink(file);
+        // Имя — по тому, что реально уходит: пережатое — .jpg, исходник — как был.
+        body.append('files', ready, ready === file ? file.name : jpegName(file.name));
 
         const res = await fetch('/api/showcase/photos', { method: 'POST', body });
-        const data = (await res.json()) as { ok: boolean; photos?: Photo[]; error?: string };
+        const data = await readJson(res);
         if (data.photos) apply(data.photos);
         if (!res.ok || !data.ok) throw new Error(data.error ?? `Сервер ответил ${res.status}`);
       }
@@ -244,7 +257,7 @@ function PhotosDialog({
     setBusy('Удаляю…');
     try {
       const res = await fetch(`/api/showcase/photos/${id}`, { method: 'DELETE' });
-      const data = (await res.json()) as { ok: boolean; photos?: Photo[]; error?: string };
+      const data = await readJson(res);
       if (data.photos) apply(data.photos);
       else if (res.status === 404) apply((photos ?? []).filter((p) => p.id !== id));
       if (!res.ok && res.status !== 404) throw new Error(data.error ?? `Сервер ответил ${res.status}`);
@@ -255,30 +268,39 @@ function PhotosDialog({
     }
   }
 
-  // Брошенное на значок в строке — отправляем, как только известно, сколько
-  // места осталось: лимит на день, а список ещё грузился.
+  // Очередь: брошенное на значок в строке (список ещё грузился) и вставленное,
+  // пока предыдущее фото летит на сервер. Отправляем, как только окно свободно:
+  // раньше вторая вставка во время отправки просто терялась — «не берёт».
   const uploadRef = useRef(upload);
   useEffect(() => {
     uploadRef.current = upload;
   });
   useEffect(() => {
-    if (photos == null || pending.current.length === 0) return;
+    if (photos == null || busy || pending.current.length === 0) return;
     const files = pending.current;
     pending.current = [];
     void uploadRef.current(files);
-  }, [photos]);
+  }, [photos, busy]);
 
   // Вставка из буфера: пока окно открыто, Ctrl+V кладёт снимок сюда.
   const canAddRef = useRef(false);
+  /** Окно занято (грузит список или отправляет) — вставку кладём в очередь. */
+  const freeRef = useRef(false);
   useEffect(() => {
-    canAddRef.current = !readOnly && photos != null && !busy;
+    canAddRef.current = !readOnly;
+    freeRef.current = photos != null && !busy;
   });
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      const files = [...(e.clipboardData?.files ?? [])];
-      if (files.length === 0) return;
+      const data = e.clipboardData;
+      if (!data) return;
       e.preventDefault();
-      if (canAddRef.current) void uploadRef.current(files);
+      if (!canAddRef.current) return;
+      void imagesFromClipboard(data).then((found) => {
+        if (found.files.length === 0) setError(found.hint);
+        else if (freeRef.current) void uploadRef.current(found.files);
+        else pending.current.push(...found.files);
+      });
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
@@ -437,7 +459,7 @@ function PhotosDialog({
           {busy ??
             (readOnly
               ? 'Просмотр: добавлять и удалять фото здесь нельзя.'
-              : `От 1 до ${MAX_PHOTOS} фото на лавку за день. Выбрать файлы, перетащить их в окно или на значок 📷 в строке, вставить скриншот через Ctrl+V — как удобнее. Картинка сохраняется как есть, без обрезки; ужимаются только тяжёлые фото с камеры (больше 3 МБ). Клик по фото — открыть в полном размере.`)}
+              : `От 1 до ${MAX_PHOTOS} фото на лавку за день. Выбрать файлы, перетащить их в окно или на значок 📷 в строке, вставить скриншот через Ctrl+V — как удобнее. Картинка сохраняется как есть, без обрезки; файлы тяжелее 900 КБ перекодируются в JPEG того же размера. Клик по фото — открыть в полном размере.`)}
         </p>
       </div>
     </div>,
@@ -446,13 +468,16 @@ function PhotosDialog({
 }
 
 /**
- * Готовит файл к отправке. Обычный скриншот или фото до 3 МБ уходит как есть —
+ * Готовит файл к отправке. Скриншот или фото до 900 КБ уходит как есть —
  * «какой загрузили, такой и лежит». Тяжёлое ужимается до MAX_SIDE по длинной
  * стороне в JPEG, пропорции сохраняются. Не получилось открыть — уходит
  * исходник, а сервер честно скажет, если не принял.
  */
 async function shrink(file: File): Promise<Blob> {
-  if (/^image\/(jpeg|png|webp)$/.test(file.type) && file.size <= KEEP_AS_IS_BYTES) return file;
+  // Как есть — только если это действительно JPEG/PNG/WebP по байтам, а не по
+  // подписи: приложения отдают HEIC и AVIF под видом «.png» и «.jpg», и такой
+  // файл сервер отверг бы. Его, как и всё прочее, браузер перекодирует ниже.
+  if (file.size <= KEEP_AS_IS_BYTES && (await isWebImage(file))) return file;
   try {
     // createImageBitmap по умолчанию учитывает поворот из EXIF — иначе
     // снимки с телефона ложились бы на бок.
@@ -469,13 +494,30 @@ async function shrink(file: File): Promise<Blob> {
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close();
     let blob: Blob | null = null;
-    for (const quality of JPEG_QUALITY) {
-      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    // Сначала качество, размер в пикселях — только если не помогло: кадр
+    // с камеры в JPEG почти всегда влезает в лимит в полном размере.
+    for (let shrinkBy = 1; shrinkBy > 0.3; shrinkBy *= 0.8) {
+      if (shrinkBy < 1) {
+        const w = Math.round(canvas.width * 0.8);
+        const h = Math.round(canvas.height * 0.8);
+        const smaller = document.createElement('canvas');
+        smaller.width = w;
+        smaller.height = h;
+        smaller.getContext('2d')?.drawImage(canvas, 0, 0, w, h);
+        canvas.width = w;
+        canvas.height = h;
+        ctx.drawImage(smaller, 0, 0);
+      }
+      for (const quality of JPEG_QUALITY) {
+        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+        if (!blob || blob.size <= KEEP_AS_IS_BYTES) break;
+      }
       if (!blob || blob.size <= KEEP_AS_IS_BYTES) break;
     }
-    return blob && (blob.size < file.size || !/^image\/(jpeg|png|webp)$/.test(file.type))
-      ? blob
-      : file;
+    // Исходник вместо пережатого — только если он и правда JPEG/PNG/WebP и
+    // меньше: AVIF или HEIC с меткой «png» сервер не примет, даже если весит
+    // меньше получившегося JPEG.
+    return blob && (blob.size < file.size || !(await isWebImage(file))) ? blob : file;
   } catch {
     return file;
   }
@@ -484,6 +526,84 @@ async function shrink(file: File): Promise<Blob> {
 /** Тащат именно файлы, а не выделенный текст или ссылку со страницы. */
 function hasFiles(dt: DataTransfer | null): boolean {
   return !!dt && [...dt.types].includes('Files');
+}
+
+type ApiAnswer = { ok: boolean; photos?: Photo[]; error?: string };
+
+/**
+ * Ответ сервера. Если запрос отбил прокси перед радаром, приходит не JSON, а
+ * его HTML-страница — тогда говорим, что случилось, а не «Сеть недоступна».
+ */
+async function readJson(res: Response): Promise<ApiAnswer> {
+  try {
+    return (await res.json()) as ApiAnswer;
+  } catch {
+    return {
+      ok: false,
+      error:
+        res.status === 413
+          ? 'Файл слишком большой для сервера (413). Попробуйте ещё раз — радар ужмёт его сильнее.'
+          : `Сервер ответил ${res.status} ${res.statusText}`.trim(),
+    };
+  }
+}
+
+/** Картинки, у которых в буфере или проводнике бывает пустой тип: узнаём по имени. */
+const IMAGE_EXT = /\.(jpe?g|jfif|png|webp|gif|bmp|heic|heif|avif|tiff?)$/i;
+
+/** JPEG, PNG или WebP по первым байтам — то, что сервер хранит без перекодирования. */
+async function isWebImage(file: Blob): Promise<boolean> {
+  const b = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const ascii = (from: number, to: number) => String.fromCharCode(...b.subarray(from, to));
+  return (
+    (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) ||
+    (b[0] === 0x89 && ascii(1, 4) === 'PNG') ||
+    (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP')
+  );
+}
+
+/**
+ * Картинки из буфера обмена. Приложения кладут их по-разному:
+ *  · файлом — скриншот, «Копировать изображение» в браузере, мессенджеры;
+ *  · только в items, без files — так делают некоторые сборки Safari и Firefox;
+ *  · HTML-фрагментом с <img>, где картинка — data: URL (веб-редакторы,
+ *    почта) или просто ссылка на сайт.
+ * Ссылку на чужой сайт браузер скачать не даст (CORS), поэтому про неё —
+ * подсказка, а не молчание: раньше вставка в таком случае просто ничего не
+ * делала, и было непонятно почему.
+ */
+async function imagesFromClipboard(data: DataTransfer): Promise<{ files: File[]; hint: string }> {
+  const files = [...data.files];
+  if (files.length === 0) {
+    for (const item of data.items) {
+      if (item.kind !== 'file') continue;
+      const f = item.getAsFile();
+      if (f) files.push(f);
+    }
+  }
+  if (files.length > 0) return { files, hint: '' };
+
+  const html = data.getData('text/html');
+  const sources = [...html.matchAll(/<img[^>]+src=["']([^"']+)["']/gi)].map((m) => m[1]);
+  for (const [i, src] of sources.entries()) {
+    try {
+      const blob = await (await fetch(src)).blob();
+      if (blob.type.startsWith('image/')) {
+        files.push(new File([blob], `вставка-${i + 1}.${blob.type.split('/')[1] ?? 'png'}`, { type: blob.type }));
+      }
+    } catch {
+      // Ссылка на чужой сайт — браузер не отдаст. Ниже — подсказка.
+    }
+  }
+  if (files.length > 0) return { files, hint: '' };
+
+  return {
+    files: [],
+    hint:
+      sources.length > 0
+        ? 'В буфере ссылка на картинку, а не сама картинка. Откройте её и выберите «Копировать изображение» или сохраните файл и перетащите сюда.'
+        : 'В буфере нет картинки. Скопируйте само изображение (скриншот или «Копировать изображение») и вставьте ещё раз.',
+  };
 }
 
 function jpegName(name: string): string {
