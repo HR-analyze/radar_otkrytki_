@@ -197,7 +197,10 @@ test('справочник лавок: объединённые ячейки р�
   // Без разворота 9 лавок из 10 остались бы без менеджера.
   const r = parseRoster(fx('spravochnik-lavok.xlsx'));
 
-  assert.equal(r.rows.length, 83);
+  // 83 из выгрузки справочника + М84 Котельники: в справочник её внесли руками
+  // 16.10.2026 (лавку открыли раньше, чем она попала в файл), РМ — Карабак.
+  assert.equal(r.rows.length, 84);
+  assert.equal(r.rows.find((x) => x.shopCode === 'М84')?.manager, 'Карабак Денис');
   assert.equal(r.managers.length, 8);
   assert.ok(r.rows.filter((x) => x.manager).length >= 80, 'РМ проставлен почти у всех лавок');
 
