@@ -16,6 +16,8 @@ import { ShowcasePhotos } from './ShowcasePhotos';
 import {
   EmptyFilter,
   FILL_SLOTS,
+  PresenceBadge,
+  rowStyle,
   FIELD_STYLE,
   FillInputs,
   SaveBadge,
@@ -26,6 +28,7 @@ import {
   type FillField,
 } from './showcase-ui';
 import { useShowcaseEdits, type SavedRow } from './use-showcase-edits';
+import { FRESH_MS, useLiveRefresh, type ShowcaseLive } from './use-showcase-live';
 
 /**
  * Второй способ заполнения: **выбрана лавка — в списке дни.**
@@ -105,11 +108,13 @@ const PRESETS: { key: string; label: string; range: () => ShowcaseRange }[] = [
 ];
 
 export function ShowcaseShopEditor({
+  live,
   shopCode,
   onShopCode,
   region,
   onRegion,
 }: {
+  live: ShowcaseLive;
   /** Пусто — какую лавку открыть, решает сервер: первую в справочнике. */
   shopCode: string;
   onShopCode: (code: string) => void;
@@ -190,7 +195,52 @@ export function ShowcaseShopEditor({
     void load(shopCode, range.from, range.to);
   }, [shopCode, range.from, range.to, load, reset]);
 
+  // Живая синхронизация — как в дневном режиме (см. ShowcaseDayEditor).
+  const focusRow = useRef<{ date: string; shopCode: string } | null>(null);
+  const dataRef = useRef<ShopData | null>(null);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  const { isIdle, settle } = edits;
+
+  const quiet = useCallback(async () => {
+    const prev = dataRef.current;
+    if (!prev?.ok) return false;
+    const query = new URLSearchParams({ shop: prev.shop.code, from: prev.from, to: prev.to });
+    const res = await fetch(`/api/showcase?${query}`);
+    const body = (await res.json()) as ShopData;
+    const now = dataRef.current;
+    if (!body.ok || !now?.ok || now.shop.code !== body.shop.code || now.from !== body.from || !isIdle()) {
+      return false;
+    }
+
+    const was = new Map(now.days.map((d) => [d.date, d]));
+    const changed = body.days
+      .filter((d) => {
+        const p = was.get(d.date);
+        return p && (p.percent !== d.percent || p.afternoonPercent !== d.afternoonPercent || p.note !== d.note);
+      })
+      .map((d) => d.date);
+
+    settle(focusRow.current);
+    setData(body);
+    if (changed.length > 0) {
+      setFresh(new Set(changed));
+      setTimeout(() => setFresh(new Set()), FRESH_MS);
+    }
+    return true;
+  }, [isIdle, settle]);
+  useLiveRefresh(live, isIdle, quiet);
+
   const code = data?.shop.code ?? shopCode;
+  const { setFocus } = live;
+  const focusDay = (date: string | null) => {
+    focusRow.current = date ? { date, shopCode: code } : null;
+    setFocus(focusRow.current);
+  };
+  const busy = (date: string) =>
+    live.others.filter((o) => o.date === date && o.shopCode === code).map((o) => o.who || 'кто-то');
   const days = data?.days ?? [];
   const thresholds = data?.thresholds ?? { green: 1, yellow: 1 };
   const readOnly = data ? !data.editable : false;
@@ -430,8 +480,12 @@ export function ShowcaseShopEditor({
               return (
                 <li
                   key={day.date}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-2 first:border-0"
-                  style={{ borderColor: 'var(--border)' }}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-2 transition-colors first:border-0"
+                  style={rowStyle(busy(day.date).length > 0, fresh.has(day.date))}
+                  onFocus={() => focusDay(day.date)}
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focusDay(null);
+                  }}
                 >
                   {/* Дата — то же место, что код лавки в дневном списке: слева,
                       фиксированной ширины, чтобы столбик не «дышал». Ширина с
@@ -503,6 +557,8 @@ export function ShowcaseShopEditor({
                     aria-label={`Комментарий, ${code}, ${day.date}`}
                     className="showcase-note order-1 min-w-0 flex-1 basis-40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-xs"
                   />
+
+                  <PresenceBadge names={busy(day.date)} />
 
                   {/* Фото — последним в разметке: Tab не должен застревать
                       между 16:00 и комментарием (см. дневной редактор). */}

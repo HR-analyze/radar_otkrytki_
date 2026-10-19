@@ -91,6 +91,14 @@ export interface ShowcaseEdits {
   /** Забыть черновики и отмену: под редактором сменился набор данных. */
   reset: () => void;
   setError: (message: string | null) => void;
+  /** Нет ни очереди, ни запроса в пути: можно перечитать данные с сервера. */
+  isIdle: () => boolean;
+  /**
+   * Забыть черновики, которые уже доехали до сервера, — кроме строки под
+   * курсором. Иначе давно сохранённое «95» навсегда перекрывало бы цифру,
+   * которую потом поставил другой человек (см. useShowcaseLive).
+   */
+  settle: (keep?: { date: string; shopCode: string } | null) => void;
 }
 
 export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseEdits {
@@ -108,6 +116,8 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Состояние сохранения для обработчиков, живущих вне рендера (см. beforeunload). */
   const saveRef = useRef<SaveState>('idle');
+  /** Сколько пачек сейчас в пути: пока они летят, перечитывать день рано. */
+  const inFlight = useRef(0);
   /**
    * Свежая отправка для reset(). Сама отправка пересоздаётся при смене кода
    * доступа, и если бы reset зависел от неё напрямую, то каждая буква,
@@ -159,6 +169,7 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
       setQueued(0);
 
       setSave('saving');
+      inFlight.current++;
       try {
         const res = await fetch('/api/showcase', {
           method: 'POST',
@@ -203,6 +214,8 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
         setQueued(pending.current.size);
         setSave('error');
         setError(e instanceof Error ? e.message : 'Не удалось сохранить');
+      } finally {
+        inFlight.current--;
       }
     },
     [router, token],
@@ -361,7 +374,28 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
     setError(null);
   }, []);
 
+  const isIdle = useCallback(
+    () => pending.current.size === 0 && inFlight.current === 0,
+    [],
+  );
+
+  const settle = useCallback<ShowcaseEdits['settle']>((keep) => {
+    const row = keep ? rowKey(keep.date, keep.shopCode) : null;
+    setDrafts((d) => {
+      const next: Record<string, string> = {};
+      for (const [key, value] of Object.entries(d)) {
+        const [date, shopCode] = key.split('|');
+        if (rowKey(date, shopCode) === row || pending.current.has(rowKey(date, shopCode))) {
+          next[key] = value;
+        }
+      }
+      return Object.keys(next).length === Object.keys(d).length ? d : next;
+    });
+  }, []);
+
   return {
+    isIdle,
+    settle,
     token,
     setToken,
     save,

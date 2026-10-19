@@ -269,3 +269,74 @@ export function TokenInput({ value, onChange }: { value: string; onChange: (v: s
     />
   );
 }
+
+/** Метка на строке: её сейчас заполняет кто-то другой. */
+export function PresenceBadge({ names }: { names: readonly string[] }) {
+  if (names.length === 0) return null;
+  return (
+    <span
+      className="st-yellow order-2 shrink-0 rounded px-1.5 py-0.5 text-xs font-medium"
+      title="Этот человек сейчас стоит в строке — договоритесь, чтобы не вбивать одно и то же дважды"
+    >
+      ✍️ {names.join(', ')}
+    </span>
+  );
+}
+
+/**
+ * Полоса «кто я и кто ещё здесь» над редактором. Имя нужно, чтобы метка у
+ * остальных говорила «✍️ Иванова Ирина», а не «✍️ кто-то»: вход в радар
+ * общий, и узнать человека серверу больше неоткуда.
+ */
+export function LiveBar({
+  who,
+  onWho,
+  names,
+  others,
+}: {
+  who: string;
+  onWho: (value: string) => void;
+  names: readonly string[];
+  others: readonly { who: string; date: string; shopCode: string }[];
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <label className="flex items-center gap-1.5">
+        <span className="muted">Я:</span>
+        <input
+          value={who}
+          onChange={(e) => onWho(e.target.value.slice(0, 40))}
+          list="showcase-who"
+          placeholder="как вас подписать"
+          aria-label="Как подписать вас для остальных"
+          className="w-48 rounded-lg border px-2.5 py-1.5 text-sm"
+          style={FIELD_STYLE}
+        />
+        <datalist id="showcase-who">
+          {names.map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
+      </label>
+      <span className="text-xs muted">
+        {others.length === 0
+          ? 'Сейчас больше никто не заполняет.'
+          : `Сейчас заполняют: ${others
+              .map((o) => `${o.who || 'кто-то'} — ${o.shopCode}, ${o.date.slice(8)}.${o.date.slice(5, 7)}`)
+              .join('; ')}.`}{' '}
+        Чужие цифры появляются сами в течение нескольких секунд.
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Строку держит кто-то другой — жёлтая подложка; её только что поменяли не
+ * вы — зелёная вспышка. Граница остаётся своей: строки разделены линией.
+ */
+export function rowStyle(busy: boolean, fresh: boolean): React.CSSProperties {
+  return {
+    borderColor: 'var(--border)',
+    background: fresh ? 'var(--green-soft)' : busy ? 'var(--yellow-soft)' : undefined,
+  };
+}

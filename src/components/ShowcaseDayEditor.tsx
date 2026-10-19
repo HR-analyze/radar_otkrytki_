@@ -9,6 +9,8 @@ import { ShowcasePhotos } from './ShowcasePhotos';
 import {
   EmptyFilter,
   FILL_SLOTS,
+  PresenceBadge,
+  rowStyle,
   FIELD_STYLE,
   FillInputs,
   SaveBadge,
@@ -19,6 +21,7 @@ import {
   type FillField,
 } from './showcase-ui';
 import { useShowcaseEdits, type SavedRow } from './use-showcase-edits';
+import { FRESH_MS, useLiveRefresh, type ShowcaseLive } from './use-showcase-live';
 
 /**
  * Первый способ заполнения: **выбран день — в списке лавки.**
@@ -68,6 +71,7 @@ interface DayData {
 }
 
 export function ShowcaseDayEditor({
+  live,
   date,
   onDate,
   shopCode,
@@ -75,6 +79,7 @@ export function ShowcaseDayEditor({
   region,
   onRegion,
 }: {
+  live: ShowcaseLive;
   date: string;
   onDate: (date: string) => void;
   shopCode: string;
@@ -153,6 +158,56 @@ export function ShowcaseDayEditor({
     reset();
     void load(date);
   }, [date, load, reset]);
+
+  /*
+   * Живая синхронизация: кто-то сохранил цифры — день тихо перечитывается,
+   * а строки, которые поменял не ты, на несколько секунд подсвечиваются.
+   * Замок фильтра «только незаполненные» при этом не трогаем: список не
+   * должен прыгать под курсором из-за чужой правки.
+   */
+  const focusRow = useRef<{ date: string; shopCode: string } | null>(null);
+  const dataRef = useRef<DayData | null>(null);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  const { isIdle, settle } = edits;
+
+  const quiet = useCallback(async () => {
+    const res = await fetch(`/api/showcase?date=${date}`);
+    const body = (await res.json()) as DayData;
+    const prev = dataRef.current;
+    // Пока ждали ответ, человек начал печатать или сменил день — не сейчас.
+    if (!body.ok || !prev || prev.date !== body.date || !isIdle()) return false;
+
+    const was = new Map(prev.shops.map((x) => [x.code, x]));
+    const changed = body.shops
+      .filter((x) => {
+        const p = was.get(x.code);
+        return p && (p.percent !== x.percent || p.afternoonPercent !== x.afternoonPercent || p.note !== x.note);
+      })
+      .map((x) => x.code);
+
+    settle(focusRow.current);
+    setData(body);
+    if (changed.length > 0) {
+      setFresh(new Set(changed));
+      setTimeout(() => setFresh(new Set()), FRESH_MS);
+    }
+    return true;
+  }, [date, isIdle, settle]);
+  useLiveRefresh(live, isIdle, quiet);
+
+  const { setFocus } = live;
+  const focusShop = useCallback(
+    (code: string | null) => {
+      focusRow.current = code ? { date, shopCode: code } : null;
+      setFocus(focusRow.current);
+    },
+    [date, setFocus],
+  );
+  const busy = (code: string) =>
+    live.others.filter((o) => o.date === date && o.shopCode === code).map((o) => o.who || 'кто-то');
 
   const shops = data?.shops ?? [];
   const thresholds = data?.thresholds ?? { green: 1, yellow: 1 };
@@ -327,8 +382,13 @@ export function ShowcaseDayEditor({
               return (
                 <li
                   key={shop.code}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-2 first:border-0"
-                  style={{ borderColor: 'var(--border)' }}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-2 transition-colors first:border-0"
+                  style={rowStyle(busy(shop.code).length > 0, fresh.has(shop.code))}
+                  onFocus={() => focusShop(shop.code)}
+                  onBlur={(e) => {
+                    // Tab внутри строки — не уход: утро → 16:00 → комментарий.
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focusShop(null);
+                  }}
                 >
                   <span className="w-12 shrink-0 text-sm font-medium tabular-nums">{shop.code}</span>
                   {/* Лавка с поздним открытием: в 08:00 она ещё закрыта, и ноль
@@ -417,6 +477,8 @@ export function ShowcaseDayEditor({
                     aria-label={`Комментарий, ${shop.code}`}
                     className="showcase-note order-1 min-w-0 flex-1 basis-40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-xs"
                   />
+
+                  <PresenceBadge names={busy(shop.code)} />
 
                   {/* Фото — последним в разметке: Tab идёт утро → 16:00 →
                       комментарий → фото, а на экране значок справа (order-3). */}
