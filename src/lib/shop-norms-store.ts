@@ -3,6 +3,7 @@ import path from 'node:path';
 import { manualDbWritable, openManualDb } from './manual-db';
 import { sortTimes } from './parsers/shop-norms';
 import type { ShopNorms } from './types';
+import bundledSeed from '../../fixtures/shop-norms.json';
 
 /**
  * Нормативы открытия по лавкам: во сколько должен приехать водитель и к
@@ -74,17 +75,23 @@ export function normsEditHint(): string {
         'Правьте нормы там, где радар развёрнут на своём сервере.';
 }
 
-/** Сид из репозитория — разобранный справочник «Лавки». */
+/**
+ * Сид из репозитория — разобранный справочник «Лавки».
+ *
+ * Как и пороги (config.ts), файл вкомпилирован в сборку и читается с диска.
+ * Без вшитой копии сервер, запущенный не из корня репозитория, не находил
+ * файл и молча оставался без норм: все лавки уходили в «Без нормы в
+ * справочнике», а снимок, собранный с нормами, объявлялся устаревшим.
+ */
 export function readNormsSeed(): ShopNorms[] {
+  let raw: { norms?: unknown };
   try {
-    const raw = JSON.parse(
-      fs.readFileSync(/* turbopackIgnore: true */ seedPath(), 'utf8'),
-    ) as { norms?: unknown };
-    if (!Array.isArray(raw.norms)) return [];
-    return raw.norms.filter(isShopNorms);
+    raw = JSON.parse(fs.readFileSync(/* turbopackIgnore: true */ seedPath(), 'utf8'));
   } catch {
-    return [];
+    raw = bundledSeed;
   }
+  if (!Array.isArray(raw.norms)) return [];
+  return raw.norms.filter(isShopNorms);
 }
 
 export async function readNorms(): Promise<ShopNormsStore> {
