@@ -209,6 +209,16 @@ function migrate(db: BetterSqlite3.Database): void {
       created_at TEXT NOT NULL
     );
 
+    -- Кто какие лавки заполняет на вкладке «Витрины» — см. showcase-owners.ts.
+    -- Список сохраняется целиком, поэтому порядок строк — просто position.
+    -- shops — JSON-массив кодов: ["М14","М16"].
+    CREATE TABLE IF NOT EXISTS showcase_owners (
+      position   INTEGER PRIMARY KEY,
+      name       TEXT NOT NULL,
+      shops      TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     -- Разовые отметки: например, что сид из репозитория уже залит.
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
