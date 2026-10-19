@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseOwners, reportDates, showcaseGaps } from './showcase-owners';
+import { parseOwners, reportDates, shopWorks, showcaseGaps } from './showcase-owners';
 
 test('лавки строкой из таблицы: латинская M и ведущий ноль приводятся к виду базы', () => {
   const r = parseOwners([{ name: '  Оператор  СБ 1 ', shops: 'M01, М02;м3  M04 М02' }]);
@@ -66,4 +66,35 @@ test('сегодня в отчёт идёт, только когда час за
   });
   assert.deepEqual(reportDates(range, '2026-10-19', 16 * 60, 'afternoon').dates, range);
   assert.deepEqual(reportDates(range, '2026-10-19', 9 * 60, 'morning').dates, range);
+});
+
+test('выходной лавки — не пропуск: по выгрузке отметок, а без неё — по прошлым неделям', () => {
+  // Октябрь 2026: 3, 10, 17 — субботы, 24 — суббота без выгрузки.
+  const dates = ['2026-10-02', '2026-10-03', '2026-10-09', '2026-10-10', '2026-10-16', '2026-10-17'];
+  const coverage = {
+    criteria: new Set<string>(),
+    dates: new Set(dates),
+    // М16 выходит только по будням, М14 — каждый день.
+    shops: new Set(
+      dates.flatMap((d) => (['03', '10', '17'].includes(d.slice(8)) ? [`${d}|М14`] : [`${d}|М14`, `${d}|М16`])),
+    ),
+  };
+
+  assert.equal(shopWorks(coverage, 'М16', '2026-10-17'), false, 'нет в выгрузке — не работала');
+  assert.equal(shopWorks(coverage, 'М16', '2026-10-16'), true);
+  assert.equal(shopWorks(coverage, 'М16', '2026-10-24'), false, 'суббота без выгрузки — выходной по графику');
+  assert.equal(shopWorks(coverage, 'М14', '2026-10-24'), true);
+  assert.equal(shopWorks(coverage, 'М16', '2026-10-23'), true, 'пятница без выгрузки — рабочая');
+
+  const report = showcaseGaps({
+    owners: [{ name: 'Крючков Валентин', shops: ['М14', 'М16'] }],
+    fills: {},
+    dates: [...dates, '2026-10-24'],
+    shops: [{ code: 'М14', name: 'М14' }, { code: 'М16', name: 'М16' }],
+    isOpen: () => true,
+    works: (code, date) => shopWorks(coverage, code, date),
+  });
+  const owner = report.owners[0];
+  assert.equal(owner.daysOff, 4, 'четыре субботы М16');
+  assert.ok(owner.missing.every((d) => !(d.shops.includes('М16') && new Date(`${d.date}T12:00:00Z`).getUTCDay() === 6)));
 });

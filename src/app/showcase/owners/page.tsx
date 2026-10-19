@@ -1,10 +1,13 @@
 import Link from 'next/link';
 import { loadConfig } from '@/lib/config';
 import { listShops } from '@/lib/queries';
+import { exportCoverage } from '@/lib/rollup';
+import { loadSnapshot } from '@/lib/snapshot';
 import { readShowcase } from '@/lib/showcase-store';
 import { canEditOwners, readOwners } from '@/lib/showcase-owners-store';
 import {
   reportDates,
+  shopWorks,
   showcaseGaps,
   SLOT_TITLE,
   type OwnerGaps,
@@ -56,6 +59,9 @@ export default async function ShowcaseOwnersPage({
     listShops(),
     listShops(today),
   ]);
+  // Рабочие дни лавок — из выгрузок отметок: лавки нет в выгрузке за день —
+  // в этот день она не работала (М16 по выходным), замер с неё не спрашиваем.
+  const coverage = exportCoverage((await loadSnapshot()).attendance);
   const { dates, todaySkipped } = reportDates(range, today, minutesNowMsk(), slot);
 
   const report = showcaseGaps({
@@ -64,6 +70,7 @@ export default async function ShowcaseOwnersPage({
     dates,
     shops,
     isOpen: (code, date) => isOpenOn(config, code, date),
+    works: (code, date) => shopWorks(coverage, code, date),
   });
 
   const totalMissing = report.owners.reduce((n, o) => n + o.missingCount, 0);
@@ -81,8 +88,10 @@ export default async function ShowcaseOwnersPage({
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Кто не заполнил витрины</h1>
         <p className="mt-1 text-sm muted">
-          Пустой замер — значения нет вовсе; 0% считается заполненным. Закрытые лавки с даты
-          закрытия не учитываются. Лавки берутся из списка ответственных внизу страницы.
+          Пустой замер — значения нет вовсе; 0% считается заполненным. Не спрашиваются закрытые
+          лавки и дни, когда лавка не работала: её нет в выгрузке отметок за день, а пока выгрузки
+          нет — это её обычный выходной по прошлым неделям. Лавки берутся из списка
+          ответственных внизу страницы.
         </p>
       </div>
 
@@ -215,6 +224,11 @@ function OwnerRow({ owner: o }: { owner: OwnerGaps }) {
       <td className="py-2 pl-3 text-right tabular-nums muted whitespace-nowrap">
         {o.filled}/{o.expected}
         {share !== null && ` · ${share}%`}
+        {o.daysOff > 0 && (
+          <div className="text-xs" title="Лавка × день, когда лавки не было в выгрузке отметок">
+            выходных: {o.daysOff}
+          </div>
+        )}
       </td>
     </tr>
   );

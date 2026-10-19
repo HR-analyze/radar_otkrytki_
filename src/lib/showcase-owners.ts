@@ -1,4 +1,5 @@
 import { compareShopNumber, normalizeCode, type ShopRef } from './shops';
+import type { ExportCoverage } from './rollup';
 
 /**
  * Кто какие лавки заполняет на вкладке «Витрины» и у кого остались пустые
@@ -123,6 +124,8 @@ export interface OwnerGaps {
   filled: number;
   missing: OwnerMissingDay[];
   missingCount: number;
+  /** Лавка × день, когда лавка не работала (выходной): их не спрашиваем. */
+  daysOff: number;
 }
 
 export interface GapsReport {
@@ -141,6 +144,11 @@ export interface GapsInput {
   shops: readonly ShopRef[];
   /** Работала ли лавка в этот день: закрытую с даты не спрашиваем. */
   isOpen: (shopCode: string, date: string) => boolean;
+  /**
+   * Был ли у лавки рабочий день (см. shopWorks): М16 по выходным закрыта, и
+   * пустой замер за субботу — не пропуск. Не задано — работают все дни.
+   */
+  works?: (shopCode: string, date: string) => boolean;
 }
 
 /**
@@ -158,11 +166,16 @@ export function showcaseGaps(input: GapsInput): GapsReport {
 
     let expected = 0;
     let filled = 0;
+    let daysOff = 0;
     const missing: OwnerMissingDay[] = [];
     for (const date of input.dates) {
       const empty: string[] = [];
       for (const code of live) {
         if (!input.isOpen(code, date)) continue;
+        if (input.works && !input.works(code, date)) {
+          daysOff++;
+          continue;
+        }
         expected++;
         if (input.fills[date]?.[code] == null) empty.push(code);
         else filled++;
@@ -178,6 +191,7 @@ export function showcaseGaps(input: GapsInput): GapsReport {
       filled,
       missing,
       missingCount: expected - filled,
+      daysOff,
     };
   });
 
@@ -188,6 +202,33 @@ export function showcaseGaps(input: GapsInput): GapsReport {
     .sort(compareShopNumber);
 
   return { owners, unassigned };
+}
+
+/** Сколько прошлых таких же дней недели смотреть, угадывая выходной. */
+const PATTERN_WEEKS = 4;
+/** Меньше двух наблюдений — не график, а случайность. */
+const PATTERN_MIN = 2;
+
+/**
+ * Работала ли лавка в этот день — по выгрузке отметок, тому же правилу, что
+ * и `isLegacyStale`: выгрузка за день приходит по всей сети сразу, и лавки,
+ * которой в ней нет, в этот день не было вовсе (М16 по выходным).
+ *
+ * За день, выгрузки за который ещё нет (сегодня, вчерашняя суббота до
+ * загрузки), решает недельный график: в последние 4 таких же дня недели
+ * с выгрузкой лавки не было ни разу — значит, это её выходной. Иначе день
+ * считается рабочим: лучше спросить лишний замер, чем пропустить настоящий.
+ */
+export function shopWorks(coverage: ExportCoverage, shopCode: string, date: string): boolean {
+  if (coverage.dates.has(date)) return coverage.shops.has(`${date}|${shopCode}`);
+
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+  const same = [...coverage.dates]
+    .filter((d) => d < date && new Date(`${d}T12:00:00Z`).getUTCDay() === weekday)
+    .sort()
+    .slice(-PATTERN_WEEKS);
+  if (same.length < PATTERN_MIN) return true;
+  return same.some((d) => coverage.shops.has(`${d}|${shopCode}`));
 }
 
 /**
