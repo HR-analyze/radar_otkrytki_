@@ -9,6 +9,8 @@ import type { ShopNorms, RegionPeriod } from './types';
 import type { ShowcaseAuditFilter, ShowcaseAuditEntry, ShowcaseEditSource } from './showcase-audit';
 import type { ContestViolation } from './contest-violations-store';
 import type { UploadLogEntry } from './upload-log';
+import { OwnersConflictError, parseShopsJson, type ShowcaseOwner } from './showcase-owners';
+import type { OwnersSeed } from './showcase-owners-store';
 
 // PostgreSQL replaces only the manual SQLite store. The original SQLite code stays
 // available for recovering the Yandex VM. All dates/timestamps are TEXT to preserve
@@ -258,5 +260,42 @@ export async function pgAppendUploads(entries:readonly UploadLogEntry[]):Promise
       await c.query('INSERT INTO radar_pg_uploads(at,original_name,file_name,kind,summary,dates,"rows",mode) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
         [e.at,e.originalName,e.fileName,e.kind,e.summary,JSON.stringify(e.dates),e.rows,e.mode]);
     }
+  });
+}
+
+// Who fills which shops on the showcase tab. The list is saved as a whole; the
+// seed goes in once, so a person removed from the list does not come back.
+async function pgSeedOwners(c:DbClient,readSeed:()=>OwnersSeed):Promise<void>{
+  if(await meta(c,'showcase_owners_seeded'))return;
+  const seed=readSeed();
+  const at=seed.updatedAt??new Date().toISOString();
+  await pgInsertOwners(c,seed.owners,at);
+  await setMeta(c,'showcase_owners_updated_at',at);
+  await setMeta(c,'showcase_owners_seeded',new Date().toISOString());
+}
+async function pgInsertOwners(c:DbClient,owners:readonly ShowcaseOwner[],at:string):Promise<void>{
+  if(!owners.length)return;
+  const rows=owners.map((o,position)=>({position,name:o.name,shops:JSON.stringify(o.shops),updated_at:at}));
+  await c.query('INSERT INTO radar_pg_showcase_owners(position,name,shops,updated_at) '+
+    'SELECT position,name,shops,updated_at FROM jsonb_to_recordset($1::jsonb) '+
+    'AS r(position int,name text,shops text,updated_at text) ON CONFLICT DO NOTHING',[JSON.stringify(rows)]);
+}
+export async function pgReadOwners(readSeed:()=>OwnersSeed):Promise<OwnersSeed>{
+  return pgTx(async c=>{
+    await pgSeedOwners(c,readSeed);
+    const r=await c.query('SELECT name,shops FROM radar_pg_showcase_owners ORDER BY position');
+    return {
+      owners:r.rows.map(x=>({name:String(x.name),shops:parseShopsJson(String(x.shops))})),
+      updatedAt:await meta(c,'showcase_owners_updated_at'),
+    };
+  });
+}
+export async function pgSaveOwners(owners:readonly ShowcaseOwner[],expected:string|null|undefined,now:string,readSeed:()=>OwnersSeed):Promise<void>{
+  await pgTx(async c=>{
+    await pgSeedOwners(c,readSeed);
+    if(expected!==undefined&&expected!==(await meta(c,'showcase_owners_updated_at')))throw new OwnersConflictError();
+    await c.query('DELETE FROM radar_pg_showcase_owners');
+    await pgInsertOwners(c,owners,now);
+    await setMeta(c,'showcase_owners_updated_at',now);
   });
 }

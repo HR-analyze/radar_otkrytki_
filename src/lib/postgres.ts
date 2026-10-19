@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS radar_pg_uploads (
   kind TEXT NOT NULL, summary TEXT NOT NULL, dates TEXT NOT NULL, "rows" INTEGER NOT NULL, mode TEXT NOT NULL,
   legacy_id BIGINT UNIQUE);
 CREATE INDEX IF NOT EXISTS radar_pg_uploads_at ON radar_pg_uploads(at DESC, id DESC);
+CREATE TABLE IF NOT EXISTS radar_pg_showcase_owners (
+  position INTEGER PRIMARY KEY, name TEXT NOT NULL, shops TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS radar_pg_archive (
   kind TEXT NOT NULL, legacy_key TEXT NOT NULL, payload JSONB NOT NULL,
   PRIMARY KEY(kind,legacy_key));

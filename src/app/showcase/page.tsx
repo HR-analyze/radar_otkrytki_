@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { latestDate, listDates, showcaseNotes } from '@/lib/queries';
 import { defaultRange } from '@/lib/params';
 import { canEditShowcase } from '@/lib/showcase-store';
@@ -49,16 +50,26 @@ export default async function ShowcasePage({
             {last && ` Последний день с данными — ${last.split('-').reverse().slice(0, 2).join('.')}.`}
           </p>
         </div>
-        {/* Обычная ссылка: файл собирается на сервере. Месяц — тот же, что у
-            сводки комментариев ниже, стрелки там переключают и выгрузку. */}
-        <a
-          href={`/api/showcase/xlsx?from=${month}-01&to=${lastDayOf(month)}`}
-          className="rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap hover:opacity-90"
-          style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
-          title="Номер лавки, дата, наполнение утром и в 16:00 и их среднее — таблицей Excel за месяц"
-        >
-          ⬇ Excel за {formatDay(`${month}-01`, { month: 'long' })}
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/showcase/owners"
+            className="rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap hover:opacity-90"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+            title="Пустые замеры по каждому ответственному и список, кто какие лавки заполняет"
+          >
+            Кто не заполнил →
+          </Link>
+          {/* Обычная ссылка: файл собирается на сервере. Месяц — тот же, что у
+              сводки комментариев ниже, стрелки там переключают и выгрузку. */}
+          <a
+            href={`/api/showcase/xlsx?from=${month}-01&to=${lastDayOf(month)}`}
+            className="rounded-lg border px-3 py-2 text-sm font-medium whitespace-nowrap hover:opacity-90"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+            title="Номер лавки, дата, наполнение утром и в 16:00 и их среднее — таблицей Excel за месяц"
+          >
+            ⬇ Excel за {formatDay(`${month}-01`, { month: 'long' })}
+          </a>
+        </div>
       </div>
 
       <ShowcaseEditor initialDate={initial} initialMode={mode} initialShop={shop} />
