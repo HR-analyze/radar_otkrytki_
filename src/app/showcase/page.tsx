@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { latestDate, listDates, showcaseNotes } from '@/lib/queries';
 import { defaultRange } from '@/lib/params';
 import { canEditShowcase } from '@/lib/showcase-store';
+import { readOwners } from '@/lib/showcase-owners-store';
 import { formatDay, todayIso } from '@/lib/time';
 import { ShowcaseEditor } from '@/components/ShowcaseEditor';
 import { NotesSummary } from '@/components/NotesSummary';
@@ -72,7 +73,12 @@ export default async function ShowcasePage({
         </div>
       </div>
 
-      <ShowcaseEditor initialDate={initial} initialMode={mode} initialShop={shop} />
+      <ShowcaseEditor
+        initialDate={initial}
+        initialMode={mode}
+        initialShop={shop}
+        ownerNames={(await readOwners()).owners.map((o) => o.name)}
+      />
 
       <NotesSummary
         notes={notes}
