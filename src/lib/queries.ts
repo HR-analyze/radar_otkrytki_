@@ -14,7 +14,12 @@ import {
 import { aggregateStatuses, isOpenOn, roundScore, statusForFill, statusFromScore } from './status';
 import { parseClock } from './time';
 import { compareShopNumber, findShops, isExactCode, matchesShop, shopNumber } from './shops';
-import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
+import {
+  rateShopDay,
+  type RatedPerson,
+  type RatingComponentKey,
+  type ShopRating,
+} from './rating';
 import {
   analyzeDepartures,
   analyzeViolations,
@@ -594,6 +599,55 @@ export async function radar(
   }
 
   return { dates, rows };
+}
+
+/* ------------------------------ API для 1С -------------------------------- */
+
+export interface KpiDay {
+  date: string;
+  shop: ShopRow;
+  /** Итог лавки за день — ровно то, что в ячейке радара при критерии «Все». */
+  status: Status;
+  /**
+   * Слагаемые итога «Водитель + Сотрудники + Витрина». null — итог в конфиге
+   * считается не по этой формуле, и раскладывать его не на что.
+   */
+  components: Record<RatingComponentKey, Status> | null;
+}
+
+/**
+ * Итоги лавок по дням для выгрузки в 1С (см. onec.ts).
+ *
+ * Итог берётся у самого радара, а не считается здесь заново: число, ушедшее в
+ * KPI, обязано совпадать с цветом, который сотрудник видит на экране, — иначе
+ * спорить о премии придётся с двумя разными цифрами.
+ */
+export async function kpiDays(from: string, to: string): Promise<KpiDay[]> {
+  const { dates, rows } = await radar({ from, to, criterion: 'all' });
+  const config = loadConfig();
+  const byComponents = useComponents(config);
+  const people = byComponents ? await peopleIndex() : null;
+  const fills = byComponents ? await showcaseIndex() : null;
+
+  const out: KpiDay[] = [];
+  for (const date of dates) {
+    for (const row of rows) {
+      const cell = row.cells[date];
+      if (!cell) continue;
+
+      let components: KpiDay['components'] = null;
+      if (people && fills) {
+        const key = `${date}|${row.shop.code}`;
+        const rating = rateShopDay(people.get(key) ?? [], fills.get(key) ?? null, config);
+        components = Object.fromEntries(rating.components.map((c) => [c.key, c.status])) as Record<
+          RatingComponentKey,
+          Status
+        >;
+      }
+      out.push({ date, shop: row.shop, status: cell.status, components });
+    }
+  }
+  return out;
 }
 
 /* ------------------------- нарушения открытия ----------------------------- */
