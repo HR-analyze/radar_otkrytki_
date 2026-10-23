@@ -21,7 +21,7 @@ export interface FilterState {
   criterion?: CriterionKey;
   status?: string;
   shop?: string;
-  /** Замер витрины: 'morning' — на 08:00, 'afternoon' — на 16:00; пусто — итог дня. */
+  /** Замер витрины: 'morning' — на 08:00, 'afternoon' — на 16:00, 'evening' — на 18:30; пусто — итог дня. */
   slot?: string;
 }
 
@@ -63,7 +63,7 @@ export function Filters({
   showCriterion?: boolean;
   showStatus?: boolean;
   /**
-   * Поле «Витрина»: итог дня, наполнение на 08:00 или на 16:00. Только там,
+   * Поле «Витрина»: итог дня или наполнение на 08:00, 16:00, 18:30. Только там,
    * где страница умеет считать по одному замеру: сводка и радар.
    */
   showSlot?: boolean;
@@ -277,7 +277,7 @@ export function Filters({
         </Field>
       )}
 
-      {/* Замеров два, утром и в 16:00, а итог дня — их среднее. По итогу
+      {/* Замеров три — утром, в 16:00 и (с 26.10) в 18:30, итог дня — их среднее. По итогу
           не видно, когда витрина просела: полная с утра и пустая к вечеру
           лавка выглядит так же, как наполовину пустая весь день. */}
       {showSlot && (
@@ -291,9 +291,10 @@ export function Filters({
             disabled={!!slotDisabled}
             title={slotDisabled}
           >
-            <option value="all">Итог дня (среднее 08:00 и 16:00)</option>
+            <option value="all">Итог дня (среднее замеров)</option>
             <option value="morning">{SLOT_FILTER_TITLE.morning}</option>
             <option value="afternoon">{SLOT_FILTER_TITLE.afternoon}</option>
+            <option value="evening">{SLOT_FILTER_TITLE.evening}</option>
           </select>
         </Field>
       )}

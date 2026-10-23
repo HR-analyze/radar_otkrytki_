@@ -93,6 +93,16 @@ function migrate(db: BetterSqlite3.Database): void {
       PRIMARY KEY (date, shop_code)
     );
 
+    -- Третий замер — в 18:30, с 26.10.2026. Устроен так же, как 16:00, и по
+    -- той же причине лежит отдельной таблицей.
+    CREATE TABLE IF NOT EXISTS showcase_fill_evening (
+      date       TEXT NOT NULL,
+      shop_code  TEXT NOT NULL,
+      fill       REAL NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (date, shop_code)
+    );
+
     -- Комментарий к лавке за день: «не привезли ягоды», «витрину чинили».
     -- Живёт отдельно от наполнения: заметку можно оставить и без процента.
     CREATE TABLE IF NOT EXISTS showcase_note (
@@ -102,6 +112,22 @@ function migrate(db: BetterSqlite3.Database): void {
       updated_at TEXT NOT NULL,
       PRIMARY KEY (date, shop_code)
     );
+
+    -- Фото витрины: от 1 до 7 снимков на лавку за день (см. showcase-photos.ts).
+    -- Байты лежат прямо в базе: она и так вне git и переживает деплой, а
+    -- отдельная папка с файлами — второе место, которое легко забыть в бэкапе.
+    -- id не переиспользуется (AUTOINCREMENT): адрес фото кэшируется навсегда.
+    CREATE TABLE IF NOT EXISTS showcase_photo (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      date       TEXT NOT NULL,
+      shop_code  TEXT NOT NULL,
+      mime       TEXT NOT NULL,
+      size       INTEGER NOT NULL,
+      data       BLOB NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS showcase_photo_cell ON showcase_photo (date, shop_code);
 
     -- Когда день трогали последний раз — для вкладки «История».
     CREATE TABLE IF NOT EXISTS showcase_day (
@@ -123,7 +149,7 @@ function migrate(db: BetterSqlite3.Database): void {
     -- правка со страницы «Витрины» или из залитой книги.
     --
     -- field: 'fill' (утреннее наполнение, доля 0–1 строкой), 'fill_afternoon'
-    -- (наполнение в 16:00) или 'note' (комментарий).
+    -- (наполнение в 16:00), 'fill_evening' (в 18:30) или 'note' (комментарий).
     -- NULL в old_value значит «значения не было», в new_value — «стёрли».
     CREATE TABLE IF NOT EXISTS showcase_audit (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -191,6 +217,16 @@ function migrate(db: BetterSqlite3.Database): void {
       region     TEXT NOT NULL,
       reason     TEXT NOT NULL,
       created_at TEXT NOT NULL
+    );
+
+    -- Кто какие лавки заполняет на вкладке «Витрины» — см. showcase-owners.ts.
+    -- Список сохраняется целиком, поэтому порядок строк — просто position.
+    -- shops — JSON-массив кодов: ["М14","М16"].
+    CREATE TABLE IF NOT EXISTS showcase_owners (
+      position   INTEGER PRIMARY KEY,
+      name       TEXT NOT NULL,
+      shops      TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
 
     -- Разовые отметки: например, что сид из репозитория уже залит.

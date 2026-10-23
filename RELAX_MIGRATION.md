@@ -15,6 +15,7 @@ RADAR_STORAGE=postgres
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DB
 RADAR_MANAGE_PASSWORD=<strong-password>
 RADAR_UPLOAD_TOKEN=<strong-upload-code>
+RADAR_1C_TOKEN=<openssl rand -hex 32; API for 1C, see README «API для 1С»>
 RADAR_GITHUB_TOKEN=<fine-grained-token-with-contents-read-write>
 RADAR_GITHUB_REPO=HR-analyze/radar_otkrytki_
 RADAR_GITHUB_BRANCH=relax-migration

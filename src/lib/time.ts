@@ -115,6 +115,21 @@ export function todayIso(now: Date = new Date()): string {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+const CLOCK_IN_TZ = new Intl.DateTimeFormat('en-GB', {
+  timeZone: RADAR_TZ,
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/** Который сейчас час по Москве — минуты от полуночи. Пара к todayIso. */
+export function minutesNowMsk(now: Date = new Date()): number {
+  const parts = Object.fromEntries(
+    CLOCK_IN_TZ.formatToParts(now).map((p) => [p.type, p.value]),
+  ) as Record<string, string>;
+  return Number(parts.hour) * 60 + Number(parts.minute);
+}
+
 /**
  * Момент времени (ISO с зоной) → «08.09.2026, 06:38» по Москве.
  *

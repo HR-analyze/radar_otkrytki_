@@ -25,12 +25,14 @@ export const STATUS_FILTER_TITLE: Record<Status, string> = {
 export const SLOT_TIME: Record<FillSlot, string> = {
   morning: '08:00',
   afternoon: '16:00',
+  evening: '18:30',
 };
 
 /** Подписи фильтра «Витрина» — по той же причине, что и у статуса. */
 export const SLOT_FILTER_TITLE: Record<FillSlot, string> = {
   morning: `Наполнение на ${SLOT_TIME.morning}`,
   afternoon: `Наполнение на ${SLOT_TIME.afternoon}`,
+  evening: `Наполнение на ${SLOT_TIME.evening}`,
 };
 
 export function StatusBadge({ status, children }: { status: Status; children?: React.ReactNode }) {

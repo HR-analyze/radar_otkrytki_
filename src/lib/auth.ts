@@ -3,7 +3,7 @@
  *
  * Сам радар открыт: цифры смотрит вся команда, и лишний барьер на входе только
  * мешает. Закрыты «Витрины» и «История» — там данные меняют, и доступ туда
- * нужен не всем.
+ * нужен не всем, — и «Конкурс»: рейтинг лавок и РМ смотрят не все.
  *
  * Пароль лежит в переменной окружения, а не в репозитории: пароль в git — это
  * пароль, который видит каждый, у кого есть доступ к коду, и который нельзя
@@ -26,10 +26,13 @@ export const COOKIE = 'radar_manage';
  * «Пороги» закрыты с 10.09.2026: со вкладки правятся нормативы лавок, а правка
  * нормы перекрашивает статусы лавки за все дни. Раньше страница была только
  * для чтения и висела открытой.
+ *
+ * «Конкурс» закрыт с 13.10.2026 целиком, вместе с PDF-отчётом и нарушениями
+ * (`/api/contest/*`): иначе рейтинг утекал бы по ссылке «Скачать PDF».
  */
-const MANAGED = ['/showcase', '/history', '/settings', '/api/showcase', '/api/norms', '/api/contest/violations'];
+const MANAGED = ['/showcase', '/history', '/settings', '/contest', '/api/showcase', '/api/norms', '/api/contest'];
 
-export const MANAGED_TITLE = 'Витрины, История, Пороги и внесение нарушений';
+export const MANAGED_TITLE = 'Витрины, История, Пороги и Конкурс';
 
 export function password(): string | undefined {
   return process.env.RADAR_MANAGE_PASSWORD || undefined;
@@ -48,9 +51,21 @@ export function passwordSet(): boolean {
  */
 export function isPublic(pathname: string): boolean {
   return (
-    pathname === '/login' || pathname === '/api/login' || pathname.startsWith('/api/cron/')
+    pathname === '/login' ||
+    pathname === '/api/login' ||
+    pathname.startsWith('/api/cron/') ||
+    PHOTO_FILE.test(pathname)
   );
 }
+
+/**
+ * Файл фото витрины — /api/showcase/photos/<id>. Его показывает карточка
+ * лавки, а она открыта всем, как и процент наполнения на ней же: закрой файл
+ * паролем — у всех без входа вместо снимков будут битые картинки. Удаление
+ * по тому же адресу проверяет пароль само (см. роут), список и загрузка —
+ * /api/showcase/photos без id — остаются под паролем.
+ */
+const PHOTO_FILE = /^\/api\/showcase\/photos\/\d+$/;
 
 /** Нужен ли для пути пароль. */
 export function isManaged(pathname: string): boolean {
@@ -91,7 +106,7 @@ export function checkCronSecret(req: Request): { ok: true } | { ok: false; reaso
   return { ok: true };
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
+export function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);

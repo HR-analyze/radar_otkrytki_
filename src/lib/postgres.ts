@@ -27,10 +27,17 @@ CREATE TABLE IF NOT EXISTS radar_pg_showcase_fill (
 CREATE TABLE IF NOT EXISTS radar_pg_showcase_fill_afternoon (
   date TEXT NOT NULL, shop_code TEXT NOT NULL, fill DOUBLE PRECISION NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY(date, shop_code));
+CREATE TABLE IF NOT EXISTS radar_pg_showcase_fill_evening (
+  date TEXT NOT NULL, shop_code TEXT NOT NULL, fill DOUBLE PRECISION NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY(date, shop_code));
 CREATE TABLE IF NOT EXISTS radar_pg_showcase_note (
   date TEXT NOT NULL, shop_code TEXT NOT NULL, note TEXT NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY(date, shop_code));
 CREATE TABLE IF NOT EXISTS radar_pg_showcase_day (date TEXT PRIMARY KEY, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS radar_pg_showcase_photo (
+  id BIGSERIAL PRIMARY KEY, date TEXT NOT NULL, shop_code TEXT NOT NULL,
+  mime TEXT NOT NULL, size INTEGER NOT NULL, data BYTEA NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS radar_pg_showcase_photo_cell ON radar_pg_showcase_photo(date, shop_code);
 CREATE TABLE IF NOT EXISTS radar_pg_showcase_audit (
   id BIGSERIAL PRIMARY KEY, at TEXT NOT NULL, date TEXT NOT NULL, shop_code TEXT NOT NULL,
   field TEXT NOT NULL, old_value TEXT, new_value TEXT, source TEXT NOT NULL,
@@ -50,6 +57,8 @@ CREATE TABLE IF NOT EXISTS radar_pg_uploads (
   kind TEXT NOT NULL, summary TEXT NOT NULL, dates TEXT NOT NULL, "rows" INTEGER NOT NULL, mode TEXT NOT NULL,
   legacy_id BIGINT UNIQUE);
 CREATE INDEX IF NOT EXISTS radar_pg_uploads_at ON radar_pg_uploads(at DESC, id DESC);
+CREATE TABLE IF NOT EXISTS radar_pg_showcase_owners (
+  position INTEGER PRIMARY KEY, name TEXT NOT NULL, shops TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS radar_pg_archive (
   kind TEXT NOT NULL, legacy_key TEXT NOT NULL, payload JSONB NOT NULL,
   PRIMARY KEY(kind,legacy_key));

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { hasEvening } from '@/lib/day-fill';
 import { plural } from '@/lib/plural';
 import {
   defaultShowcaseRange,
@@ -12,9 +13,12 @@ import {
 import { todayIso } from '@/lib/time';
 import type { Status } from '@/lib/types';
 import { ClearButton } from './ClearButton';
+import { ShowcasePhotos } from './ShowcasePhotos';
 import {
   EmptyFilter,
   FILL_SLOTS,
+  PresenceBadge,
+  rowStyle,
   FIELD_STYLE,
   FillInputs,
   SaveBadge,
@@ -22,9 +26,11 @@ import {
   TokenInput,
   UndoButton,
   humanDate,
+  slotMissing,
   type FillField,
 } from './showcase-ui';
 import { useShowcaseEdits, type SavedRow } from './use-showcase-edits';
+import { FRESH_MS, useLiveRefresh, type ShowcaseLive } from './use-showcase-live';
 
 /**
  * Второй способ заполнения: **выбрана лавка — в списке дни.**
@@ -51,9 +57,13 @@ interface DayRow {
   percent: number | null;
   /** Замер в 16:00. */
   afternoonPercent: number | null;
-  /** Статус итога дня — среднего двух замеров. */
+  /** Замер в 18:30 — с 26.10.2026. */
+  eveningPercent: number | null;
+  /** Статус итога дня — среднего заполненных замеров. */
   status: Status;
   note: string;
+  /** Сколько фото витрины приложено (0–7), см. ShowcasePhotos. */
+  photos: number;
   updatedAt: string | null;
 }
 
@@ -102,11 +112,13 @@ const PRESETS: { key: string; label: string; range: () => ShowcaseRange }[] = [
 ];
 
 export function ShowcaseShopEditor({
+  live,
   shopCode,
   onShopCode,
   region,
   onRegion,
 }: {
+  live: ShowcaseLive;
   /** Пусто — какую лавку открыть, решает сервер: первую в справочнике. */
   shopCode: string;
   onShopCode: (code: string) => void;
@@ -139,6 +151,7 @@ export function ShowcaseShopEditor({
                     ...d,
                     percent: saved.percent,
                     afternoonPercent: saved.afternoonPercent,
+                    eveningPercent: saved.eveningPercent,
                     status: saved.status,
                     note: saved.note,
                   }
@@ -150,6 +163,13 @@ export function ShowcaseShopEditor({
   }, []);
 
   const edits = useShowcaseEdits(applySaved);
+
+  /** Окно фото сообщает, сколько их стало, — значок в строке обновляется без перезагрузки. */
+  const setPhotoCount = useCallback((date: string, photos: number) => {
+    setData((prev) =>
+      prev ? { ...prev, days: prev.days.map((d) => (d.date === date ? { ...d, photos } : d)) } : prev,
+    );
+  }, []);
   const { reset, setError } = edits;
 
   const load = useCallback(
@@ -162,7 +182,13 @@ export function ShowcaseShopEditor({
       setData(body);
       // Фильтр читаем через ref: перезагружать лавку из-за его смены незачем.
       const field = onlyEmptyRef.current;
-      setEmptyLock(new Set((body.days ?? []).filter((d) => field && d[field] == null).map((d) => d.date)));
+      setEmptyLock(
+        new Set(
+          (body.days ?? [])
+            .filter((d) => field && d[field] == null && slotMissing(d.date, field, ''))
+            .map((d) => d.date),
+        ),
+      );
       if (!body.ok) {
         setError(body.error ?? 'Не удалось загрузить лавку');
         return;
@@ -180,7 +206,58 @@ export function ShowcaseShopEditor({
     void load(shopCode, range.from, range.to);
   }, [shopCode, range.from, range.to, load, reset]);
 
+  // Живая синхронизация — как в дневном режиме (см. ShowcaseDayEditor).
+  const focusRow = useRef<{ date: string; shopCode: string } | null>(null);
+  const dataRef = useRef<ShopData | null>(null);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  const { isIdle, settle } = edits;
+
+  const quiet = useCallback(async () => {
+    const prev = dataRef.current;
+    if (!prev?.ok) return false;
+    const query = new URLSearchParams({ shop: prev.shop.code, from: prev.from, to: prev.to });
+    const res = await fetch(`/api/showcase?${query}`);
+    const body = (await res.json()) as ShopData;
+    const now = dataRef.current;
+    if (!body.ok || !now?.ok || now.shop.code !== body.shop.code || now.from !== body.from || !isIdle()) {
+      return false;
+    }
+
+    const was = new Map(now.days.map((d) => [d.date, d]));
+    const changed = body.days
+      .filter((d) => {
+        const p = was.get(d.date);
+        return (
+          p &&
+          (p.percent !== d.percent ||
+            p.afternoonPercent !== d.afternoonPercent ||
+            p.eveningPercent !== d.eveningPercent ||
+            p.note !== d.note)
+        );
+      })
+      .map((d) => d.date);
+
+    settle(focusRow.current);
+    setData(body);
+    if (changed.length > 0) {
+      setFresh(new Set(changed));
+      setTimeout(() => setFresh(new Set()), FRESH_MS);
+    }
+    return true;
+  }, [isIdle, settle]);
+  useLiveRefresh(live, isIdle, quiet);
+
   const code = data?.shop.code ?? shopCode;
+  const { setFocus } = live;
+  const focusDay = (date: string | null) => {
+    focusRow.current = date ? { date, shopCode: code } : null;
+    setFocus(focusRow.current);
+  };
+  const busy = (date: string) =>
+    live.others.filter((o) => o.date === date && o.shopCode === code).map((o) => o.who || 'кто-то');
   const days = data?.days ?? [];
   const thresholds = data?.thresholds ?? { green: 1, yellow: 1 };
   const readOnly = data ? !data.editable : false;
@@ -216,14 +293,24 @@ export function ShowcaseShopEditor({
   };
 
   const visible = useMemo(
-    () => days.filter((d) => !onlyEmpty || emptyLock.has(d.date) || percentOf(d, onlyEmpty) === ''),
+    () =>
+      days.filter(
+        (d) => !onlyEmpty || emptyLock.has(d.date) || slotMissing(d.date, onlyEmpty, percentOf(d, onlyEmpty)),
+      ),
     [days, onlyEmpty, emptyLock, percentOf],
   );
+  // 18:30 в шапке и фильтре — если в окне есть хоть один день с этим замером.
+  const withEvening = days.some((d) => hasEvening(d.date));
+  const slots = withEvening ? FILL_SLOTS : FILL_SLOTS.filter((s) => s.field !== 'eveningPercent');
 
   const filled = (field: FillField) => days.filter((d) => percentOf(d, field) !== '').length;
-  const doneInView = onlyEmpty ? visible.filter((d) => percentOf(d, onlyEmpty) !== '').length : 0;
+  const doneInView = onlyEmpty
+    ? visible.filter((d) => !slotMissing(d.date, onlyEmpty, percentOf(d, onlyEmpty))).length
+    : 0;
   const relock = (field: FillField | '' = onlyEmpty) =>
-    setEmptyLock(new Set(field ? days.filter((d) => percentOf(d, field) === '').map((d) => d.date) : []));
+    setEmptyLock(
+      new Set(field ? days.filter((d) => slotMissing(d.date, field, percentOf(d, field))).map((d) => d.date) : []),
+    );
 
   function focusAt(index: number, field: FillField) {
     const day = visible[index];
@@ -295,7 +382,7 @@ export function ShowcaseShopEditor({
 
         <span className="text-sm">
           Заполнено{' '}
-          {FILL_SLOTS.map((slot, i) => (
+          {slots.map((slot, i) => (
             <span key={slot.field}>
               {i > 0 && ' · '}
               {slot.label} <b className="tabular-nums">{filled(slot.field)}</b>
@@ -369,6 +456,7 @@ export function ShowcaseShopEditor({
 
         <EmptyFilter
           value={onlyEmpty}
+          slots={slots}
           noun="день"
           onChange={(next) => {
             setOnlyEmpty(next);
@@ -420,8 +508,12 @@ export function ShowcaseShopEditor({
               return (
                 <li
                   key={day.date}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-2 first:border-0"
-                  style={{ borderColor: 'var(--border)' }}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t px-3 py-2 transition-colors first:border-0"
+                  style={rowStyle(busy(day.date).length > 0, fresh.has(day.date))}
+                  onFocus={() => focusDay(day.date)}
+                  onBlur={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focusDay(null);
+                  }}
                 >
                   {/* Дата — то же место, что код лавки в дневном списке: слева,
                       фиксированной ширины, чтобы столбик не «дышал». Ширина с
@@ -432,11 +524,14 @@ export function ShowcaseShopEditor({
                   </span>
 
                   {/* Порядок Tab тот же, что в дневном режиме: утро → 16:00 →
-                      комментарий того же дня → утро следующего. */}
+                      18:30 → комментарий того же дня → утро следующего. */}
                   <FillInputs
+                    date={day.date}
+                    reserveEvening={withEvening}
                     values={{
                       percent: percentOf(day, 'percent'),
                       afternoonPercent: percentOf(day, 'afternoonPercent'),
+                      eveningPercent: percentOf(day, 'eveningPercent'),
                     }}
                     thresholds={thresholds}
                     disabled={readOnly}
@@ -468,6 +563,7 @@ export function ShowcaseShopEditor({
                     }}
                   />
 
+
                   <input
                     value={noteOf(day)}
                     onChange={(e) =>
@@ -492,6 +588,18 @@ export function ShowcaseShopEditor({
                     aria-label={`Комментарий, ${code}, ${day.date}`}
                     className="showcase-note order-1 min-w-0 flex-1 basis-40 rounded-lg px-2 py-1.5 text-sm disabled:opacity-50 sm:max-w-xs"
                   />
+
+                  <PresenceBadge names={busy(day.date)} />
+
+                  {/* Фото — последним в разметке: Tab не должен застревать
+                      между 16:00 и комментарием (см. дневной редактор). */}
+                  <ShowcasePhotos
+                    date={day.date}
+                    shopCode={code}
+                    count={day.photos ?? 0}
+                    readOnly={readOnly}
+                    onCount={(n) => setPhotoCount(day.date, n)}
+                  />
                 </li>
               );
             })}
@@ -501,7 +609,8 @@ export function ShowcaseShopEditor({
 
       <p className="text-xs muted">
         Режим для дозаполнения задним числом: лавка выбирается один раз, дни идут сверху вниз,
-        свежий — первым. Замеров два — утро и 16:00, статус — итог дня, среднее двух. Enter
+        свежий — первым. Замеры — утро, 16:00 и с 26.10 18:30, статус — итог дня, среднее
+        заполненных. Enter
         или ↓ — следующий день, ↑ — предыдущий (по тому же замеру), Tab — следующее поле того же
         дня. Стрелки слева от названия переводят на соседнюю лавку, не сбрасывая период; выбранный
         РМ сужает обход. Период меняется стрелками «←/→» на свою же длину или быстрыми кнопками;

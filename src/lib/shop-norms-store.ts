@@ -3,6 +3,7 @@ import path from 'node:path';
 import { manualDbWritable, openManualDb } from './manual-db';
 import { sortTimes } from './parsers/shop-norms';
 import type { ShopNorms } from './types';
+import bundledSeed from '../../fixtures/shop-norms.json';
 
 /**
  * Нормативы открытия по лавкам: во сколько должен приехать водитель и к
@@ -41,6 +42,24 @@ export interface ShopNormsEdit {
   cookAt: string[];
 }
 
+/**
+ * Содержимое `fixtures/shop-norms.json` из разобранного справочника. Одно на
+ * двоих: `npm run norms:build` и загрузку справочника кнопкой с дашборда —
+ * иначе файл, собранный руками и с сайта, однажды разошёлся бы по формату.
+ */
+export function normsSeedJson(norms: readonly ShopNorms[], source: string, builtAt = new Date()): string {
+  const seed = {
+    $comment:
+      'Нормативы открытия по лавкам. Собирается из справочника «Лавки»: npm run norms:build ' +
+      'или загрузкой справочника кнопкой на дашборде. ' +
+      'Правки с сайта сюда не попадают — они живут в базе ручных данных (см. shop-norms-store.ts).',
+    source,
+    builtAt: builtAt.toISOString().slice(0, 10),
+    norms: [...norms].sort((a, b) => a.code.localeCompare(b.code, 'ru', { numeric: true })),
+  };
+  return JSON.stringify(seed, null, 2) + '\n';
+}
+
 function seedPath(): string {
   return process.env.RADAR_SHOP_NORMS_PATH ?? path.join(process.cwd(), SHOP_NORMS_SEED_PATH);
 }
@@ -56,17 +75,23 @@ export function normsEditHint(): string {
         'Правьте нормы там, где радар развёрнут на своём сервере.';
 }
 
-/** Сид из репозитория — разобранный справочник «Лавки». */
+/**
+ * Сид из репозитория — разобранный справочник «Лавки».
+ *
+ * Как и пороги (config.ts), файл вкомпилирован в сборку и читается с диска.
+ * Без вшитой копии сервер, запущенный не из корня репозитория, не находил
+ * файл и молча оставался без норм: все лавки уходили в «Без нормы в
+ * справочнике», а снимок, собранный с нормами, объявлялся устаревшим.
+ */
 export function readNormsSeed(): ShopNorms[] {
+  let raw: { norms?: unknown };
   try {
-    const raw = JSON.parse(
-      fs.readFileSync(/* turbopackIgnore: true */ seedPath(), 'utf8'),
-    ) as { norms?: unknown };
-    if (!Array.isArray(raw.norms)) return [];
-    return raw.norms.filter(isShopNorms);
+    raw = JSON.parse(fs.readFileSync(/* turbopackIgnore: true */ seedPath(), 'utf8'));
   } catch {
-    return [];
+    raw = bundledSeed;
   }
+  if (!Array.isArray(raw.norms)) return [];
+  return raw.norms.filter(isShopNorms);
 }
 
 export async function readNorms(): Promise<ShopNormsStore> {

@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ShowcaseDayEditor } from './ShowcaseDayEditor';
 import { ShowcaseShopEditor } from './ShowcaseShopEditor';
+import { LiveBar } from './showcase-ui';
+import { useShowcaseLive } from './use-showcase-live';
 
 /**
  * Редактор наполнения витрин — два разреза одних и тех же данных.
@@ -30,17 +32,37 @@ export function ShowcaseEditor({
   initialDate,
   initialMode = 'day',
   initialShop = '',
+  ownerNames = [],
 }: {
   initialDate: string;
   initialMode?: Mode;
   initialShop?: string;
+  /** Ответственные за витрины — подсказки в поле «Я». */
+  ownerNames?: readonly string[];
 }) {
+  // Одна живая связь на страницу: при смене режима метка и опрос не рвутся.
+  const live = useShowcaseLive();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [date, setDate] = useState(initialDate);
   // Лавка и РМ живут здесь, а не внутри режимов: в дневном это фильтр списка,
   // в полавочном — предмет работы, но человек считает их одним выбором.
   const [shopCode, setShopCode] = useState(initialShop);
   const [region, setRegion] = useState('');
+
+  // Фото можно бросить на значок 📷 в строке (см. ShowcasePhotos). Промах мимо
+  // него браузер по умолчанию понимает как «открыть файл» — уходит со страницы,
+  // и правки, ещё не дописанные в базу, теряются. Бросок мимо цели гасим здесь.
+  useEffect(() => {
+    const swallow = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+    };
+    window.addEventListener('dragover', swallow);
+    window.addEventListener('drop', swallow);
+    return () => {
+      window.removeEventListener('dragover', swallow);
+      window.removeEventListener('drop', swallow);
+    };
+  }, []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -73,8 +95,11 @@ export function ShowcaseEditor({
         </span>
       </div>
 
+      <LiveBar who={live.who} onWho={live.setWho} names={ownerNames} others={live.others} />
+
       {mode === 'day' ? (
         <ShowcaseDayEditor
+          live={live}
           date={date}
           onDate={setDate}
           shopCode={shopCode}
@@ -84,6 +109,7 @@ export function ShowcaseEditor({
         />
       ) : (
         <ShowcaseShopEditor
+          live={live}
           shopCode={shopCode}
           onShopCode={setShopCode}
           region={region}

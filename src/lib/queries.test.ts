@@ -477,7 +477,7 @@ test('конкурс считается по утреннему замеру, и
 
   const [history] = await q.shopHistory('М8', day, day);
   assert.equal(history.fill, 0.75, 'в карточке лавки итог — среднее замеров');
-  assert.deepEqual(history.fillSlots, { morning: 1, afternoon: 0.5 });
+  assert.deepEqual(history.fillSlots, { morning: 1, afternoon: 0.5, evening: null });
   assert.equal(
     history.criteria.find((c) => c.criterion === 'showcase')?.status,
     'red',

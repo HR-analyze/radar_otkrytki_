@@ -9,6 +9,8 @@ import type { ShopNorms, RegionPeriod } from './types';
 import type { ShowcaseAuditFilter, ShowcaseAuditEntry, ShowcaseEditSource } from './showcase-audit';
 import type { ContestViolation } from './contest-violations-store';
 import type { UploadLogEntry } from './upload-log';
+import { OwnersConflictError, parseShopsJson, type ShowcaseOwner } from './showcase-owners';
+import type { OwnersSeed } from './showcase-owners-store';
 
 // PostgreSQL replaces only the manual SQLite store. The original SQLite code stays
 // available for recovering the Yandex VM. All dates/timestamps are TEXT to preserve
@@ -16,6 +18,7 @@ import type { UploadLogEntry } from './upload-log';
 const TABLES = {
   fill: 'radar_pg_showcase_fill',
   fill_afternoon: 'radar_pg_showcase_fill_afternoon',
+  fill_evening: 'radar_pg_showcase_fill_evening',
   note: 'radar_pg_showcase_note',
 } as const;
 
@@ -43,7 +46,7 @@ export async function pgSeedShowcase(readSeed: () => Seed): Promise<void> {
       const notes = Object.entries(seed.notes || {}).flatMap(([date, values]) =>
         Object.entries(values).map(([shop_code, note]) => ({ date, shop_code, note, updated_at: stamp(date) })));
       const touches = Object.entries(seed.touched || {}).map(([date, updated_at]) => ({date, updated_at}));
-      const dates = new Set([...Object.keys(seed.days), ...Object.keys(seed.afternoon), ...Object.keys(seed.notes || {})]);
+      const dates = new Set([...Object.keys(seed.days), ...Object.keys(seed.afternoon), ...Object.keys(seed.evening || {}), ...Object.keys(seed.notes || {})]);
       for(const date of dates) {
         if (!touches.some(t => t.date === date)) touches.push({date, updated_at: stamp(date)});
       }
@@ -54,6 +57,7 @@ export async function pgSeedShowcase(readSeed: () => Seed): Promise<void> {
       for (const [table, rows] of [
         ['radar_pg_showcase_fill', fills(seed.days)],
         ['radar_pg_showcase_fill_afternoon', fills(seed.afternoon)],
+        ['radar_pg_showcase_fill_evening', fills(seed.evening || {})],
       ] as const) {
         if (rows.length) await c.query(sqlFill(table), [JSON.stringify(rows)]);
       }
@@ -80,26 +84,28 @@ export async function pgSeedShowcase(readSeed: () => Seed): Promise<void> {
 export async function pgShowcaseVersion(readSeed: () => Seed): Promise<string> {
   await pgSeedShowcase(readSeed);
   const v = await pgRows<{n: string; at: string}>(
-    "SELECT COUNT(*)::text AS n,COALESCE(MAX(updated_at),'') AS at FROM (SELECT updated_at FROM radar_pg_showcase_fill UNION ALL SELECT updated_at FROM radar_pg_showcase_fill_afternoon) t");
+    "SELECT COUNT(*)::text AS n,COALESCE(MAX(updated_at),'') AS at FROM (SELECT updated_at FROM radar_pg_showcase_fill UNION ALL SELECT updated_at FROM radar_pg_showcase_fill_afternoon UNION ALL SELECT updated_at FROM radar_pg_showcase_fill_evening) t");
   const a = await pgRows<{n: string}>('SELECT COUNT(*)::text AS n FROM radar_pg_showcase_audit');
   return 'pg|' + v[0].at + '|' + v[0].n + '|' + a[0].n;
 }
 
 export async function pgReadShowcase(readSeed: () => Seed): Promise<ShowcaseStore> {
   await pgSeedShowcase(readSeed);
-  const [m, a, n, t] = await Promise.all([
+  const [m, a, ev, n, t] = await Promise.all([
     pgRows<{date:string;shop_code:string;fill:number}>('SELECT date,shop_code,fill FROM radar_pg_showcase_fill ORDER BY date,shop_code'),
     pgRows<{date:string;shop_code:string;fill:number}>('SELECT date,shop_code,fill FROM radar_pg_showcase_fill_afternoon ORDER BY date,shop_code'),
+    pgRows<{date:string;shop_code:string;fill:number}>('SELECT date,shop_code,fill FROM radar_pg_showcase_fill_evening ORDER BY date,shop_code'),
     pgRows<{date:string;shop_code:string;note:string}>('SELECT date,shop_code,note FROM radar_pg_showcase_note ORDER BY date,shop_code'),
     pgRows<{date:string;updated_at:string}>('SELECT date,updated_at FROM radar_pg_showcase_day'),
   ]);
-  const days: Seed['days'] = {}, afternoon: Seed['afternoon'] = {}, notes: Seed['notes'] = {}, touched: Seed['touched'] = {};
+  const days: Seed['days'] = {}, afternoon: Seed['afternoon'] = {}, evening: Seed['evening'] = {}, notes: Seed['notes'] = {}, touched: Seed['touched'] = {};
   for (const x of m) (days[x.date] ??= {})[x.shop_code] = Number(x.fill);
   for (const x of a) (afternoon[x.date] ??= {})[x.shop_code] = Number(x.fill);
+  for (const x of ev) (evening[x.date] ??= {})[x.shop_code] = Number(x.fill);
   for (const x of n) (notes[x.date] ??= {})[x.shop_code] = x.note;
   for (const x of t) touched[x.date] = x.updated_at;
   const updatedAt = t.map(x => x.updated_at).sort().at(-1) ?? null;
-  return { days,afternoon,notes,touched,updatedAt,source:'db' };
+  return { days,afternoon,evening,notes,touched,updatedAt,source:'db' };
 }
 
 export async function pgSaveShowcaseEdits(
@@ -116,7 +122,7 @@ export async function pgSaveShowcaseEdits(
     };
     for (const e of edits) {
       let touched = false;
-      for (const [field,value] of [['fill',e.fill],['fill_afternoon',e.afternoonFill]] as const) {
+      for (const [field,value] of [['fill',e.fill],['fill_afternoon',e.afternoonFill],['fill_evening',e.eveningFill]] as const) {
         if (value === undefined) continue;
         const table=TABLES[field];
         const prior=await c.query('SELECT fill FROM '+table+' WHERE date=$1 AND shop_code=$2',[e.date,e.shopCode]);
@@ -165,7 +171,7 @@ export async function pgReadAudit(filter:ShowcaseAuditFilter={}):Promise<Showcas
   const rows=await pgRows<{at:string;date:string;shop_code:string;field:string;old_value:string|null;new_value:string|null;source:string}>(
     'SELECT at,date,shop_code,field,old_value,new_value,source FROM radar_pg_showcase_audit'+
     (parts.length?' WHERE '+parts.join(' AND '):'')+' ORDER BY at DESC,id DESC LIMIT $'+args.length,args);
-  return rows.map(r=>({at:r.at,date:r.date,shopCode:r.shop_code,field: r.field==='note'||r.field==='fill_afternoon'?r.field:'fill',from:r.old_value,to:r.new_value,source:r.source==='ui'||r.source==='upload'?r.source:'unknown'}));
+  return rows.map(r=>({at:r.at,date:r.date,shopCode:r.shop_code,field: r.field==='note'||r.field==='fill_afternoon'||r.field==='fill_evening'?r.field:'fill',from:r.old_value,to:r.new_value,source:r.source==='ui'||r.source==='upload'?r.source:'unknown'}));
 }
 export async function pgAuditCount():Promise<number>{
   const r=await pgRows<{n:number}>('SELECT COUNT(*)::int AS n FROM radar_pg_showcase_audit');
@@ -258,5 +264,42 @@ export async function pgAppendUploads(entries:readonly UploadLogEntry[]):Promise
       await c.query('INSERT INTO radar_pg_uploads(at,original_name,file_name,kind,summary,dates,"rows",mode) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
         [e.at,e.originalName,e.fileName,e.kind,e.summary,JSON.stringify(e.dates),e.rows,e.mode]);
     }
+  });
+}
+
+// Who fills which shops on the showcase tab. The list is saved as a whole; the
+// seed goes in once, so a person removed from the list does not come back.
+async function pgSeedOwners(c:DbClient,readSeed:()=>OwnersSeed):Promise<void>{
+  if(await meta(c,'showcase_owners_seeded'))return;
+  const seed=readSeed();
+  const at=seed.updatedAt??new Date().toISOString();
+  await pgInsertOwners(c,seed.owners,at);
+  await setMeta(c,'showcase_owners_updated_at',at);
+  await setMeta(c,'showcase_owners_seeded',new Date().toISOString());
+}
+async function pgInsertOwners(c:DbClient,owners:readonly ShowcaseOwner[],at:string):Promise<void>{
+  if(!owners.length)return;
+  const rows=owners.map((o,position)=>({position,name:o.name,shops:JSON.stringify(o.shops),updated_at:at}));
+  await c.query('INSERT INTO radar_pg_showcase_owners(position,name,shops,updated_at) '+
+    'SELECT position,name,shops,updated_at FROM jsonb_to_recordset($1::jsonb) '+
+    'AS r(position int,name text,shops text,updated_at text) ON CONFLICT DO NOTHING',[JSON.stringify(rows)]);
+}
+export async function pgReadOwners(readSeed:()=>OwnersSeed):Promise<OwnersSeed>{
+  return pgTx(async c=>{
+    await pgSeedOwners(c,readSeed);
+    const r=await c.query('SELECT name,shops FROM radar_pg_showcase_owners ORDER BY position');
+    return {
+      owners:r.rows.map(x=>({name:String(x.name),shops:parseShopsJson(String(x.shops))})),
+      updatedAt:await meta(c,'showcase_owners_updated_at'),
+    };
+  });
+}
+export async function pgSaveOwners(owners:readonly ShowcaseOwner[],expected:string|null|undefined,now:string,readSeed:()=>OwnersSeed):Promise<void>{
+  await pgTx(async c=>{
+    await pgSeedOwners(c,readSeed);
+    if(expected!==undefined&&expected!==(await meta(c,'showcase_owners_updated_at')))throw new OwnersConflictError();
+    await c.query('DELETE FROM radar_pg_showcase_owners');
+    await pgInsertOwners(c,owners,now);
+    await setMeta(c,'showcase_owners_updated_at',now);
   });
 }
