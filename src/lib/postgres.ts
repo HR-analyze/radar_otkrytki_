@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS radar_pg_showcase_fill (
 CREATE TABLE IF NOT EXISTS radar_pg_showcase_fill_afternoon (
   date TEXT NOT NULL, shop_code TEXT NOT NULL, fill DOUBLE PRECISION NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY(date, shop_code));
+CREATE TABLE IF NOT EXISTS radar_pg_showcase_fill_evening (
+  date TEXT NOT NULL, shop_code TEXT NOT NULL, fill DOUBLE PRECISION NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY(date, shop_code));
 CREATE TABLE IF NOT EXISTS radar_pg_showcase_note (
   date TEXT NOT NULL, shop_code TEXT NOT NULL, note TEXT NOT NULL, updated_at TEXT NOT NULL,
   PRIMARY KEY(date, shop_code));

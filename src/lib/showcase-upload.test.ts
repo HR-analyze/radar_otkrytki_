@@ -52,6 +52,13 @@ function book(): Buffer {
   afternoon['!merges'] = [XLSX.utils.decode_range('B4:C4')];
   XLSX.utils.book_append_sheet(wb, afternoon, 'Витрины 1600');
 
+  const evening = XLSX.utils.aoa_to_sheet([
+    ['Лавка', d('2026-10-08')],
+    ['М1 Милютинский', 60],
+    ['М3 Пресня', 'закрылись раньше'],
+  ]);
+  XLSX.utils.book_append_sheet(wb, evening, 'Витрины 1830');
+
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 }
 
@@ -95,7 +102,12 @@ test('разбор книги: оба замера, комментарии, со
   assert.equal(f.kind, 'showcase');
   assert.deepEqual(f.dates, ['2026-10-08', '2026-10-09', '2026-10-10']);
   const byKey = new Map(f.showcase.map((e) => [`${e.shopCode}|${e.date}`, e]));
-  assert.deepEqual(byKey.get('М1|2026-10-08'), { date: '2026-10-08', shopCode: 'М1', fill: 0.95, afternoonFill: 0.8 });
+  assert.deepEqual(byKey.get('М1|2026-10-08'), {
+    date: '2026-10-08', shopCode: 'М1', fill: 0.95, afternoonFill: 0.8, eveningFill: 0.6,
+  });
+  assert.deepEqual(byKey.get('М3|2026-10-08'), {
+    date: '2026-10-08', shopCode: 'М3', afternoonFill: 0.75, note: '18:30: закрылись раньше',
+  });
   assert.deepEqual(byKey.get('М1|2026-10-10'), { date: '2026-10-10', shopCode: 'М1', note: 'вых' });
   assert.deepEqual(byKey.get('М2|2026-10-09'), {
     date: '2026-10-09', shopCode: 'М2', fill: 1, note: '16:00: после поставки',
@@ -113,7 +125,7 @@ test('разбор книги: оба замера, комментарии, со
   assert.match(notes, /строка 6: не понял лавку «Итого»/);
   assert.match(notes, /«Витрины 0800»!B7 \(М9, 2026-10-08\): «250» — не процент/);
   assert.match(notes, /«Витрины 1600»!B4:C4: ячейка объединена/);
-  assert.match(f.summary, /на 08:00 — 7 значений, на 16:00 — 3 значения/);
+  assert.match(f.summary, /на 08:00 — 7 значений, на 16:00 — 3 значения, на 18:30 — 1 значение/);
 });
 
 test('книга, где витрины не заполнены, отклоняется', async () => {

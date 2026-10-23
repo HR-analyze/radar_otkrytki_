@@ -1,5 +1,6 @@
 import { compareShopNumber, normalizeCode, type ShopRef } from './shops';
 import type { ExportCoverage } from './rollup';
+import { hasEvening } from './day-fill';
 
 /**
  * Кто какие лавки заполняет на вкладке «Витрины» и у кого остались пустые
@@ -21,12 +22,13 @@ export interface ShowcaseOwner {
   shops: string[];
 }
 
-/** Какой замер проверяем: утренний или в 16:00. */
-export type OwnerSlot = 'morning' | 'afternoon';
+/** Какой замер проверяем: утренний, в 16:00 или в 18:30. */
+export type OwnerSlot = 'morning' | 'afternoon' | 'evening';
 
 export const SLOT_TITLE: Record<OwnerSlot, string> = {
   morning: 'утро',
   afternoon: '16:00',
+  evening: '18:30',
 };
 
 /**
@@ -36,6 +38,7 @@ export const SLOT_TITLE: Record<OwnerSlot, string> = {
 export const SLOT_DUE_MINUTES: Record<OwnerSlot, number> = {
   morning: 8 * 60,
   afternoon: 16 * 60,
+  evening: 18 * 60 + 30,
 };
 
 const SHOP_CODE = /^[А-ЯA-Z]{1,3}\d{1,4}$/;
@@ -233,7 +236,8 @@ export function shopWorks(coverage: ExportCoverage, shopCode: string, date: stri
 
 /**
  * Дни отчёта: от from до to, но не дальше сегодняшнего, а сегодняшний — только
- * если час замера уже прошёл.
+ * если час замера уже прошёл. Замер 18:30 спрашивается с 26.10.2026: до этого
+ * его не было, и пустые дни там — не пропуск (см. EVENING_FROM).
  */
 export function reportDates(
   range: readonly string[],
@@ -242,7 +246,9 @@ export function reportDates(
   slot: OwnerSlot,
 ): { dates: string[]; todaySkipped: boolean } {
   const due = nowMinutes >= SLOT_DUE_MINUTES[slot];
-  const dates = range.filter((d) => d < today || (d === today && due));
+  const dates = range.filter(
+    (d) => (d < today || (d === today && due)) && (slot !== 'evening' || hasEvening(d)),
+  );
   return { dates, todaySkipped: range.includes(today) && !due };
 }
 

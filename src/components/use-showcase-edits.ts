@@ -38,8 +38,8 @@ const SAVED_BADGE_MS = 2500;
 const UNDO_DEPTH = 50;
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-/** percent — утренний замер, afternoonPercent — замер в 16:00. */
-export type EditField = 'percent' | 'afternoonPercent' | 'note';
+/** percent — утренний замер, afternoonPercent — в 16:00, eveningPercent — в 18:30. */
+export type EditField = 'percent' | 'afternoonPercent' | 'eveningPercent' | 'note';
 
 /** Строка, как её вернул сервер после сохранения: по ней красят ячейку. */
 export interface SavedRow {
@@ -47,7 +47,8 @@ export interface SavedRow {
   shopCode: string;
   percent: number | null;
   afternoonPercent: number | null;
-  /** Статус итога дня — среднего двух замеров. */
+  eveningPercent: number | null;
+  /** Статус итога дня — среднего заполненных замеров. */
   status: Status;
   note: string;
 }
@@ -110,7 +111,7 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
   const [undo, setUndo] = useState<UndoStep[]>([]);
   const [queued, setQueued] = useState(0);
 
-  // Копим правки по полям: оба замера и комментарий одной строки правят
+  // Копим правки по полям: замеры и комментарий одной строки правят
   // независимо, и отправить нужно ровно то, что человек трогал.
   const pending = useRef<Map<string, Partial<Record<EditField, string>>>>(new Map());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -189,6 +190,9 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
                 ...(fields.percent !== undefined ? { percent: fields.percent || null } : {}),
                 ...(fields.afternoonPercent !== undefined
                   ? { afternoonPercent: fields.afternoonPercent || null }
+                  : {}),
+                ...(fields.eveningPercent !== undefined
+                  ? { eveningPercent: fields.eveningPercent || null }
                   : {}),
                 ...(fields.note !== undefined ? { note: fields.note } : {}),
               };

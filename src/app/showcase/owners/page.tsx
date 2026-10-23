@@ -13,6 +13,7 @@ import {
   type OwnerGaps,
   type OwnerSlot,
 } from '@/lib/showcase-owners';
+import { EVENING_FROM, hasEvening } from '@/lib/day-fill';
 import { isOpenOn } from '@/lib/status';
 import { dateRange, formatDay, minutesNowMsk, shortDate, todayIso } from '@/lib/time';
 import { plural } from '@/lib/plural';
@@ -44,7 +45,8 @@ export default async function ShowcaseOwnersPage({
 }) {
   const sp = await searchParams;
   const today = todayIso();
-  const slot: OwnerSlot = sp.slot === 'morning' ? 'morning' : 'afternoon';
+  const slot: OwnerSlot =
+    sp.slot === 'morning' || sp.slot === 'evening' ? sp.slot : 'afternoon';
 
   let from = isoParam(sp.from) ?? `${today.slice(0, 7)}-01`;
   let to = isoParam(sp.to) ?? today;
@@ -66,7 +68,7 @@ export default async function ShowcaseOwnersPage({
 
   const report = showcaseGaps({
     owners: owners.owners,
-    fills: slot === 'morning' ? store.days : store.afternoon,
+    fills: { morning: store.days, afternoon: store.afternoon, evening: store.evening }[slot],
     dates,
     shops,
     isOpen: (code, date) => isOpenOn(config, code, date),
@@ -108,6 +110,7 @@ export default async function ShowcaseOwnersPage({
           <span className="text-xs muted">Замер</span>
           <select name="slot" defaultValue={slot} className="rounded-lg border px-2.5 py-2" style={FIELD}>
             <option value="afternoon">на 16:00</option>
+            <option value="evening">на 18:30</option>
             <option value="morning">утренний</option>
           </select>
         </label>
@@ -133,6 +136,9 @@ export default async function ShowcaseOwnersPage({
               {todaySkipped &&
                 ` Сегодня (${shortDate(today)}) не учтено: ${SLOT_TITLE[slot]} ещё не наступило.`}
               {cut && ` Показаны последние ${MAX_DAYS} дней периода.`}
+              {slot === 'evening' &&
+                range.some((d) => !hasEvening(d)) &&
+                ` Замер 18:30 спрашивается с ${shortDate(EVENING_FROM)}: дни раньше не учтены.`}
             </p>
           </div>
           {totalMissing > 0 && (

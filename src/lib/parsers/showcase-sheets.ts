@@ -4,8 +4,8 @@ import { normalizeFill } from '../status';
 import { excelDay } from '../time';
 
 /**
- * Книга наполнения витрин из Google-таблицы: листы «Витрины 0800» и
- * «Витрины 1600».
+ * Книга наполнения витрин из Google-таблицы: листы «Витрины 0800»,
+ * «Витрины 1600» и (с 26.10.2026) «Витрины 1830».
  *
  * Пока радар может лежать, витрины вносят в Google-таблицу, а потом её
  * скачивают в .xlsx и заливают кнопкой «Загрузить». Значения уходят в базу
@@ -24,7 +24,7 @@ import { excelDay } from '../time';
  * Пустая ячейка не приходит вовсе и ничего в базе не затирает.
  */
 
-export type ShowcaseSlot = 'morning' | 'afternoon';
+export type ShowcaseSlot = 'morning' | 'afternoon' | 'evening';
 
 /** Лист → замер. «Витрины 0800», «Витрины 08:00», «витрина 8.00» — утро. */
 export function showcaseSlotOfSheet(name: string): ShowcaseSlot | null {
@@ -33,6 +33,7 @@ export function showcaseSlotOfSheet(name: string): ShowcaseSlot | null {
   const time = n.replace(/^витрин[аы]?/, '').replace(/[\s:.]/g, '');
   if (time === '0800' || time === '800') return 'morning';
   if (time === '1600') return 'afternoon';
+  if (time === '1830') return 'evening';
   return null;
 }
 

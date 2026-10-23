@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { hasEvening } from '@/lib/day-fill';
 import { plural } from '@/lib/plural';
 import { shiftDate } from '@/lib/showcase-range';
 import type { Status } from '@/lib/types';
@@ -18,6 +19,8 @@ import {
   TokenInput,
   UndoButton,
   humanDate,
+  slotMissing,
+  slotsOn,
   type FillField,
 } from './showcase-ui';
 import { useShowcaseEdits, type SavedRow } from './use-showcase-edits';
@@ -31,8 +34,8 @@ import { FRESH_MS, useLiveRefresh, type ShowcaseLive } from './use-showcase-live
  * числом, Enter — вниз, статус 🟢/🟡/🔴 появляется прямо в строке, счётчик
  * «заполнено N из 80» показывает, сколько осталось.
  *
- * Замеров в строке два — утро и 16:00; статус в строке — итог дня, среднее
- * двух.
+ * Замеры в строке — утро, 16:00 и с 26.10 18:30; статус в строке — итог дня, среднее
+ * заполненных.
  *
  * Дозаполнять пропуски задним числом здесь неудобно — для этого есть второй
  * режим, «лавка → дни» (см. ShowcaseShopEditor).
@@ -48,7 +51,9 @@ interface ShopRow {
   percent: number | null;
   /** Замер в 16:00. */
   afternoonPercent: number | null;
-  /** Статус итога дня — среднего двух замеров. */
+  /** Замер в 18:30 — с 26.10.2026. */
+  eveningPercent: number | null;
+  /** Статус итога дня — среднего заполненных замеров. */
   status: Status;
   /** Короткая пометка: «не привезли ягоды», «витрину чинили». */
   note: string;
@@ -99,6 +104,11 @@ export function ShowcaseDayEditor({
   useEffect(() => {
     onlyEmptyRef.current = onlyEmpty;
   }, [onlyEmpty]);
+  // Ушли на день до 26.10, а фильтр стоял на 18:30: такого замера здесь нет,
+  // и фильтр по нему спрятал бы весь список.
+  useEffect(() => {
+    if (onlyEmpty === 'eveningPercent' && !hasEvening(date)) setOnlyEmpty('');
+  }, [date, onlyEmpty]);
   /** Поля ввода по ключу «лавка|замер»: Enter ведёт вниз по тому же замеру. */
   const inputs = useRef<Map<string, HTMLInputElement>>(new Map());
 
@@ -116,6 +126,7 @@ export function ShowcaseDayEditor({
                       ...s,
                       percent: saved.percent,
                       afternoonPercent: saved.afternoonPercent,
+                      eveningPercent: saved.eveningPercent,
                       status: saved.status,
                       note: saved.note,
                     }
@@ -184,7 +195,13 @@ export function ShowcaseDayEditor({
     const changed = body.shops
       .filter((x) => {
         const p = was.get(x.code);
-        return p && (p.percent !== x.percent || p.afternoonPercent !== x.afternoonPercent || p.note !== x.note);
+        return (
+          p &&
+          (p.percent !== x.percent ||
+            p.afternoonPercent !== x.afternoonPercent ||
+            p.eveningPercent !== x.eveningPercent ||
+            p.note !== x.note)
+        );
       })
       .map((x) => x.code);
 
@@ -240,17 +257,24 @@ export function ShowcaseDayEditor({
         if (region && s.region !== region) return false;
         if (shopCode && s.code !== shopCode) return false;
         // Замок держит строку в списке, пока в неё дописывают число.
-        if (onlyEmpty && !emptyLock.has(s.code) && percentOf(s, onlyEmpty) !== '') return false;
+        if (onlyEmpty && !emptyLock.has(s.code) && !slotMissing(date, onlyEmpty, percentOf(s, onlyEmpty))) {
+          return false;
+        }
         return true;
       }),
-    [shops, region, shopCode, onlyEmpty, emptyLock, percentOf],
+    [shops, region, shopCode, onlyEmpty, emptyLock, percentOf, date],
   );
+  const slots = slotsOn(date);
 
   const filled = (field: FillField) => shops.filter((s) => percentOf(s, field) !== '').length;
   /** Сколько строк остались в списке только благодаря замку — их можно спрятать. */
-  const doneInView = onlyEmpty ? visible.filter((s) => percentOf(s, onlyEmpty) !== '').length : 0;
+  const doneInView = onlyEmpty
+    ? visible.filter((s) => !slotMissing(date, onlyEmpty, percentOf(s, onlyEmpty))).length
+    : 0;
   const relock = (field: FillField | '' = onlyEmpty) =>
-    setEmptyLock(new Set(field ? shops.filter((s) => percentOf(s, field) === '').map((s) => s.code) : []));
+    setEmptyLock(
+      new Set(field ? shops.filter((s) => slotMissing(date, field, percentOf(s, field))).map((s) => s.code) : []),
+    );
   const readOnly = data ? !data.editable : false;
 
   function focusAt(index: number, field: FillField) {
@@ -279,7 +303,7 @@ export function ShowcaseDayEditor({
 
         <span className="text-sm">
           Заполнено{' '}
-          {FILL_SLOTS.map((slot, i) => (
+          {slots.map((slot, i) => (
             <span key={slot.field}>
               {i > 0 && ' · '}
               {slot.label} <b className="tabular-nums">{filled(slot.field)}</b>
@@ -352,6 +376,7 @@ export function ShowcaseDayEditor({
         </div>
         <EmptyFilter
           value={onlyEmpty}
+          slots={slots}
           noun="лавка"
           onChange={(next) => {
             setOnlyEmpty(next);
@@ -414,13 +439,15 @@ export function ShowcaseDayEditor({
                     Раньше поля шли в обратном порядке, и Tab из процента уводил
                     в комментарий СОСЕДНЕЙ лавки — человек, проходящий день по
                     списку, через раз оказывался не там, где думал. Теперь Tab
-                    остаётся внутри строки: утро → 16:00 → комментарий той же
+                    остаётся внутри строки: утро → 16:00 → 18:30 → комментарий той же
                     лавки → утро следующей.
                   */}
                   <FillInputs
+                    date={date}
                     values={{
                       percent: percentOf(shop, 'percent'),
                       afternoonPercent: percentOf(shop, 'afternoonPercent'),
+                      eveningPercent: percentOf(shop, 'eveningPercent'),
                     }}
                     thresholds={thresholds}
                     disabled={readOnly}
@@ -497,14 +524,14 @@ export function ShowcaseDayEditor({
       </div>
 
       <p className="text-xs muted">
-        Значение вводится в процентах, замеров два: утром и в 16:00. Статус в строке — итог
-        дня, среднее двух: утром 100%, в 16:00 50% — итог 75%. Конкурс по витринам считается
+        Значение вводится в процентах, замеры — утром, в 16:00 и с 26.10 в 18:30. Статус в
+        строке — итог дня, среднее заполненных замеров: утром 100%, в 16:00 50% — итог 75%. Конкурс по витринам считается
         только по утреннему замеру. Enter или ↓ — следующая лавка, ↑ — предыдущая (по тому же
         замеру), Tab — следующее поле этой же лавки. Пустое поле означает «не заполняли»: такой
-        замер в итог не входит, а лавка без обоих замеров — в средние значения. Комментарий
+        замер в итог не входит, а лавка без единого замера — в средние значения. Комментарий
         рядом — свободный текст на случай «не привезли ягоды»; на цифры он не влияет. Сохраняется
         само, а последнее изменение отменяется кнопкой «Отменить» или Ctrl+Z. Фильтр
-        «только незаполненные» (по утру или по 16:00) фиксирует список: заполненная лавка не
+        «только незаполненные» (по утру, 16:00 или 18:30) фиксирует список: заполненная лавка не
         выпрыгивает из-под курсора на первой же цифре, а прячется по кнопке рядом с фильтром или
         при смене дня. Метка «🕙 с 10:00» — лавка открывается позже общих 08:00 (М71 Кузьминки, М72
         Ватутинки): раннее наполнение у неё считать не с чего.

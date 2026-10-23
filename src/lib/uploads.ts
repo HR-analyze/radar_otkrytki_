@@ -72,6 +72,8 @@ export interface ShowcaseUploadEdit {
   fill?: number;
   /** Замер на 16:00, доля 0–1. */
   afternoonFill?: number;
+  /** Замер на 18:30, доля 0–1. */
+  eveningFill?: number;
   /** Комментарий дня — текст, который вписали в ячейку вместо числа. */
   note?: string;
 }
@@ -478,7 +480,7 @@ function inspectShowcaseBook(name: string, buffer: Buffer): InspectResult {
       ok: false,
       originalName: name,
       error:
-        'Листы «Витрины 0800» / «Витрины 1600» есть, но заполненных ячеек в них не нашлось.' +
+        'Листы «Витрины 0800» / «Витрины 1600» / «Витрины 1830» есть, но заполненных ячеек в них не нашлось.' +
         (parsed.warnings.length ? ` ${parsed.warnings.slice(0, 3).join('; ')}` : ''),
     };
   }
@@ -487,6 +489,7 @@ function inspectShowcaseBook(name: string, buffer: Buffer): InspectResult {
     parsed.cells.filter((c) => c.slot === slot && c.fill != null).length;
   const morning = count('morning');
   const afternoon = count('afternoon');
+  const evening = count('evening');
   const values = (n: number) => `${n} ${plural(n, 'значение', 'значения', 'значений')}`;
   const shops = new Set(edits.map((e) => e.shopCode)).size;
 
@@ -509,9 +512,10 @@ function inspectShowcaseBook(name: string, buffer: Buffer): InspectResult {
       summary:
         `Витрины из Google-таблицы · ${describeDates(parsed.dates)} · ` +
         `${shops} ${plural(shops, 'лавка', 'лавки', 'лавок')}: ` +
-        `на 08:00 — ${values(morning)}, на 16:00 — ${values(afternoon)}`,
+        `на 08:00 — ${values(morning)}, на 16:00 — ${values(afternoon)}` +
+        (evening ? `, на 18:30 — ${values(evening)}` : ''),
       dates: parsed.dates,
-      rows: morning + afternoon,
+      rows: morning + afternoon + evening,
       shops,
       unknownRoles: [],
       showcase: edits,
@@ -533,8 +537,8 @@ function inspectShowcaseBook(name: string, buffer: Buffer): InspectResult {
 }
 
 /**
- * Ячейки листов → правки базы: одна на лавку и день, оба замера вместе.
- * Тексты обоих замеров сливаются в один комментарий дня — он в базе один.
+ * Ячейки листов → правки базы: одна на лавку и день, все замеры вместе.
+ * Тексты всех замеров сливаются в один комментарий дня — он в базе один.
  */
 export function showcaseEditsFromCells(cells: readonly ShowcaseSheetCell[]): ShowcaseUploadEdit[] {
   const byKey = new Map<string, ShowcaseUploadEdit & { texts: string[] }>();
@@ -544,9 +548,14 @@ export function showcaseEditsFromCells(cells: readonly ShowcaseSheetCell[]): Sho
     if (!edit) byKey.set(key, (edit = { date: c.date, shopCode: c.shopCode, texts: [] }));
     if (c.fill != null) {
       if (c.slot === 'morning') edit.fill = c.fill;
-      else edit.afternoonFill = c.fill;
+      else if (c.slot === 'afternoon') edit.afternoonFill = c.fill;
+      else edit.eveningFill = c.fill;
     }
-    if (c.text) edit.texts.push(c.slot === 'afternoon' ? `16:00: ${c.text}` : c.text);
+    if (c.text) {
+      edit.texts.push(
+        c.slot === 'afternoon' ? `16:00: ${c.text}` : c.slot === 'evening' ? `18:30: ${c.text}` : c.text,
+      );
+    }
   }
   return [...byKey.values()].map(({ texts, ...edit }) => (texts.length ? { ...edit, note: texts.join('; ') } : edit));
 }

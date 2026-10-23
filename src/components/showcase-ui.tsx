@@ -1,7 +1,7 @@
 'use client';
 
 import type { KeyboardEvent } from 'react';
-import { averagePercent } from '@/lib/day-fill';
+import { averagePercent, hasEvening } from '@/lib/day-fill';
 import { plural } from '@/lib/plural';
 import { formatDay, formatMoment } from '@/lib/time';
 import type { Status } from '@/lib/types';
@@ -39,14 +39,31 @@ export function statusOf(
 
 /**
  * Замеры наполнения за день. Утренний был всегда, второй — в 16:00: витрину,
- * полную с утра и пустую после обеда, одним замером не поймать.
+ * полную с утра и пустую после обеда, одним замером не поймать. С 26.10.2026
+ * добавился третий — в 18:30 (см. EVENING_FROM).
  */
 export const FILL_SLOTS = [
   { field: 'percent', label: 'утро', title: 'Утренний замер' },
   { field: 'afternoonPercent', label: '16:00', title: 'Замер в 16:00' },
+  { field: 'eveningPercent', label: '18:30', title: 'Замер в 18:30' },
 ] as const satisfies readonly { field: EditField; label: string; title: string }[];
 
 export type FillField = (typeof FILL_SLOTS)[number]['field'];
+export type FillSlotDef = (typeof FILL_SLOTS)[number];
+
+/** Замеры, которые есть в этот день: до 26.10.2026 — без 18:30. */
+export function slotsOn(date: string): readonly FillSlotDef[] {
+  return hasEvening(date) ? FILL_SLOTS : FILL_SLOTS.filter((s) => s.field !== 'eveningPercent');
+}
+
+/**
+ * Пуст ли замер так, что его надо дозаполнить. 18:30 до 26.10 пустой всегда —
+ * это не пропуск, и фильтр «только незаполненные» таких дней не показывает.
+ */
+export function slotMissing(date: string, field: FillField, value: string): boolean {
+  if (field === 'eveningPercent' && !hasEvening(date)) return false;
+  return value === '';
+}
 
 /**
  * Статус итога дня, пока правка летит на сервер: среднее набранных замеров.
@@ -64,16 +81,21 @@ export function dayStatusOf(
     .map((v) => Number(v.replace(',', '.')))
     .filter(Number.isFinite);
   if (numbers.length === 0) return 'no_data';
-  const day = numbers.length === 1 ? numbers[0] : averagePercent(numbers[0], numbers[1]);
+  const day = numbers.length === 1 ? numbers[0] : averagePercent(...numbers);
   return statusOf(String(day), thresholds);
 }
 
 /**
- * Оба замера и статус итога — одна группа полей, общая для дневного и
+ * Замеры и статус итога — одна группа полей, общая для дневного и
  * полавочного редакторов. Навигация стрелками у редакторов своя (по лавкам
  * или по дням), поэтому клавиши и ссылки на поля отдаются наружу.
+ *
+ * Поле 18:30 — только с 26.10.2026. В полавочном списке дни до и после этой
+ * даты стоят вперемешку, и `reserveEvening` держит на месте пустое место под
+ * поле: иначе статус и комментарий у старых дней съезжали бы влево.
  */
 export function FillInputs({
+  date,
   values,
   thresholds,
   disabled,
@@ -81,7 +103,10 @@ export function FillInputs({
   onChange,
   onKeyDown,
   register,
+  reserveEvening = false,
 }: {
+  /** День строки: по нему решается, есть ли замер 18:30. */
+  date: string;
   values: Record<FillField, string>;
   thresholds: { green: number; yellow: number };
   disabled: boolean;
@@ -90,14 +115,18 @@ export function FillInputs({
   onChange: (field: FillField, raw: string) => void;
   onKeyDown: (field: FillField, e: KeyboardEvent<HTMLInputElement>) => void;
   register: (field: FillField, el: HTMLInputElement | null) => void;
+  reserveEvening?: boolean;
 }) {
+  const slots = slotsOn(date);
   const status = dayStatusOf(
-    FILL_SLOTS.map((slot) => values[slot.field]),
+    slots.map((slot) => values[slot.field]),
     thresholds,
   );
+  // С тремя замерами строка на телефоне шире экрана: статус переносится вниз,
+  // а не уезжает за край, где его не видно.
   return (
-    <div className="order-2 flex items-center gap-1.5">
-      {FILL_SLOTS.map((slot) => (
+    <div className="order-2 flex flex-wrap items-center gap-1.5">
+      {slots.map((slot) => (
         <label key={slot.field} className="flex items-center gap-1" title={slot.title}>
           <span className="text-xs muted tabular-nums">{slot.label}</span>
           <input
@@ -115,10 +144,16 @@ export function FillInputs({
           />
         </label>
       ))}
+      {reserveEvening && slots.length < FILL_SLOTS.length && (
+        <span aria-hidden className="invisible flex items-center gap-1">
+          <span className="text-xs tabular-nums">18:30</span>
+          <span className="w-14 border px-2 py-1.5 text-sm">—</span>
+        </span>
+      )}
       <span className="w-4 text-xs muted">%</span>
       <span
         className={`st-${status} w-18 shrink-0 whitespace-nowrap rounded px-2 py-1 text-center text-xs font-medium`}
-        title="Итог дня — среднее двух замеров"
+        title="Итог дня — среднее заполненных замеров"
       >
         {statusLabel(status)}
       </span>
@@ -134,11 +169,14 @@ export function EmptyFilter({
   value,
   onChange,
   noun,
+  slots = FILL_SLOTS,
 }: {
   value: FillField | '';
   onChange: (value: FillField | '') => void;
   /** «лавка» или «день» — для подсказки. */
   noun: string;
+  /** Какие замеры предлагать: до 26.10 — без 18:30. */
+  slots?: readonly FillSlotDef[];
 }) {
   return (
     <label
@@ -154,7 +192,7 @@ export function EmptyFilter({
           aria-label="Только незаполненные"
         >
           <option value="">нет</option>
-          {FILL_SLOTS.map((slot) => (
+          {slots.map((slot) => (
             <option key={slot.field} value={slot.field}>
               {slot.label}
             </option>

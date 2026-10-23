@@ -255,6 +255,51 @@ test('версия витрин меняется и от правки 16:00', as
   assert.notEqual(before, await store.showcaseVersion());
 });
 
+test('замер в 18:30 хранится отдельно, пишется в журнал и не трогает остальные', async () => {
+  const { readShowcaseAudit } = await import('./showcase-audit');
+  await store.saveShowcaseEdits([{ date: '2026-10-26', shopCode: 'М1', fill: 1, afternoonFill: 0.9 }]);
+  const saved = await store.saveShowcaseEdits([{ date: '2026-10-26', shopCode: 'М1', eveningFill: 0.7 }]);
+  assert.equal(saved.changed, 1);
+
+  const read = await store.readShowcase();
+  assert.equal(read.days['2026-10-26']['М1'], 1);
+  assert.equal(read.afternoon['2026-10-26']['М1'], 0.9);
+  assert.equal(read.evening['2026-10-26']['М1'], 0.7);
+
+  const entries = await readShowcaseAudit({ date: '2026-10-26', shopCode: 'М1' });
+  assert.equal(entries[0].field, 'fill_evening');
+  assert.equal(entries[0].to, '0.7');
+
+  await store.saveShowcaseEdits([{ date: '2026-10-26', shopCode: 'М1', eveningFill: null }]);
+  const after = await store.readShowcase();
+  assert.equal(after.evening['2026-10-26']?.['М1'], undefined);
+  assert.equal(after.afternoon['2026-10-26']['М1'], 0.9, 'стирание 18:30 не задевает 16:00');
+});
+
+test('итог дня — среднее трёх замеров, если заполнены все', async () => {
+  assert.equal(store.dayFill(1, 0.9, 0.7), 0.87, '(100 + 90 + 70) / 3 = 86,7 → 87%');
+  assert.equal(store.dayFill(1, null, 0.5), 0.75, 'пустое 16:00 в среднее не входит');
+  assert.equal(store.dayFill(null, null, 0.6), 0.6, 'один замер — он сам');
+
+  await store.saveShowcaseEdits([
+    { date: '2026-10-27', shopCode: 'М2', fill: 1, afternoonFill: 0.9, eveningFill: 0.7 },
+  ]);
+  const { showcase } = store.showcaseRowsFromStore(await store.readShowcase());
+  const m2 = showcase.find((s) => s.date === '2026-10-27' && s.shopCode === 'М2')!;
+  assert.equal(m2.fill, 0.87);
+  assert.equal(m2.evening, 0.7);
+});
+
+test('замер 18:30 попадает в резервную копию, а его правка меняет версию', async () => {
+  const before = await store.showcaseVersion();
+  await store.saveShowcaseEdits([{ date: '2026-10-28', shopCode: 'М3', eveningFill: 0.66 }]);
+  assert.notEqual(before, await store.showcaseVersion());
+
+  store.writeSeed(await store.readShowcase());
+  assert.equal(store.readSeed().evening['2026-10-28']['М3'], 0.66);
+  assert.ok(store.readSeed().touched['2026-10-28'], 'день с одним лишь 18:30 не теряет отметку');
+});
+
 test('в закоммиченном сиде репозитория лежит вся история витрин', () => {
   // Сид — резервная копия истории: если он потеряется, свежая установка
   // поднимется с пустыми витринами. Порог не равенство, а «не меньше»:
