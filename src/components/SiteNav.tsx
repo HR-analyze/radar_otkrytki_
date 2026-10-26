@@ -21,7 +21,10 @@ const TABS: { href: string; label: string; keys: readonly string[] }[] = [
   { href: '/', label: 'Сводка', keys: [...SHARED, 'criterion', 'status', 'slot'] },
   { href: '/radar', label: 'Радар по лавкам', keys: [...SHARED, 'criterion', 'status', 'slot'] },
   { href: '/showcase', label: 'Витрины', keys: [] },
-  { href: '/contest', label: 'Конкурс', keys: SHARED },
+  // «КПИ» заменил в шапке «Конкурс»: конкурс по-прежнему открывается по
+  // прямой ссылке /contest (под паролем) — с нарушениями и PDF, — но вкладки
+  // у него нет.
+  { href: '/kpi', label: 'КПИ', keys: SHARED },
   { href: '/violations', label: 'Нарушения', keys: SHARED },
   { href: '/history', label: 'История', keys: [] },
   { href: '/settings', label: 'Пороги', keys: [] },
