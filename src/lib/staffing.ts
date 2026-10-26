@@ -1,0 +1,123 @@
+import { formatClock } from './time';
+
+/**
+ * Норма выхода сотрудников: сколько человек каждой должности должно быть на
+ * смене в лавке в каждом часовом окне.
+ *
+ * Источник — лист «Шаблон по часам-пикам» (см. parsers/staffing.ts). У каждой
+ * должности свои окна: у кассира 6:30–7:30, 7:30–11, 11–16…, у повара «до 8»,
+ * 8–11, 11–16… — поэтому окна хранятся у должности, а не общей сеткой.
+ *
+ * Модуль без зависимостей от сервера: калькулятор «сколько должно быть сейчас»
+ * считает прямо в браузере, без похода за данными на каждую смену времени.
+ */
+
+export type StaffRole = 'cashier' | 'cook' | 'barista' | 'cleaner';
+
+/** Порядок — как в шаблоне: так таблицу на сайте легко сверить с Excel. */
+export const STAFF_ROLES: readonly StaffRole[] = ['cashier', 'cook', 'barista', 'cleaner'];
+
+export const STAFF_ROLE_TITLE: Record<StaffRole, string> = {
+  cook: 'Повар',
+  cashier: 'Кассир',
+  barista: 'Бариста',
+  cleaner: 'Уборщик',
+};
+
+/** Склонение для ответа калькулятора: «2 повара», «5 кассиров». */
+export const STAFF_ROLE_FORMS: Record<StaffRole, [string, string, string]> = {
+  cook: ['повар', 'повара', 'поваров'],
+  cashier: ['кассир', 'кассира', 'кассиров'],
+  barista: ['бариста', 'бариста', 'бариста'],
+  cleaner: ['уборщик', 'уборщика', 'уборщиков'],
+};
+
+/** Часовое окно и сколько человек в нём должно быть. */
+export interface StaffSlot {
+  /**
+   * Начало окна, минуты от полуночи. null — «до 8»: окно открывается с начала
+   * смены, сколько бы рано она ни начиналась.
+   */
+  from: number | null;
+  /** Конец окна, минуты от полуночи, не включительно: в 11:00 уже окно «11–16». */
+  to: number;
+  count: number;
+}
+
+export interface StaffRoleNorm {
+  /** Окна по порядку, как в шаблоне. */
+  slots: StaffSlot[];
+  /** Штатных единиц (FTE) на должность; null — в шаблоне пусто. */
+  fte: number | null;
+  /** Человеко-часы за месяц; null — в шаблоне пусто. */
+  hours: number | null;
+}
+
+export interface StaffNorm {
+  /** Код лавки: «М1». */
+  code: string;
+  /** Название без кода: «Милютинский». */
+  name: string;
+  /** Грейд по товарообороту: «10-14 млн». */
+  grade: string | null;
+  /** Есть ли кофемашина — от неё зависит, нужен ли бариста. */
+  coffeeMachine: boolean | null;
+  roles: Record<StaffRole, StaffRoleNorm>;
+}
+
+/** Ответ калькулятора по одной должности. */
+export interface StaffAt {
+  role: StaffRole;
+  count: number;
+  /** Окно, в которое попало время; null — вне окон шаблона (до или после смены). */
+  slot: StaffSlot | null;
+}
+
+/** Окно, в которое попадает момент `minutes`; начало включительно, конец — нет. */
+export function slotAt(slots: readonly StaffSlot[], minutes: number): StaffSlot | null {
+  return slots.find((s) => (s.from == null || minutes >= s.from) && minutes < s.to) ?? null;
+}
+
+/** Сколько человек каждой должности должно быть на смене в момент `minutes`. */
+export function staffAt(norm: StaffNorm, minutes: number): StaffAt[] {
+  return STAFF_ROLES.map((role) => {
+    const slot = slotAt(norm.roles[role].slots, minutes);
+    return { role, count: slot?.count ?? 0, slot };
+  });
+}
+
+/** «11:00–16:00», «до 08:00». */
+export function slotLabel(slot: StaffSlot): string {
+  return slot.from == null ? `до ${formatClock(slot.to)}` : `${formatClock(slot.from)}–${formatClock(slot.to)}`;
+}
+
+/** Короткая подпись для шапки таблицы: «6:30–7:30», «11–16», «до 8». */
+export function slotShortLabel(slot: StaffSlot): string {
+  const short = (m: number) => (m % 60 === 0 ? String(m / 60) : `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`);
+  return slot.from == null ? `до ${short(slot.to)}` : `${short(slot.from)}–${short(slot.to)}`;
+}
+
+/** «06:30» → 390; всё, что не время суток, — null. */
+export function parseTimeOfDay(value: string | undefined | null): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(value ?? '').trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  return h < 24 && min < 60 ? h * 60 + min : null;
+}
+
+/**
+ * Лавка по запросу из адреса: точный код («М1», «м01»), иначе первая, чьё
+ * название содержит запрос. Со сводки и радара в ссылку едет их поиск по
+ * лавке — он бывает и кодом, и куском названия.
+ */
+export function findStaffNorm(norms: readonly StaffNorm[], query: string | undefined | null): StaffNorm | null {
+  const q = String(query ?? '').trim().toLowerCase();
+  if (!q) return null;
+  const code = q.replace(/\s+/g, '').replace(/^m/, 'м').replace(/^([а-яa-z]+)0+(\d)/, '$1$2');
+  return (
+    norms.find((n) => n.code.toLowerCase() === code) ??
+    norms.find((n) => `${n.code} ${n.name}`.toLowerCase().includes(q)) ??
+    null
+  );
+}

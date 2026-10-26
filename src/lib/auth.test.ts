@@ -99,7 +99,7 @@ test('пароль спрашивается на вкладках, где дан
 
   // Сам радар открыт: цифры смотрит вся команда.
   // «/showcases» — проверка, что закрывается путь, а не любая строка с ним внутри.
-  for (const p of ['/', '/radar', '/shop/М1', '/api/upload', '/showcases', '/contests', '/kpis']) {
+  for (const p of ['/', '/radar', '/staffing', '/shop/М1', '/api/upload', '/showcases', '/contests', '/kpis']) {
     assert.equal(isManaged(p), false, `${p} под паролем быть не должен`);
   }
 });
