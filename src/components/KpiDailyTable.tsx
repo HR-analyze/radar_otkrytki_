@@ -4,6 +4,7 @@ import { shortDate } from '@/lib/time';
 import { hasEvening } from '@/lib/day-fill';
 import { FILL_SLOTS, type FillSlot } from '@/lib/types';
 import { SLOT_TIME, STATUS_TEXT } from './Status';
+import { HScroll } from './HScroll';
 
 /**
  * Блок КПИ линейных сотрудников: лавки × дни, в клетке — итог дня в процентах.
@@ -27,7 +28,7 @@ export function KpiDailyTable({
   to: string;
 }) {
   return (
-    <div className="surface radar-scroll">
+    <HScroll className="surface radar-scroll kpi-scroll" label="Таблица по дням">
       <table className="radar-table w-full text-sm">
         <caption className="sr-only">
           Наполнение витрины лавок по дням за период {shortDate(from)} — {shortDate(to)}, в процентах
@@ -80,7 +81,7 @@ export function KpiDailyTable({
           ))}
         </tbody>
       </table>
-    </div>
+    </HScroll>
   );
 }
 

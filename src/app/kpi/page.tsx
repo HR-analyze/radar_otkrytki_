@@ -9,6 +9,7 @@ import { Filters } from '@/components/Filters';
 import { StatusLegend } from '@/components/Status';
 import { KpiDailyTable } from '@/components/KpiDailyTable';
 import { Hint } from '@/components/Hint';
+import { HScroll } from '@/components/HScroll';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,64 +124,66 @@ export default async function KpiPage({
               subtitle="Средний % за период. Одна строка на руководителя: у ТД — две его лавки, у директора — своя (или две). Клик по имени — только его лавки во всех блоках."
               hint="Среднее — по всем дням с замером во всех лавках руководителя: каждый лавко-день весит одинаково. Лавка, где мерили два дня из тридцати, тянет итог меньше, чем лавка с тридцатью замерами. Директора и ТД берутся из нынешней таблицы «Лавки» — истории руководителей, в отличие от РМ, радар не ведёт."
             />
-            <div className="radar-scroll mt-3">
-              <table className="radar-table w-full text-sm">
-                <thead>
-                  <tr>
-                    <Th left>Руководитель</Th>
-                    <Th left>Лавки</Th>
-                    <Th left className="hidden sm:table-cell">РМ</Th>
-                    <Th className="hidden sm:table-cell">Лавко-дней</Th>
-                    <Th>Средний %</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaders.map((l) => (
-                    <tr key={leaderKey(l) ?? `shop:${l.shops[0].shop.code}`}>
-                      <td className="px-2 py-1.5 whitespace-nowrap">
-                        <span className="mr-1.5 inline-block w-6 text-xs muted">
-                          {l.kind === 'territorial' ? 'ТД' : 'Дир'}
-                        </span>
-                        {l.name ? (
-                          <Link href={kpiHref({ leader: leaderKey(l)! })} className="hover:underline">
-                            {l.name}
-                          </Link>
-                        ) : (
-                          /* Лавки нет в таблице «Лавки» — имени директора радар не знает. */
-                          <span className="muted">директор лавки</span>
-                        )}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <div className="flex flex-col gap-0.5">
-                          {l.shops.map((r) => (
-                            <span key={r.shop.code} className="whitespace-nowrap">
-                              <Link
-                                href={`/shop/${encodeURIComponent(r.shop.code)}?from=${p.from}&to=${p.to}`}
-                                className="hover:underline"
-                              >
-                                {r.shop.name}
-                              </Link>
-                              {/* У директора одна лавка, и её среднее — это и есть итог строки. */}
-                              {l.shops.length > 1 && (
-                                <span className="ml-2 text-xs tabular-nums muted">{formatPercent(r.avg)}</span>
-                              )}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="hidden px-2 py-1.5 text-xs whitespace-nowrap muted sm:table-cell">
-                        {l.regions.join(', ') || '—'}
-                      </td>
-                      <td className="hidden px-2 py-1.5 text-right text-xs tabular-nums muted sm:table-cell">
-                        {l.measured}
-                      </td>
-                      <td className="px-2 py-1.5 text-right">
-                        <Percent value={l} />
-                      </td>
+            <div className="mt-3">
+              <HScroll className="radar-scroll" label="Директора и ТД">
+                <table className="radar-table w-full text-sm">
+                  <thead>
+                    <tr>
+                      <Th left>Руководитель</Th>
+                      <Th left>Лавки</Th>
+                      <Th left className="hidden sm:table-cell">РМ</Th>
+                      <Th className="hidden sm:table-cell">Лавко-дней</Th>
+                      <Th>Средний %</Th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {leaders.map((l) => (
+                      <tr key={leaderKey(l) ?? `shop:${l.shops[0].shop.code}`}>
+                        <td className="px-2 py-1.5 whitespace-nowrap">
+                          <span className="mr-1.5 inline-block w-6 text-xs muted">
+                            {l.kind === 'territorial' ? 'ТД' : 'Дир'}
+                          </span>
+                          {l.name ? (
+                            <Link href={kpiHref({ leader: leaderKey(l)! })} className="hover:underline">
+                              {l.name}
+                            </Link>
+                          ) : (
+                            /* Лавки нет в таблице «Лавки» — имени директора радар не знает. */
+                            <span className="muted">директор лавки</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <div className="flex flex-col gap-0.5">
+                            {l.shops.map((r) => (
+                              <span key={r.shop.code} className="whitespace-nowrap">
+                                <Link
+                                  href={`/shop/${encodeURIComponent(r.shop.code)}?from=${p.from}&to=${p.to}`}
+                                  className="hover:underline"
+                                >
+                                  {r.shop.name}
+                                </Link>
+                                {/* У директора одна лавка, и её среднее — это и есть итог строки. */}
+                                {l.shops.length > 1 && (
+                                  <span className="ml-2 text-xs tabular-nums muted">{formatPercent(r.avg)}</span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="hidden px-2 py-1.5 text-xs whitespace-nowrap muted sm:table-cell">
+                          {l.regions.join(', ') || '—'}
+                        </td>
+                        <td className="hidden px-2 py-1.5 text-right text-xs tabular-nums muted sm:table-cell">
+                          {l.measured}
+                        </td>
+                        <td className="px-2 py-1.5 text-right">
+                          <Percent value={l} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </HScroll>
             </div>
           </section>
 
@@ -195,50 +198,52 @@ export default async function KpiPage({
             {regionRows.length === 0 ? (
               <p className="mt-4 text-sm muted">За период РМ не определились — справочник пуст.</p>
             ) : (
-              <div className="radar-scroll mt-3">
-                <table className="radar-table w-full text-sm">
-                  <thead>
-                    <tr>
-                      <Th left>РМ</Th>
-                      <Th>Лавок</Th>
-                      <Th className="hidden sm:table-cell">Лавко-дней</Th>
-                      <Th>Средний %</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {regionRows.map((r) => (
-                      <tr key={r.region}>
-                        <td className="px-2 py-1.5 whitespace-nowrap">
-                          <Link href={kpiHref({ region: r.region })} className="hover:underline">
-                            {r.region}
-                          </Link>
-                        </td>
-                        <td className="px-2 py-1.5 text-right text-xs tabular-nums muted">{r.shops}</td>
-                        <td className="hidden px-2 py-1.5 text-right text-xs tabular-nums muted sm:table-cell">
-                          {r.measured}
-                        </td>
-                        <td className="px-2 py-1.5 text-right">
-                          <Percent value={r} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  {/* Сеть — для сравнения: выше или ниже среднего по сети РМ. */}
-                  {!p.region && regionRows.length > 1 && (
-                    <tfoot>
+              <div className="mt-3">
+                <HScroll className="radar-scroll" label="Региональные менеджеры">
+                  <table className="radar-table w-full text-sm">
+                    <thead>
                       <tr>
-                        <td className="px-2 py-1.5 font-medium">Вся сеть</td>
-                        <td className="px-2 py-1.5 text-right text-xs tabular-nums muted">{network.shops}</td>
-                        <td className="hidden px-2 py-1.5 text-right text-xs tabular-nums muted sm:table-cell">
-                          {network.measured}
-                        </td>
-                        <td className="px-2 py-1.5 text-right">
-                          <Percent value={network} />
-                        </td>
+                        <Th left>РМ</Th>
+                        <Th>Лавок</Th>
+                        <Th className="hidden sm:table-cell">Лавко-дней</Th>
+                        <Th>Средний %</Th>
                       </tr>
-                    </tfoot>
-                  )}
-                </table>
+                    </thead>
+                    <tbody>
+                      {regionRows.map((r) => (
+                        <tr key={r.region}>
+                          <td className="px-2 py-1.5 whitespace-nowrap">
+                            <Link href={kpiHref({ region: r.region })} className="hover:underline">
+                              {r.region}
+                            </Link>
+                          </td>
+                          <td className="px-2 py-1.5 text-right text-xs tabular-nums muted">{r.shops}</td>
+                          <td className="hidden px-2 py-1.5 text-right text-xs tabular-nums muted sm:table-cell">
+                            {r.measured}
+                          </td>
+                          <td className="px-2 py-1.5 text-right">
+                            <Percent value={r} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {/* Сеть — для сравнения: выше или ниже среднего по сети РМ. */}
+                    {!p.region && regionRows.length > 1 && (
+                      <tfoot>
+                        <tr>
+                          <td className="px-2 py-1.5 font-medium">Вся сеть</td>
+                          <td className="px-2 py-1.5 text-right text-xs tabular-nums muted">{network.shops}</td>
+                          <td className="hidden px-2 py-1.5 text-right text-xs tabular-nums muted sm:table-cell">
+                            {network.measured}
+                          </td>
+                          <td className="px-2 py-1.5 text-right">
+                            <Percent value={network} />
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </HScroll>
               </div>
             )}
           </section>
