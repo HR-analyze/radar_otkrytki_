@@ -35,6 +35,7 @@ import {
 } from './contest';
 import { readContestViolations, type ContestViolation } from './contest-violations-store';
 import { contestArchiveDays } from './contest-archive';
+import { addFill, averagePercent, emptyAverage, mergeAverages, type FillAverage } from './kpi';
 
 /**
  * Чтение для дашборда поверх снимка в памяти (см. snapshot.ts).
@@ -48,6 +49,8 @@ export interface ShopRow {
   code: string;
   name: string;
   region: string | null;
+  /** Территориальный директор — см. Shop.director. */
+  director?: string | null;
 }
 
 /** Порядок справочника — общее правило, см. shops.ts. */
@@ -841,6 +844,167 @@ function archiveRange(rows: readonly ContestRow[]): { from: string; to: string }
     .map(([date]) => date)
     .sort();
   return days.length ? { from: days[0], to: days[days.length - 1] } : null;
+}
+
+/* --------------------------------- КПИ ----------------------------------- */
+
+export interface KpiFilters {
+  from: string;
+  to: string;
+  region?: string;
+  /** Код или часть названия лавки — тот же поиск, что в радаре. */
+  shop?: string;
+}
+
+/** Итог одного дня лавки — по нему оценивают линейных сотрудников. */
+export interface KpiDay {
+  /** Итог дня в целых процентах: среднее утра и 16:00 (dayFill). */
+  percent: number;
+  status: Status;
+  /** Замеры, из которых сложен итог, в целых процентах; null — не мерили. */
+  morning: number | null;
+  afternoon: number | null;
+}
+
+/** Среднее за период и его знаменатель — общая часть строк всех трёх блоков. */
+export interface KpiAverage {
+  /** Средний процент с одним знаком: 94.6; null — за период не мерили. */
+  avg: number | null;
+  /** Статус того же округлённого числа, что на экране. */
+  status: Status;
+  /** Лавко-дней с замером — знаменатель среднего. */
+  measured: number;
+}
+
+export interface KpiShopRow extends KpiAverage {
+  shop: ShopRow;
+  /** дата → итог дня. Дни без замера сюда не попадают. */
+  days: Record<string, KpiDay>;
+}
+
+export interface KpiLeaderRow extends KpiAverage {
+  /** territorial — ТД со своими лавками, director — директор одной лавки. */
+  kind: 'territorial' | 'director';
+  /** Имя ТД; у директора лавки имени в справочнике нет — null. */
+  name: string | null;
+  shops: KpiShopRow[];
+  /** РМ этих лавок по справочнику. */
+  regions: string[];
+}
+
+export interface KpiRegionRow extends KpiAverage {
+  region: string;
+  /** Лавок с замерами у этого РМ за период. */
+  shops: number;
+}
+
+/**
+ * КПИ по наполнению витрин — правило в kpi.ts.
+ *
+ * Источник — `snap.showcase`, итог дня (среднее утра и 16:00), тот же, что
+ * у радара и сводки. Лавки без единого замера за период в блоки не попадают —
+ * их коды возвращаются отдельно (`unmeasured`), чтобы пропуск было видно.
+ *
+ * День лавки идёт тому РМ, который вёл её в этот день (regionAt), как в
+ * конкурсе. У ТД истории нет: лавки собираются по нынешнему справочнику.
+ */
+export async function kpi(filters: KpiFilters): Promise<{
+  dates: string[];
+  shops: KpiShopRow[];
+  leaders: KpiLeaderRow[];
+  regions: KpiRegionRow[];
+  network: KpiAverage & { shops: number };
+  unmeasured: ShopRow[];
+}> {
+  const snap = await loadSnapshot();
+  const config = loadConfig();
+  const matching = await shopsMatching(filters.region, filters.shop, filters.from, filters.to);
+  const allowed = new Set(matching.map((s) => s.code));
+  const inRegion = await regionDayMatcher(filters.region);
+  const history = regionIndexOf(snap);
+  const currentRegion = new Map(matching.map((s) => [s.code, s.region]));
+
+  const percentOf = (v: number | null) => (v == null ? null : Math.round(v * 100));
+  const finish = (acc: FillAverage): KpiAverage => {
+    const avg = averagePercent(acc);
+    return { avg, status: statusForFill(avg == null ? null : avg / 100, config), measured: acc.days };
+  };
+
+  const byShop = new Map<string, { days: Record<string, KpiDay>; acc: FillAverage }>();
+  const byRegion = new Map<string, { acc: FillAverage; shops: Set<string> }>();
+  const dates = new Set<string>();
+
+  for (const s of snap.showcase) {
+    if (s.date < filters.from || s.date > filters.to) continue;
+    if (!allowed.has(s.shopCode) || !inRegion(s.shopCode, s.date)) continue;
+
+    let shop = byShop.get(s.shopCode);
+    if (!shop) byShop.set(s.shopCode, (shop = { days: {}, acc: emptyAverage() }));
+    shop.days[s.date] = {
+      percent: Math.round(s.fill * 100),
+      status: s.status,
+      morning: percentOf(slotFill(s, 'morning')),
+      afternoon: percentOf(slotFill(s, 'afternoon')),
+    };
+    addFill(shop.acc, s.fill);
+    dates.add(s.date);
+
+    const manager = regionAt(history.get(s.shopCode), s.date) ?? currentRegion.get(s.shopCode);
+    if (!manager) continue;
+    let region = byRegion.get(manager);
+    if (!region) byRegion.set(manager, (region = { acc: emptyAverage(), shops: new Set() }));
+    addFill(region.acc, s.fill);
+    region.shops.add(s.shopCode);
+  }
+
+  const shops: KpiShopRow[] = [];
+  const unmeasured: ShopRow[] = [];
+  for (const shop of matching) {
+    const data = byShop.get(shop.code);
+    if (!data) unmeasured.push(shop);
+    else shops.push({ shop, days: data.days, ...finish(data.acc) });
+  }
+
+  // ТД — одна строка на все его лавки; лавка без ТД — строка её директора.
+  const groups = new Map<string, KpiShopRow[]>();
+  for (const row of shops) {
+    const key = row.shop.director ? `ТД ${row.shop.director}` : `лавка ${row.shop.code}`;
+    const list = groups.get(key);
+    if (list) list.push(row);
+    else groups.set(key, [row]);
+  }
+  const accOf = (row: KpiShopRow): FillAverage => byShop.get(row.shop.code)!.acc;
+  const leaders: KpiLeaderRow[] = [...groups.values()].map((list) => ({
+    kind: list[0].shop.director ? 'territorial' : 'director',
+    name: list[0].shop.director ?? null,
+    shops: list,
+    regions: [...new Set(list.map((r) => r.shop.region).filter((r): r is string => !!r))],
+    ...finish(mergeAverages(list.map(accOf))),
+  }));
+
+  const regions: KpiRegionRow[] = [...byRegion.entries()].map(([region, v]) => ({
+    region,
+    shops: v.shops.size,
+    ...finish(v.acc),
+  }));
+
+  // Выше — у кого витрина полнее; при равенстве — у кого больше замеров:
+  // 100% за один день и 100% за тридцать стоят разных усилий.
+  const byAverage = (a: KpiAverage, b: KpiAverage) =>
+    (b.avg ?? -1) - (a.avg ?? -1) || b.measured - a.measured;
+  leaders.sort(
+    (a, b) => byAverage(a, b) || byShopNumber(a.shops[0].shop, b.shops[0].shop),
+  );
+  regions.sort((a, b) => byAverage(a, b) || a.region.localeCompare(b.region, 'ru'));
+
+  return {
+    dates: [...dates].sort(),
+    shops,
+    leaders,
+    regions,
+    network: { ...finish(mergeAverages(shops.map(accOf))), shops: shops.length },
+    unmeasured,
+  };
 }
 
 /* ------------------------------- сводка ---------------------------------- */
