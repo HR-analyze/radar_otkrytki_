@@ -74,3 +74,60 @@ export function formatPercent(percent: number | null): string {
   if (percent == null) return '—';
   return `${percent.toFixed(1).replace('.', ',')}%`;
 }
+
+/* ------------------------- руководители лавок ---------------------------- */
+
+/**
+ * Кто отвечает за лавку во втором блоке КПИ и в фильтре «Руководитель».
+ *
+ * У лавки либо свой директор (управляющий), либо территориальный директор на
+ * две лавки. Источник — таблица «Лавки» (shop-directors.json): она новее и
+ * знает имена директоров. Лавки, которой там нет, берём из справочника «Лавки
+ * БК» — там есть только ТД, директор остаётся без имени.
+ */
+export interface ShopLeader {
+  kind: 'territorial' | 'director';
+  /** null — директор лавки, имени которого радар не знает. */
+  name: string | null;
+}
+
+export function leaderOf(
+  table: { director: string | null; territorial: string | null } | undefined,
+  rosterTerritorial: string | null | undefined,
+): ShopLeader {
+  const territorial = table ? table.territorial : (rosterTerritorial ?? null);
+  if (territorial) return { kind: 'territorial', name: territorial };
+  return { kind: 'director', name: table?.director ?? null };
+}
+
+/**
+ * Значение фильтра в адресе: «td:Макарова Дарья», «dir:Абрамова Дарья».
+ * Приставка нужна: ТД и директор могут оказаться тёзками, а это разные строки.
+ * У безымянного директора ключа нет — выбрать его в фильтре нельзя.
+ */
+export function leaderKey(leader: ShopLeader): string | null {
+  return leader.name ? `${leader.kind === 'territorial' ? 'td' : 'dir'}:${leader.name}` : null;
+}
+
+/** Ключ из адреса обратно в руководителя; мусор — null, фильтр не действует. */
+export function parseLeaderKey(value: string | undefined | null): ShopLeader | null {
+  const m = /^(td|dir):(.+)$/.exec(String(value ?? '').trim());
+  return m ? { kind: m[1] === 'td' ? 'territorial' : 'director', name: m[2].trim() } : null;
+}
+
+/** Варианты фильтра «Руководитель», по алфавиту внутри групп. */
+export interface LeaderOptions {
+  territorial: string[];
+  directors: string[];
+}
+
+export function leaderOptions(leaders: Iterable<ShopLeader>): LeaderOptions {
+  const territorial = new Set<string>();
+  const directors = new Set<string>();
+  for (const l of leaders) {
+    if (!l.name) continue;
+    (l.kind === 'territorial' ? territorial : directors).add(l.name);
+  }
+  const sort = (s: Set<string>) => [...s].sort((a, b) => a.localeCompare(b, 'ru'));
+  return { territorial: sort(territorial), directors: sort(directors) };
+}

@@ -40,7 +40,19 @@ import {
 } from './contest';
 import { readContestViolations, type ContestViolation } from './contest-violations-store';
 import { contestArchiveDays } from './contest-archive';
-import { addFill, averagePercent, emptyAverage, mergeAverages, type FillAverage } from './kpi';
+import {
+  addFill,
+  averagePercent,
+  emptyAverage,
+  leaderKey,
+  leaderOf,
+  leaderOptions,
+  mergeAverages,
+  type FillAverage,
+  type LeaderOptions,
+  type ShopLeader,
+} from './kpi';
+import { readShopDirectors } from './shop-directors-store';
 
 /**
  * Чтение для дашборда поверх снимка в памяти (см. snapshot.ts).
@@ -909,6 +921,8 @@ export interface KpiFilters {
   region?: string;
   /** Код или часть названия лавки — тот же поиск, что в радаре. */
   shop?: string;
+  /** Руководитель — ключ «td:Имя» или «dir:Имя» (см. leaderKey). */
+  leader?: string;
 }
 
 /**
@@ -939,11 +953,7 @@ export interface KpiShopRow extends KpiAverage {
   days: Record<string, KpiFillDay>;
 }
 
-export interface KpiLeaderRow extends KpiAverage {
-  /** territorial — ТД со своими лавками, director — директор одной лавки. */
-  kind: 'territorial' | 'director';
-  /** Имя ТД; у директора лавки имени в справочнике нет — null. */
-  name: string | null;
+export interface KpiLeaderRow extends KpiAverage, ShopLeader {
   shops: KpiShopRow[];
   /** РМ этих лавок по справочнику. */
   regions: string[];
@@ -963,7 +973,13 @@ export interface KpiRegionRow extends KpiAverage {
  * их коды возвращаются отдельно (`unmeasured`), чтобы пропуск было видно.
  *
  * День лавки идёт тому РМ, который вёл её в этот день (regionAt), как в
- * конкурсе. У ТД истории нет: лавки собираются по нынешнему справочнику.
+ * конкурсе. У директоров и ТД истории нет: лавки собираются по нынешней
+ * таблице «Лавки» (leaderOf).
+ *
+ * Фильтр «Руководитель» сужает набор лавок для всех трёх блоков: выбрали ТД —
+ * видно его лавки по дням, его строку и РМ, к которым эти лавки относятся.
+ * Варианты фильтра (`leaderOptions`) — руководители лавок под фильтром «РМ»:
+ * выбранный РМ сужает список так же, как в редакторе витрин.
  */
 export async function kpi(filters: KpiFilters): Promise<{
   dates: string[];
@@ -972,10 +988,19 @@ export async function kpi(filters: KpiFilters): Promise<{
   regions: KpiRegionRow[];
   network: KpiAverage & { shops: number };
   unmeasured: ShopRow[];
+  leaderOptions: LeaderOptions;
 }> {
   const snap = await loadSnapshot();
   const config = loadConfig();
-  const matching = await shopsMatching(filters.region, filters.shop, filters.from, filters.to);
+
+  const table = new Map(readShopDirectors().shops.map((r) => [r.code, r]));
+  const leaderOfShop = (shop: ShopRow): ShopLeader => leaderOf(table.get(shop.code), shop.director);
+  const inRm = await shopsMatching(filters.region, undefined, filters.from, filters.to);
+  const options = leaderOptions(inRm.map(leaderOfShop));
+
+  const matching = (await shopsMatching(filters.region, filters.shop, filters.from, filters.to)).filter(
+    (shop) => !filters.leader || leaderKey(leaderOfShop(shop)) === filters.leader,
+  );
   const allowed = new Set(matching.map((s) => s.code));
   const inRegion = await regionDayMatcher(filters.region);
   const history = regionIndexOf(snap);
@@ -1025,18 +1050,19 @@ export async function kpi(filters: KpiFilters): Promise<{
     else shops.push({ shop, days: data.days, ...finish(data.acc) });
   }
 
-  // ТД — одна строка на все его лавки; лавка без ТД — строка её директора.
-  const groups = new Map<string, KpiShopRow[]>();
+  // Одна строка на руководителя: у ТД в ней две лавки, у директора — его
+  // лавка (или две, как у Абрамовой). Безымянный директор — строка лавки.
+  const groups = new Map<string, { leader: ShopLeader; rows: KpiShopRow[] }>();
   for (const row of shops) {
-    const key = row.shop.director ? `ТД ${row.shop.director}` : `лавка ${row.shop.code}`;
-    const list = groups.get(key);
-    if (list) list.push(row);
-    else groups.set(key, [row]);
+    const leader = leaderOfShop(row.shop);
+    const key = leaderKey(leader) ?? `лавка ${row.shop.code}`;
+    const group = groups.get(key);
+    if (group) group.rows.push(row);
+    else groups.set(key, { leader, rows: [row] });
   }
   const accOf = (row: KpiShopRow): FillAverage => byShop.get(row.shop.code)!.acc;
-  const leaders: KpiLeaderRow[] = [...groups.values()].map((list) => ({
-    kind: list[0].shop.director ? 'territorial' : 'director',
-    name: list[0].shop.director ?? null,
+  const leaders: KpiLeaderRow[] = [...groups.values()].map(({ leader, rows: list }) => ({
+    ...leader,
     shops: list,
     regions: [...new Set(list.map((r) => r.shop.region).filter((r): r is string => !!r))],
     ...finish(mergeAverages(list.map(accOf))),
@@ -1064,6 +1090,7 @@ export async function kpi(filters: KpiFilters): Promise<{
     regions,
     network: { ...finish(mergeAverages(shops.map(accOf))), shops: shops.length },
     unmeasured,
+    leaderOptions: options,
   };
 }
 

@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addFill, averagePercent, emptyAverage, formatPercent, mergeAverages } from './kpi';
+import {
+  addFill,
+  averagePercent,
+  emptyAverage,
+  formatPercent,
+  leaderKey,
+  leaderOf,
+  leaderOptions,
+  mergeAverages,
+  parseLeaderKey,
+} from './kpi';
 
 const of = (...fills: number[]) => fills.reduce((acc, f) => addFill(acc, f), emptyAverage());
 
@@ -33,4 +43,38 @@ test('процент пишется через запятую и всегда с
   assert.equal(formatPercent(94.6), '94,6%');
   assert.equal(formatPercent(95), '95,0%');
   assert.equal(formatPercent(100), '100,0%');
+});
+
+test('руководитель: таблица «Лавки» важнее старого справочника', () => {
+  assert.deepEqual(leaderOf({ director: 'Абрамова Дарья', territorial: null }, 'Старый ТД'), {
+    kind: 'director',
+    name: 'Абрамова Дарья',
+  });
+  assert.deepEqual(leaderOf({ director: null, territorial: 'Макарова Дарья' }, null), {
+    kind: 'territorial',
+    name: 'Макарова Дарья',
+  });
+  // Лавки нет в таблице — ТД из справочника, директор без имени.
+  assert.deepEqual(leaderOf(undefined, 'Репников Алексей'), { kind: 'territorial', name: 'Репников Алексей' });
+  assert.deepEqual(leaderOf(undefined, null), { kind: 'director', name: null });
+});
+
+test('фильтр «Руководитель»: ключ в адресе туда и обратно', () => {
+  const td = { kind: 'territorial' as const, name: 'Макарова Дарья' };
+  assert.equal(leaderKey(td), 'td:Макарова Дарья');
+  assert.deepEqual(parseLeaderKey('td:Макарова Дарья'), td);
+  assert.deepEqual(parseLeaderKey('dir:Абрамова Дарья'), { kind: 'director', name: 'Абрамова Дарья' });
+  assert.equal(leaderKey({ kind: 'director', name: null }), null, 'безымянного директора не выбрать');
+  assert.equal(parseLeaderKey('Макарова Дарья'), null, 'без приставки — мусор');
+});
+
+test('варианты фильтра: без повторов, по алфавиту, безымянных нет', () => {
+  const options = leaderOptions([
+    { kind: 'director', name: 'Елесина Анастасия' },
+    { kind: 'director', name: 'Абрамова Дарья' },
+    { kind: 'director', name: 'Абрамова Дарья' },
+    { kind: 'territorial', name: 'Макарова Дарья' },
+    { kind: 'director', name: null },
+  ]);
+  assert.deepEqual(options, { territorial: ['Макарова Дарья'], directors: ['Абрамова Дарья', 'Елесина Анастасия'] });
 });

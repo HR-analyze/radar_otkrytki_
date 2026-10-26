@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { loadConfig } from '@/lib/config';
 import { resolveParams } from '@/lib/params';
 import { kpi, listRegions, listShops, type KpiAverage } from '@/lib/queries';
-import { formatPercent } from '@/lib/kpi';
+import { formatPercent, leaderKey, parseLeaderKey, type ShopLeader } from '@/lib/kpi';
 import { shortDate } from '@/lib/time';
 import { plural } from '@/lib/plural';
 import { Filters } from '@/components/Filters';
@@ -33,12 +33,22 @@ export default async function KpiPage({
   const config = loadConfig();
   const [regions, shopList] = await Promise.all([listRegions(p.from, p.to), listShops(p.from)]);
 
-  const { dates, shops, leaders, regions: regionRows, network, unmeasured } = await kpi({
+  // Руководитель: «td:Имя» или «dir:Имя». Мусор в ссылке фильтром не считается.
+  const leaderRaw = Array.isArray(sp.leader) ? sp.leader[0] : sp.leader;
+  const leader = parseLeaderKey(leaderRaw);
+  const leaderParam = leader ? (leaderKey(leader) ?? undefined) : undefined;
+
+  const { dates, shops, leaders, regions: regionRows, network, unmeasured, leaderOptions } = await kpi({
     from: p.from,
     to: p.to,
     region: p.region,
     shop: p.shop,
+    leader: leaderParam,
   });
+
+  /** Ссылка на КПИ того же периода с другим фильтром — для имён в блоках 2 и 3. */
+  const kpiHref = (patch: Record<string, string>) =>
+    `/kpi?${new URLSearchParams({ from: p.from, to: p.to, ...patch })}`;
 
   const showcase = config.criteria.showcase;
   const zones =
@@ -58,6 +68,7 @@ export default async function KpiPage({
               {shops.length} {plural(shops.length, 'лавка', 'лавки', 'лавок')} ·{' '}
               {shortDate(p.from)} — {shortDate(p.to)}
               {p.region && ` · РМ ${p.region}`}
+              {leader && ` · ${leaderTitle(leader)}`}
               {p.shop && ` · поиск «${p.shop}»`}
             </>
           )}
@@ -66,20 +77,23 @@ export default async function KpiPage({
 
       <Filters
         base="/kpi"
-        state={p}
+        state={{ ...p, leader: leaderParam }}
         regions={regions}
         dates={p.dates}
         config={config}
         shops={shopList.map((s) => ({ code: s.code, name: s.name }))}
         showCriterion={false}
         showStatus={false}
+        leaders={leaderOptions}
       />
 
       {shops.length === 0 ? (
         <div className="surface p-8 text-center text-sm muted">
           {p.shop
             ? `По запросу «${p.shop}» замеров витрин за период не нашлось. Попробуйте код (М17) или часть названия.`
-            : 'За выбранный период витрины не заполняли. Возьми другой период или сними фильтр по РМ.'}
+            : leader
+              ? `У руководителя «${leader.name}» за период замеров нет${p.region ? ' — или его лавки не у выбранного РМ' : ''}. Возьми другой период или сними фильтр.`
+              : 'За выбранный период витрины не заполняли. Возьми другой период или сними фильтр по РМ.'}
         </div>
       ) : (
         <>
@@ -106,8 +120,8 @@ export default async function KpiPage({
             <BlockHeading
               n={2}
               title="Директор и территориальный директор"
-              subtitle="Средний % за период. У ТД одна строка на все его лавки — по справочнику лавок; лавка без ТД — строка её директора."
-              hint="Среднее — по всем дням с замером во всех лавках руководителя: каждый лавко-день весит одинаково. Лавка, где мерили два дня из тридцати, тянет итог ТД меньше, чем лавка с тридцатью замерами. ТД берётся из нынешнего справочника — истории ТД, в отличие от РМ, радар не ведёт."
+              subtitle="Средний % за период. Одна строка на руководителя: у ТД — две его лавки, у директора — своя (или две). Клик по имени — только его лавки во всех блоках."
+              hint="Среднее — по всем дням с замером во всех лавках руководителя: каждый лавко-день весит одинаково. Лавка, где мерили два дня из тридцати, тянет итог меньше, чем лавка с тридцатью замерами. Директора и ТД берутся из нынешней таблицы «Лавки» — истории руководителей, в отличие от РМ, радар не ведёт."
             />
             <div className="radar-scroll mt-3">
               <table className="radar-table w-full text-sm">
@@ -122,15 +136,18 @@ export default async function KpiPage({
                 </thead>
                 <tbody>
                   {leaders.map((l) => (
-                    <tr key={l.kind === 'territorial' ? `td:${l.name}` : `shop:${l.shops[0].shop.code}`}>
+                    <tr key={leaderKey(l) ?? `shop:${l.shops[0].shop.code}`}>
                       <td className="px-2 py-1.5 whitespace-nowrap">
-                        {l.kind === 'territorial' ? (
-                          <>
-                            <span className="mr-1.5 text-xs muted">ТД</span>
+                        <span className="mr-1.5 inline-block w-6 text-xs muted">
+                          {l.kind === 'territorial' ? 'ТД' : 'Дир'}
+                        </span>
+                        {l.name ? (
+                          <Link href={kpiHref({ leader: leaderKey(l)! })} className="hover:underline">
                             {l.name}
-                          </>
+                          </Link>
                         ) : (
-                          <span className="muted">Директор лавки</span>
+                          /* Лавки нет в таблице «Лавки» — имени директора радар не знает. */
+                          <span className="muted">директор лавки</span>
                         )}
                       </td>
                       <td className="px-2 py-1.5">
@@ -192,10 +209,7 @@ export default async function KpiPage({
                     {regionRows.map((r) => (
                       <tr key={r.region}>
                         <td className="px-2 py-1.5 whitespace-nowrap">
-                          <Link
-                            href={`/kpi?from=${p.from}&to=${p.to}&region=${encodeURIComponent(r.region)}`}
-                            className="hover:underline"
-                          >
+                          <Link href={kpiHref({ region: r.region })} className="hover:underline">
                             {r.region}
                           </Link>
                         </td>
@@ -232,6 +246,11 @@ export default async function KpiPage({
       )}
     </div>
   );
+}
+
+/** «ТД Макарова Дарья», «директор Абрамова Дарья» — для подписи под заголовком. */
+function leaderTitle(leader: ShopLeader): string {
+  return `${leader.kind === 'territorial' ? 'ТД' : 'директор'} ${leader.name}`;
 }
 
 function BlockHeading({

@@ -625,22 +625,54 @@ test('КПИ: ни один лавко-день не теряется и не з
   assert.deepEqual(inLeaders, shops.map((r) => r.shop.code).sort(), 'лавка у двух руководителей или ни у кого');
 });
 
-test('КПИ: у ТД одна строка на несколько лавок, у директора — одна лавка', async () => {
+test('КПИ: одна строка на руководителя — ТД с двумя лавками, директор со своими', async () => {
+  const { readShopDirectors } = await import('./shop-directors-store');
+  const table = new Map(readShopDirectors().shops.map((r) => [r.code, r]));
   const { leaders } = await q.kpi({ from: ALL.from, to: ALL.to });
 
   const territorial = leaders.filter((l) => l.kind === 'territorial');
-  assert.ok(territorial.some((l) => l.shops.length > 1), 'ни у одного ТД нет двух лавок — справочник не доехал до снимка');
+  assert.ok(territorial.some((l) => l.shops.length > 1), 'ни у одного ТД нет двух лавок — таблица «Лавки» не доехала');
   for (const l of territorial) {
-    assert.ok(l.name, 'у ТД должно быть имя');
-    for (const r of l.shops) assert.equal(r.shop.director, l.name, `${r.shop.code} попала к чужому ТД`);
+    for (const r of l.shops) {
+      const row = table.get(r.shop.code);
+      const expected = row ? row.territorial : r.shop.director;
+      assert.equal(expected, l.name, `${r.shop.code} попала к чужому ТД`);
+    }
   }
-  for (const l of leaders.filter((x) => x.kind === 'director')) {
-    assert.equal(l.shops.length, 1, 'у директора лавки ровно одна лавка');
-    assert.ok(!l.shops[0].shop.director, `${l.shops[0].shop.code}: лавка с ТД попала к директору`);
-  }
+
+  // Директор с двумя лавками — одна строка, а не две «Директор лавки».
+  const abramova = leaders.find((l) => l.kind === 'director' && l.name === 'Абрамова Дарья');
+  assert.deepEqual(abramova?.shops.map((r) => r.shop.code).sort(), ['М23', 'М47']);
+  const named = leaders.filter((l) => l.kind === 'director' && l.name);
+  assert.ok(named.length > 20, `директоров с именем всего ${named.length}`);
 
   const order = leaders.map((l) => l.avg ?? -1);
   assert.deepEqual(order, [...order].sort((a, b) => b - a), 'руководители не по убыванию среднего');
+});
+
+test('КПИ: фильтр «Руководитель» оставляет только его лавки во всех блоках', async () => {
+  const all = await q.kpi({ from: ALL.from, to: ALL.to });
+  assert.ok(all.leaderOptions.territorial.includes('Макарова Дарья'), 'ТД нет в вариантах фильтра');
+  assert.ok(all.leaderOptions.directors.includes('Абрамова Дарья'), 'директора нет в вариантах фильтра');
+
+  const td = await q.kpi({ from: ALL.from, to: ALL.to, leader: 'td:Макарова Дарья' });
+  assert.deepEqual(td.shops.map((r) => r.shop.code).sort(), ['М38', 'М54']);
+  assert.equal(td.leaders.length, 1);
+  assert.equal(td.network.measured, td.leaders[0].measured, 'сеть под фильтром — лавки руководителя');
+  assert.equal(
+    td.regions.reduce((a, r) => a + r.measured, 0),
+    td.network.measured,
+    'РМ под фильтром посчитали чужие лавки',
+  );
+
+  const dir = await q.kpi({ from: ALL.from, to: ALL.to, leader: 'dir:Абрамова Дарья' });
+  assert.deepEqual(dir.shops.map((r) => r.shop.code).sort(), ['М23', 'М47']);
+
+  // Выбранный РМ сужает варианты фильтра до руководителей своих лавок.
+  const rm = all.regions[0].region;
+  const scoped = await q.kpi({ from: ALL.from, to: ALL.to, region: rm });
+  const count = (o: typeof all.leaderOptions) => o.territorial.length + o.directors.length;
+  assert.ok(count(scoped.leaderOptions) < count(all.leaderOptions), 'РМ не сузил список руководителей');
 });
 
 test('КПИ уважает фильтр по РМ', async () => {

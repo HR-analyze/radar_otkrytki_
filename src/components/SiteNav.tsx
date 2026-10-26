@@ -24,7 +24,7 @@ const TABS: { href: string; label: string; keys: readonly string[] }[] = [
   // «КПИ» заменил в шапке «Конкурс»: конкурс по-прежнему открывается по
   // прямой ссылке /contest (под паролем) — с нарушениями и PDF, — но вкладки
   // у него нет.
-  { href: '/kpi', label: 'КПИ', keys: SHARED },
+  { href: '/kpi', label: 'КПИ', keys: [...SHARED, 'leader'] },
   { href: '/violations', label: 'Нарушения', keys: SHARED },
   // Норма выхода живёт не периодом, а моментом: забирает только лавку.
   { href: '/staffing', label: 'Норма выхода', keys: ['shop'] },
