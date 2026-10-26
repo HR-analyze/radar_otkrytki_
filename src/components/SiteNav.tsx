@@ -25,6 +25,8 @@ const TABS: { href: string; label: string; keys: readonly string[] }[] = [
   // прямой ссылке /contest — с нарушениями и PDF, — но вкладки у него нет.
   { href: '/kpi', label: 'КПИ', keys: SHARED },
   { href: '/violations', label: 'Нарушения', keys: SHARED },
+  // Норма выхода живёт не периодом, а моментом: забирает только лавку.
+  { href: '/staffing', label: 'Норма выхода', keys: ['shop'] },
   { href: '/history', label: 'История', keys: [] },
   { href: '/settings', label: 'Пороги', keys: [] },
 ];
