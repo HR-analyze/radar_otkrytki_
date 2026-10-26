@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useDialog } from '@/lib/use-dialog';
+import { MAX_PHOTOS } from '@/lib/showcase-photo-limits';
 import { FIELD_STYLE, humanDate } from './showcase-ui';
 
 /**
- * Фото витрины в строке редактора: значок «📷 2/5» и окно со снимками.
+ * Фото витрины в строке редактора: значок «📷 2/10» и окно со снимками.
  *
- * К лавке за день прикладывают от 1 до 7 фото (см. showcase-photos.ts). Окно
+ * К лавке за день прикладывают от 1 до 10 фото (см. showcase-photo-limits.ts). Окно
  * общее для обоих редакторов — дневного и полавочного: ключ, как и у
  * процентов, «дата + лавка».
  *
@@ -32,8 +33,6 @@ import { FIELD_STYLE, humanDate } from './showcase-ui';
  *    сразу начнёт загрузку.
  */
 
-/** Столько же, сколько принимает сервер (MAX_PHOTOS в showcase-photos.ts). */
-const MAX_PHOTOS = 7;
 const MAX_SIDE = 2560;
 /** Качество по убыванию: если файл всё ещё тяжелее лимита — следующая ступень. */
 const JPEG_QUALITY = [0.88, 0.75, 0.6];

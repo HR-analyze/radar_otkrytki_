@@ -1,7 +1,11 @@
 import { openManualDb } from './manual-db';
+import { MAX_PHOTOS } from './showcase-photo-limits';
+
+export { MAX_PHOTOS, MAX_PHOTO_BYTES } from './showcase-photo-limits';
 
 /**
- * Фото витрины: к лавке за день можно приложить от 1 до 7 снимков.
+ * Фото витрины: к лавке за день можно приложить от 1 до 10 снимков (лимит —
+ * в showcase-photo-limits.ts).
  *
  * Процент наполнения — это чья-то оценка «на глаз», и спор «да там было
  * пусто» / «да всё стояло» без снимка решить нечем. Фото — подтверждение
@@ -19,13 +23,6 @@ import { openManualDb } from './manual-db';
  * байтам: файлу с расширением .jpg верить на слово нельзя.
  */
 
-/**
- * Потолок на лавку за день: витрина целиком, холодильники, крупные планы полок.
- * Было 5 — по просьбе с 15.10.2026 стало 7: на больших лавках не хватало.
- */
-export const MAX_PHOTOS = 7;
-/** Потолок на один файл после сжатия в браузере — с запасом на PNG-скриншот. */
-export const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 
 export type PhotoMime = 'image/jpeg' | 'image/png' | 'image/webp';
 
