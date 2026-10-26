@@ -277,3 +277,22 @@ export function parseShopsJson(raw: string): string[] {
     return [];
   }
 }
+
+/**
+ * Лавки человека из поля «Я» — для кнопки «Только мои лавки» в редакторе.
+ *
+ * Имя сравниваем без регистра и лишних пробелов: в поле «Я» его набирают
+ * руками, и «горностаев  дмитрий» — тот же человек, что в списке. Лавки
+ * возвращаются по номеру (М1, М2, М10…): первая из них открывается в режиме
+ * «лавка → дни». Нет такого ответственного — null: фильтровать не по чему.
+ */
+export function ownerShops(owners: readonly ShowcaseOwner[], who: string): string[] | null {
+  const key = who.replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!key) return null;
+  const owner = owners.find((o) => o.name.toLowerCase() === key);
+  if (!owner) return null;
+  return owner.shops
+    .map((code): ShopRef => ({ code, name: code }))
+    .sort(compareShopNumber)
+    .map((s) => s.code);
+}

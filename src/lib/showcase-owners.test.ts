@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseOwners, reportDates, shopWorks, showcaseGaps } from './showcase-owners';
+import { ownerShops, parseOwners, reportDates, shopWorks, showcaseGaps } from './showcase-owners';
 
 test('лавки строкой из таблицы: латинская M и ведущий ноль приводятся к виду базы', () => {
   const r = parseOwners([{ name: '  Оператор  СБ 1 ', shops: 'M01, М02;м3  M04 М02' }]);
@@ -111,4 +111,15 @@ test('выходной лавки — не пропуск: по выгрузке
   const owner = report.owners[0];
   assert.equal(owner.daysOff, 4, 'четыре субботы М16');
   assert.ok(owner.missing.every((d) => !(d.shops.includes('М16') && new Date(`${d.date}T12:00:00Z`).getUTCDay() === 6)));
+});
+
+test('«Только мои лавки»: имя из поля «Я» без регистра и лишних пробелов, лавки по номеру', () => {
+  const owners = [
+    { name: 'Горностаев Дмитрий', shops: ['М12', 'М2', 'М45'] },
+    { name: 'Кобзева Дарья', shops: ['М1'] },
+  ];
+  assert.deepEqual(ownerShops(owners, '  горностаев   Дмитрий '), ['М2', 'М12', 'М45']);
+  assert.equal(ownerShops(owners, 'Горностаев'), null, 'одна фамилия — не тот же человек');
+  assert.equal(ownerShops(owners, ''), null);
+  assert.deepEqual(ownerShops([{ name: 'Новенький', shops: [] }], 'Новенький'), [], 'в списке, но без лавок');
 });

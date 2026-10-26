@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ownerShops, type ShowcaseOwner } from '@/lib/showcase-owners';
 import { ShowcaseDayEditor } from './ShowcaseDayEditor';
 import { ShowcaseShopEditor } from './ShowcaseShopEditor';
 import { LiveBar } from './showcase-ui';
@@ -28,17 +29,23 @@ import { useShowcaseLive } from './use-showcase-live';
 
 type Mode = 'day' | 'shop';
 
+/** Включена ли «Только мои лавки» — помним в браузере, как и имя в поле «Я». */
+const MINE_KEY = 'radar.showcase.mine';
+
 export function ShowcaseEditor({
   initialDate,
   initialMode = 'day',
   initialShop = '',
-  ownerNames = [],
+  owners = [],
 }: {
   initialDate: string;
   initialMode?: Mode;
   initialShop?: string;
-  /** Ответственные за витрины — подсказки в поле «Я». */
-  ownerNames?: readonly string[];
+  /**
+   * Ответственные за витрины: их имена — подсказки в поле «Я», их лавки —
+   * кнопка «Только мои лавки».
+   */
+  owners?: readonly ShowcaseOwner[];
 }) {
   // Одна живая связь на страницу: при смене режима метка и опрос не рвутся.
   const live = useShowcaseLive();
@@ -48,6 +55,43 @@ export function ShowcaseEditor({
   // в полавочном — предмет работы, но человек считает их одним выбором.
   const [shopCode, setShopCode] = useState(initialShop);
   const [region, setRegion] = useState('');
+
+  /**
+   * «Только мои лавки»: лавки человека из поля «Я» по списку ответственных
+   * (вкладка «Кто не заполнил»). Сужают оба режима — список дня, счётчики,
+   * выпадашки лавок и РМ, обход стрелками. Имени нет в списке — кнопка
+   * выключена и говорит почему.
+   */
+  const [mineOn, setMineOn] = useState(false);
+  useEffect(() => {
+    try {
+      setMineOn(localStorage.getItem(MINE_KEY) === '1');
+    } catch {
+      // Хранилище закрыто (приватный режим) — просто начинаем со всех лавок.
+    }
+  }, []);
+  const myShops = useMemo(() => ownerShops(owners, live.who), [owners, live.who]);
+  const mine = useMemo(() => (mineOn && myShops ? new Set(myShops) : null), [mineOn, myShops]);
+
+  const toggleMine = () => {
+    const next = !mineOn;
+    setMineOn(next);
+    try {
+      localStorage.setItem(MINE_KEY, next ? '1' : '0');
+    } catch {
+      // Не запомнили — не беда: кнопка работает и без этого.
+    }
+    // РМ мог отсечь все свои лавки — снимаем его, чтобы не получить пустой экран.
+    if (next) setRegion('');
+  };
+
+  // Выбранная лавка должна быть своей. В режиме «лавка → дни» лавка выбрана
+  // всегда — открываем первую свою, а не первую в справочнике.
+  useEffect(() => {
+    if (!mine || !myShops) return;
+    if (shopCode && !mine.has(shopCode)) setShopCode(mode === 'shop' ? (myShops[0] ?? '') : '');
+    else if (!shopCode && mode === 'shop' && myShops[0]) setShopCode(myShops[0]);
+  }, [mine, myShops, mode, shopCode]);
 
   // Фото можно бросить на значок 📷 в строке (см. ShowcasePhotos). Промах мимо
   // него браузер по умолчанию понимает как «открыть файл» — уходит со страницы,
@@ -95,7 +139,24 @@ export function ShowcaseEditor({
         </span>
       </div>
 
-      <LiveBar who={live.who} onWho={live.setWho} names={ownerNames} others={live.others} />
+      <LiveBar
+        who={live.who}
+        onWho={live.setWho}
+        names={owners.map((o) => o.name)}
+        others={live.others}
+        mine={{
+          on: !!mine,
+          count: myShops?.length ?? null,
+          onToggle: toggleMine,
+          disabled: !live.who.trim()
+            ? 'Сначала выбери себя в поле «Я»'
+            : !myShops
+              ? `«${live.who.trim()}» нет в списке ответственных — проверь ФИО или добавь себя на странице «Кто не заполнил»`
+              : myShops.length === 0
+                ? 'За тобой не закреплено ни одной лавки — это правится на странице «Кто не заполнил»'
+                : undefined,
+        }}
+      />
 
       {mode === 'day' ? (
         <ShowcaseDayEditor
@@ -106,6 +167,7 @@ export function ShowcaseEditor({
           onShopCode={setShopCode}
           region={region}
           onRegion={setRegion}
+          onlyShops={mine}
         />
       ) : (
         <ShowcaseShopEditor
@@ -114,6 +176,7 @@ export function ShowcaseEditor({
           onShopCode={setShopCode}
           region={region}
           onRegion={setRegion}
+          onlyShops={mine}
         />
       )}
     </div>

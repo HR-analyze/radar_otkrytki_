@@ -331,11 +331,21 @@ export function LiveBar({
   onWho,
   names,
   others,
+  mine,
 }: {
   who: string;
   onWho: (value: string) => void;
   names: readonly string[];
   others: readonly { who: string; date: string; shopCode: string }[];
+  /** Кнопка «Только мои лавки»; не передана — кнопки нет. */
+  mine?: {
+    on: boolean;
+    /** Сколько лавок за человеком; null — его нет в списке ответственных. */
+    count: number | null;
+    onToggle: () => void;
+    /** Почему нажать нельзя; пусто — можно. */
+    disabled?: string;
+  };
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -356,6 +366,26 @@ export function LiveBar({
           ))}
         </datalist>
       </label>
+      {mine && (
+        <button
+          type="button"
+          onClick={mine.onToggle}
+          disabled={!!mine.disabled && !mine.on}
+          aria-pressed={mine.on}
+          title={
+            mine.disabled ??
+            (mine.on ? 'Показать все лавки' : 'Оставить в списке только лавки, закреплённые за тобой')
+          }
+          className={`rounded-lg border px-2.5 py-1.5 text-sm whitespace-nowrap disabled:opacity-50 ${mine.on ? 'font-semibold' : ''}`}
+          style={{
+            borderColor: mine.on ? 'var(--focus)' : 'var(--border)',
+            background: mine.on ? 'color-mix(in srgb, var(--focus) 12%, var(--surface))' : 'var(--surface)',
+            color: 'var(--text)',
+          }}
+        >
+          👤 Только мои лавки{mine.count ? ` (${mine.count})` : ''}
+        </button>
+      )}
       <span className="text-xs muted">
         {others.length === 0
           ? 'Сейчас больше никто не заполняет.'

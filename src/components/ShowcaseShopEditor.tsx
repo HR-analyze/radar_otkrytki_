@@ -117,6 +117,7 @@ export function ShowcaseShopEditor({
   onShopCode,
   region,
   onRegion,
+  onlyShops = null,
 }: {
   live: ShowcaseLive;
   /** Пусто — какую лавку открыть, решает сервер: первую в справочнике. */
@@ -124,6 +125,8 @@ export function ShowcaseShopEditor({
   onShopCode: (code: string) => void;
   region: string;
   onRegion: (region: string) => void;
+  /** «Только мои лавки»: выпадашка и стрелки ходят только по ним; null — все. */
+  onlyShops?: ReadonlySet<string> | null;
 }) {
   const [range, setRange] = useState<ShowcaseRange>(() => defaultShowcaseRange());
   const [data, setData] = useState<ShopData | null>(null);
@@ -273,7 +276,10 @@ export function ShowcaseShopEditor({
     [edits, code],
   );
 
-  const shops = data?.shops ?? [];
+  const shops = useMemo(() => {
+    const all = data?.shops ?? [];
+    return onlyShops ? all.filter((s) => onlyShops.has(s.code)) : all;
+  }, [data, onlyShops]);
   const regions = useMemo(
     () => [...new Set(shops.map((s) => s.region).filter(Boolean))].sort() as string[],
     [shops],

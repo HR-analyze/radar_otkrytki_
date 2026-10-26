@@ -83,6 +83,7 @@ export function ShowcaseDayEditor({
   onShopCode,
   region,
   onRegion,
+  onlyShops = null,
 }: {
   live: ShowcaseLive;
   date: string;
@@ -91,6 +92,8 @@ export function ShowcaseDayEditor({
   onShopCode: (code: string) => void;
   region: string;
   onRegion: (region: string) => void;
+  /** «Только мои лавки»: остальных лавок на экране нет вовсе; null — все. */
+  onlyShops?: ReadonlySet<string> | null;
 }) {
   const [data, setData] = useState<DayData | null>(null);
   /** По какому замеру показывать только незаполненные; пусто — показывать всё. */
@@ -226,7 +229,12 @@ export function ShowcaseDayEditor({
   const busy = (code: string) =>
     live.others.filter((o) => o.date === date && o.shopCode === code).map((o) => o.who || 'кто-то');
 
-  const shops = data?.shops ?? [];
+  // «Только мои лавки» сужает экран целиком — и список, и счётчик «заполнено
+  // N из M», и выпадашки лавок и РМ: иначе «5 из 82» про чужие лавки.
+  const shops = useMemo(() => {
+    const all = data?.shops ?? [];
+    return onlyShops ? all.filter((s) => onlyShops.has(s.code)) : all;
+  }, [data, onlyShops]);
   const thresholds = data?.thresholds ?? { green: 1, yellow: 1 };
 
   const percentOf = useCallback(

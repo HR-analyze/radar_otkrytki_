@@ -77,7 +77,7 @@ export default async function ShowcasePage({
         initialDate={initial}
         initialMode={mode}
         initialShop={shop}
-        ownerNames={(await readOwners()).owners.map((o) => o.name)}
+        owners={(await readOwners()).owners}
       />
 
       <NotesSummary
