@@ -49,7 +49,13 @@ export interface StaffRoleNorm {
   slots: StaffSlot[];
   /** Штатных единиц (FTE) на должность; null — в шаблоне пусто. */
   fte: number | null;
-  /** Человеко-часы за месяц; null — в шаблоне пусто. */
+  /**
+   * Человеко-часы за месяц — колонка «ЧЕЛ-КО часы» как есть; null — в шаблоне
+   * пусто. Не пересчитывается и с `dailyHours × 31` не сходится: во всех
+   * лавках она равна сумме «норма окна × норма того же окна у М1» × 31, то
+   * есть вместо длины окон шаблон берёт строку М1. Отсюда и 0 у бариста:
+   * в М1 кофемашины нет.
+   */
   hours: number | null;
 }
 
@@ -98,6 +104,24 @@ export function staffAtAll(norms: readonly StaffNorm[], minutes: number): StaffA
     count: each.reduce((sum, at) => sum + at[i].count, 0),
     slot: each[0]?.[i].slot ?? null,
   }));
+}
+
+/**
+ * Человеко-часы за день по окнам: сколько человек в окне × длина окна в часах,
+ * сложено за смену. У М50 кассиры 2·1 + 4·3,5 + 4·5 + 4·1,5 + 4·3,5 + 3·2 = 62.
+ *
+ * null — есть окно «до N» без начала, а люди в нём есть: длину такого окна не
+ * знаем, и сумма вышла бы заниженной. Пустое окно без начала ничего не меняет.
+ * Считаем в минутах и делим один раз — до десятых часа.
+ */
+export function dailyHours(slots: readonly StaffSlot[]): number | null {
+  let minutes = 0;
+  for (const s of slots) {
+    if (s.count === 0) continue;
+    if (s.from == null) return null;
+    minutes += s.count * (s.to - s.from);
+  }
+  return Math.round(minutes / 6) / 10;
 }
 
 /** «11:00–16:00», «до 08:00». */

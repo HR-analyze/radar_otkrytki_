@@ -5,6 +5,7 @@ import {
   STAFF_ROLES,
   STAFF_ROLE_FORMS,
   STAFF_ROLE_TITLE,
+  dailyHours,
   slotAt,
   slotLabel,
   slotShortLabel,
@@ -168,7 +169,8 @@ export function StaffingBoard({
           <p className="mt-0.5 text-xs muted">
             Сколько человек должно быть на смене в каждом окне. Подсвечены окна, в которые попадает{' '}
             {formatClock(minutes)}. Клик по строке оставит в таблице одну эту лавку, вернуть всю сеть — «Все
-            лавки» в фильтре. FTE — итого по штату, чел.-ч — человеко-часов в месяц.
+            лавки» в фильтре. FTE — итого по штату, чел.-ч/мес — человеко-часы в месяц из шаблона, чел.-ч/день —
+            по окнам: человек × длина окна.
           </p>
         </div>
         <div className="surface radar-scroll staffing-scroll">
@@ -185,7 +187,7 @@ export function StaffingBoard({
                 {STAFF_ROLES.map((role) => (
                   <th
                     key={role}
-                    colSpan={head.roles[role].slots.length + 2}
+                    colSpan={head.roles[role].slots.length + 3}
                     className="px-2 pt-2 text-center text-xs font-semibold"
                     style={{ borderLeft: '1px solid var(--border)' }}
                   >
@@ -216,7 +218,14 @@ export function StaffingBoard({
                       </Hint>
                     </th>,
                     <th key={`${role}-h`} className="px-1.5 py-1.5 text-center text-[11px] font-medium whitespace-nowrap muted">
-                      чел.-ч
+                      <Hint text={MONTH_HINT} below>
+                        чел.-ч/мес
+                      </Hint>
+                    </th>,
+                    <th key={`${role}-d`} className="px-1.5 py-1.5 text-center text-[11px] font-medium whitespace-nowrap muted">
+                      <Hint text={DAY_HINT} below>
+                        чел.-ч/день
+                      </Hint>
                     </th>,
                   ];
                 })}
@@ -253,6 +262,7 @@ export function StaffingBoard({
                     {STAFF_ROLES.flatMap((role) => {
                       const r = n.roles[role];
                       const active = slotAt(r.slots, minutes);
+                      const day = dailyHours(r.slots);
                       return [
                         ...r.slots.map((s, i) => (
                           <td
@@ -280,6 +290,13 @@ export function StaffingBoard({
                           style={selected ? { background: SELECTED_ROW } : undefined}
                         >
                           {r.hours == null ? '—' : r.hours}
+                        </td>,
+                        <td
+                          key={`${role}-d`}
+                          className="px-1.5 py-1 text-center text-xs tabular-nums muted"
+                          style={selected ? { background: SELECTED_ROW } : undefined}
+                        >
+                          {day == null ? '—' : formatCount(day)}
                         </td>,
                       ];
                     })}
@@ -309,7 +326,15 @@ const ACTIVE_COLUMN = 'color-mix(in srgb, var(--focus) 10%, var(--surface))';
 const SELECTED_ROW = 'color-mix(in srgb, var(--focus) 12%, var(--surface))';
 const SELECTED_CELL = 'color-mix(in srgb, var(--focus) 26%, var(--surface))';
 
-/** Дробные бывают только FTE (0,5 ставки) — пишем через запятую. */
+/**
+ * Подсказки к человеко-часам. Месяц и день друг из друга не получаются:
+ * месячное число шаблон считает своей формулой (см. StaffRoleNorm.hours),
+ * а дневное — честная сумма по окнам, её можно проверить по строке глазами.
+ */
+const MONTH_HINT = 'Человеко-часы в месяц — число из шаблона как есть. С «в день» × 31 не сходится: шаблон считает по своей формуле';
+const DAY_HINT = 'Человеко-часы в день по окнам: сколько человек в окне × длина окна в часах, сложено за смену';
+
+/** Дробные бывают у FTE (0,5 ставки) и у часов в день — пишем через запятую. */
 function formatCount(n: number): string {
   return Number.isInteger(n) ? String(n) : String(n).replace('.', ',');
 }
