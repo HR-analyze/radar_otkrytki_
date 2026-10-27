@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * часам-пикам», правило окон — в staffing.ts.
  *
  * Страница читает из адреса лавку и время (`?shop=М1&time=14:00`); без них
- * открывается на первой лавке и текущем времени по Москве. Лавка понимает и
+ * открывается на всех лавках и текущем времени по Москве. Лавка понимает и
  * поиск со сводки и радара — его шапка переносит сюда.
  */
 export default async function StaffingPage({
@@ -35,7 +35,7 @@ export default async function StaffingPage({
     );
   }
 
-  const shop = findStaffNorm(norms, one('shop')) ?? norms[0];
+  const shop = findStaffNorm(norms, one('shop'));
   const minutes = parseTimeOfDay(one('time')) ?? minutesNowMsk();
 
   return (
@@ -47,7 +47,7 @@ export default async function StaffingPage({
           на этот момент. Источник — {source}, собран {builtAt.split('-').reverse().join('.')}.
         </p>
       </div>
-      <StaffingBoard norms={norms} initialCode={shop.code} initialMinutes={minutes} />
+      <StaffingBoard norms={norms} initialCode={shop?.code ?? null} initialMinutes={minutes} />
     </div>
   );
 }

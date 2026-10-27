@@ -18,11 +18,17 @@ export function Hint({
   text,
   children,
   className = '',
+  below = false,
 }: {
   text: string;
   /** К чему подсказка. Не передано — рисуем значок «?». */
   children?: React.ReactNode;
   className?: string;
+  /**
+   * Открыть вниз и влево от правого края. Для шапки таблицы, прилипшей к
+   * верху рамки со скроллом: вверх подсказку обрезал бы край рамки.
+   */
+  below?: boolean;
 }) {
   /**
    * Два независимых повода показать подсказку, а не один переключатель.
@@ -98,9 +104,14 @@ export function Hint({
         <span
           id={id}
           role="tooltip"
-          /* Ширина фиксированная: подсказки здесь в две-три строки, и по
-             содержимому они растягивались бы то в нитку, то во весь экран. */
-          className="surface absolute bottom-full left-0 z-50 mb-1.5 w-64 max-w-[min(16rem,calc(100vw-2rem))] p-2 text-xs font-normal shadow-lg"
+          /* Ширина по тексту без переносов (w-max), но не шире 16rem: длинное
+             пояснение переносится в две-три строки, а не тянется в нитку или
+             во весь экран, а короткое («Итого по штату») не сидит в пустой
+             плашке на 16rem — в шапке таблицы на телефоне такая уезжала за
+             левый край. */
+          className={`surface absolute z-50 w-max max-w-[min(16rem,calc(100vw-2rem))] p-2 text-left text-xs font-normal shadow-lg ${
+            below ? 'top-full right-0 mt-1.5' : 'bottom-full left-0 mb-1.5'
+          }`}
           style={{ color: 'var(--text)' }}
         >
           {text}

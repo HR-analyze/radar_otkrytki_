@@ -9,21 +9,25 @@ import {
   slotLabel,
   slotShortLabel,
   staffAt,
+  staffAtAll,
   type StaffNorm,
 } from '@/lib/staffing';
 import { formatClock, minutesNowMsk } from '@/lib/time';
 import { plural } from '@/lib/plural';
+import { Hint } from './Hint';
 
 /**
- * Норма выхода: калькулятор «лавка + время → сколько людей на смене» и под
- * ним весь шаблон таблицей.
+ * График пиков: калькулятор «лавка + время → сколько людей на смене» и под
+ * ним шаблон таблицей.
  *
  * Всё считается в браузере: норм на все лавки — пара сотен окон, и гонять
  * сервер на каждую смену времени незачем. Выбор живёт в адресе (replaceState,
  * без перезагрузки страницы), так что «М17 в 14:00» передаётся ссылкой.
  *
- * Таблица и калькулятор связаны: выбранная лавка подсвечена строкой, окно, в
- * которое попало время, — столбцом. Клик по строке выбирает лавку.
+ * Таблица и калькулятор связаны: при «Все лавки» в таблице вся сеть, а
+ * калькулятор считает сумму по ней; выбрана лавка — в таблице остаётся она
+ * одна. Окно, в которое попало время, подсвечено столбцом. Клик по строке
+ * выбирает лавку.
  */
 export function StaffingBoard({
   norms,
@@ -31,21 +35,25 @@ export function StaffingBoard({
   initialMinutes,
 }: {
   norms: StaffNorm[];
-  initialCode: string;
+  /** null — «Все лавки». */
+  initialCode: string | null;
   initialMinutes: number;
 }) {
   const [code, setCode] = useState(initialCode);
   const [minutes, setMinutes] = useState(initialMinutes);
-  const norm = norms.find((n) => n.code === code) ?? norms[0];
-  const at = useMemo(() => staffAt(norm, minutes), [norm, minutes]);
+  const norm = code == null ? null : (norms.find((n) => n.code === code) ?? null);
+  const shown = norm ? [norm] : norms;
+  // Окна в шаблоне одни на все лавки — шапке таблицы годится любая.
+  const head = norm ?? norms[0];
+  const at = useMemo(() => (norm ? staffAt(norm, minutes) : staffAtAll(norms, minutes)), [norm, norms, minutes]);
   const total = at.reduce((a, r) => a + r.count, 0);
 
-  const pick = (next: { code?: string; minutes?: number }) => {
-    const c = next.code ?? code;
+  const pick = (next: { code?: string | null; minutes?: number }) => {
+    const c = next.code !== undefined ? next.code : code;
     const m = next.minutes ?? minutes;
-    if (next.code) setCode(next.code);
+    if (next.code !== undefined) setCode(next.code);
     if (next.minutes != null) setMinutes(next.minutes);
-    const q = new URLSearchParams({ shop: c, time: formatClock(m) });
+    const q = new URLSearchParams(c ? { shop: c, time: formatClock(m) } : { time: formatClock(m) });
     window.history.replaceState(null, '', `?${q}`);
   };
 
@@ -57,11 +65,12 @@ export function StaffingBoard({
           <label className="flex flex-col gap-1.5 text-xs muted">
             Лавка
             <select
-              value={norm.code}
-              onChange={(e) => pick({ code: e.target.value })}
+              value={norm?.code ?? ''}
+              onChange={(e) => pick({ code: e.target.value || null })}
               className="h-10 rounded-lg border px-2 text-sm"
               style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
+              <option value="">Все лавки</option>
               {norms.map((n) => (
                 <option key={n.code} value={n.code}>
                   {n.code} {n.name}
@@ -94,17 +103,32 @@ export function StaffingBoard({
             </span>
           </label>
           <p className="text-xs muted sm:text-right">
-            {norm.grade && <>Грейд {norm.grade} · </>}
-            {norm.coffeeMachine == null ? 'кофемашина — не указано' : norm.coffeeMachine ? 'с кофемашиной' : 'без кофемашины'}
+            {norm ? (
+              <>
+                {norm.grade && <>Грейд {norm.grade} · </>}
+                {norm.coffeeMachine == null ? 'кофемашина — не указано' : norm.coffeeMachine ? 'с кофемашиной' : 'без кофемашины'}
+              </>
+            ) : (
+              `${norms.length} ${plural(norms.length, 'лавка', 'лавки', 'лавок')} в шаблоне`
+            )}
           </p>
         </div>
 
         <div aria-live="polite">
           <p className="text-sm">
-            В <span className="font-semibold tabular-nums">{formatClock(minutes)}</span> в{' '}
-            <span className="font-semibold">
-              {norm.code} {norm.name}
-            </span>{' '}
+            В <span className="font-semibold tabular-nums">{formatClock(minutes)}</span>{' '}
+            {norm ? (
+              <>
+                в{' '}
+                <span className="font-semibold">
+                  {norm.code} {norm.name}
+                </span>
+              </>
+            ) : (
+              <>
+                во <span className="font-semibold">всех лавках</span>
+              </>
+            )}{' '}
             на смене должно быть{' '}
             <span className="font-semibold">
               {total} {plural(total, 'человек', 'человека', 'человек')}
@@ -142,9 +166,9 @@ export function StaffingBoard({
         <div>
           <h2 className="text-sm font-semibold">Шаблон по часам-пикам</h2>
           <p className="mt-0.5 text-xs muted">
-            Сколько человек должно быть на смене в каждом окне. Подсвечены выбранная лавка и окна, в которые
-            попадает {formatClock(minutes)}. Клик по строке — выбрать лавку. FTE — итого по штату, чел.-ч —
-            человеко-часов в месяц.
+            Сколько человек должно быть на смене в каждом окне. Подсвечены окна, в которые попадает{' '}
+            {formatClock(minutes)}. Клик по строке оставит в таблице одну эту лавку, вернуть всю сеть — «Все
+            лавки» в фильтре. FTE — итого по штату, чел.-ч — человеко-часов в месяц.
           </p>
         </div>
         <div className="surface radar-scroll staffing-scroll">
@@ -161,7 +185,7 @@ export function StaffingBoard({
                 {STAFF_ROLES.map((role) => (
                   <th
                     key={role}
-                    colSpan={norm.roles[role].slots.length + 2}
+                    colSpan={head.roles[role].slots.length + 2}
                     className="px-2 pt-2 text-center text-xs font-semibold"
                     style={{ borderLeft: '1px solid var(--border)' }}
                   >
@@ -171,7 +195,7 @@ export function StaffingBoard({
               </tr>
               <tr>
                 {STAFF_ROLES.flatMap((role) => {
-                  const slots = norm.roles[role].slots;
+                  const slots = head.roles[role].slots;
                   const active = slotAt(slots, minutes);
                   return [
                     ...slots.map((s, i) => (
@@ -187,9 +211,9 @@ export function StaffingBoard({
                       </th>
                     )),
                     <th key={`${role}-fte`} className="px-1.5 py-1.5 text-center text-[11px] font-medium muted">
-                      <abbr title="Итого по штату" className="cursor-help">
+                      <Hint text="Итого по штату" below>
                         FTE
-                      </abbr>
+                      </Hint>
                     </th>,
                     <th key={`${role}-h`} className="px-1.5 py-1.5 text-center text-[11px] font-medium whitespace-nowrap muted">
                       чел.-ч
@@ -199,8 +223,8 @@ export function StaffingBoard({
               </tr>
             </thead>
             <tbody>
-              {norms.map((n) => {
-                const selected = n.code === norm.code;
+              {shown.map((n) => {
+                const selected = n.code === norm?.code;
                 return (
                   <tr
                     key={n.code}

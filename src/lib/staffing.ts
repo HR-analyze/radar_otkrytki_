@@ -86,6 +86,20 @@ export function staffAt(norm: StaffNorm, minutes: number): StaffAt[] {
   });
 }
 
+/**
+ * То же по всем лавкам сразу: сколько человек должно быть на смене по сети.
+ * Окна в шаблоне одни на все лавки, поэтому окно берём у первой лавки — оно
+ * нужно только для подписи, а `count` у него не тот, что в ответе.
+ */
+export function staffAtAll(norms: readonly StaffNorm[], minutes: number): StaffAt[] {
+  const each = norms.map((n) => staffAt(n, minutes));
+  return STAFF_ROLES.map((role, i) => ({
+    role,
+    count: each.reduce((sum, at) => sum + at[i].count, 0),
+    slot: each[0]?.[i].slot ?? null,
+  }));
+}
+
 /** «11:00–16:00», «до 08:00». */
 export function slotLabel(slot: StaffSlot): string {
   return slot.from == null ? `до ${formatClock(slot.to)}` : `${formatClock(slot.from)}–${formatClock(slot.to)}`;
