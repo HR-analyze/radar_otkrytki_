@@ -92,6 +92,8 @@ test('пароль спрашивается на вкладках, где дан
     '/api/contest/violations',
     // «КПИ» заменил «Конкурс» в шапке и закрыт так же: там рейтинг ТД и РМ.
     '/kpi',
+    // «График пиков» закрыт с 27.10.2026: там заработок смен в рублях.
+    '/staffing',
   ];
   for (const p of managed) {
     assert.equal(isManaged(p), true, `${p} должен быть под паролем`);
@@ -99,7 +101,7 @@ test('пароль спрашивается на вкладках, где дан
 
   // Сам радар открыт: цифры смотрит вся команда.
   // «/showcases» — проверка, что закрывается путь, а не любая строка с ним внутри.
-  for (const p of ['/', '/radar', '/staffing', '/shop/М1', '/api/upload', '/showcases', '/contests', '/kpis']) {
+  for (const p of ['/', '/radar', '/shop/М1', '/api/upload', '/showcases', '/contests', '/kpis', '/staffings']) {
     assert.equal(isManaged(p), false, `${p} под паролем быть не должен`);
   }
 });
