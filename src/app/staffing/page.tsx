@@ -41,7 +41,7 @@ export default async function StaffingPage({
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Норма выхода сотрудников</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">График пиков</h1>
         <p className="mt-1 text-sm muted">
           Сколько человек каждой должности должно быть на смене. Выберите лавку и время — радар покажет норму
           на этот момент. Источник — {source}, собран {builtAt.split('-').reverse().join('.')}.

@@ -149,7 +149,7 @@ export function StaffingBoard({
         </div>
         <div className="surface radar-scroll">
           <table className="radar-table w-full text-sm">
-            <caption className="sr-only">Норма выхода сотрудников по лавкам и часовым окнам</caption>
+            <caption className="sr-only">График пиков: норма выхода сотрудников по лавкам и часовым окнам</caption>
             <thead>
               <tr>
                 <th rowSpan={2} className="radar-sticky px-3 py-2 text-left text-xs font-medium muted">

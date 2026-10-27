@@ -26,8 +26,8 @@ const TABS: { href: string; label: string; keys: readonly string[] }[] = [
   // у него нет.
   { href: '/kpi', label: 'КПИ', keys: [...SHARED, 'leader'] },
   { href: '/violations', label: 'Нарушения', keys: SHARED },
-  // Норма выхода живёт не периодом, а моментом: забирает только лавку.
-  { href: '/staffing', label: 'Норма выхода', keys: ['shop'] },
+  // График пиков живёт не периодом, а моментом: забирает только лавку.
+  { href: '/staffing', label: 'График пиков', keys: ['shop'] },
   { href: '/history', label: 'История', keys: [] },
   { href: '/settings', label: 'Пороги', keys: [] },
 ];
