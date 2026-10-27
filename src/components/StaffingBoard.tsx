@@ -5,7 +5,9 @@ import {
   STAFF_ROLES,
   STAFF_ROLE_FORMS,
   STAFF_ROLE_TITLE,
+  MONTH_DAYS,
   dailyHours,
+  monthlyHours,
   slotAt,
   slotLabel,
   slotShortLabel,
@@ -169,8 +171,8 @@ export function StaffingBoard({
           <p className="mt-0.5 text-xs muted">
             Сколько человек должно быть на смене в каждом окне. Подсвечены окна, в которые попадает{' '}
             {formatClock(minutes)}. Клик по строке оставит в таблице одну эту лавку, вернуть всю сеть — «Все
-            лавки» в фильтре. FTE — итого по штату, чел.-ч/мес — человеко-часы в месяц из шаблона, чел.-ч/день —
-            по окнам: человек × длина окна.
+            лавки» в фильтре. FTE — итого по штату, чел.-ч/день — по окнам: человек × длина окна, чел.-ч/мес —
+            день × {MONTH_DAYS}.
           </p>
         </div>
         <div className="surface radar-scroll staffing-scroll">
@@ -263,6 +265,7 @@ export function StaffingBoard({
                       const r = n.roles[role];
                       const active = slotAt(r.slots, minutes);
                       const day = dailyHours(r.slots);
+                      const month = monthlyHours(r.slots);
                       return [
                         ...r.slots.map((s, i) => (
                           <td
@@ -289,7 +292,7 @@ export function StaffingBoard({
                           className="px-1.5 py-1 text-center text-xs tabular-nums muted"
                           style={selected ? { background: SELECTED_ROW } : undefined}
                         >
-                          {r.hours == null ? '—' : r.hours}
+                          {month == null ? '—' : formatCount(month)}
                         </td>,
                         <td
                           key={`${role}-d`}
@@ -327,11 +330,11 @@ const SELECTED_ROW = 'color-mix(in srgb, var(--focus) 12%, var(--surface))';
 const SELECTED_CELL = 'color-mix(in srgb, var(--focus) 26%, var(--surface))';
 
 /**
- * Подсказки к человеко-часам. Месяц и день друг из друга не получаются:
- * месячное число шаблон считает своей формулой (см. StaffRoleNorm.hours),
- * а дневное — честная сумма по окнам, её можно проверить по строке глазами.
+ * Подсказки к человеко-часам. День — сумма по окнам, её можно проверить по
+ * строке глазами; месяц — день × 31. Колонку «ЧЕЛ-КО часы» из шаблона не
+ * показываем: она посчитана не от длины окон (см. StaffRoleNorm.hours).
  */
-const MONTH_HINT = 'Человеко-часы в месяц — число из шаблона как есть. С «в день» × 31 не сходится: шаблон считает по своей формуле';
+const MONTH_HINT = `Человеко-часы в месяц: «в день» × ${MONTH_DAYS}, как в шаблоне. Число из колонки шаблона не берём — оно посчитано не от длины окон`;
 const DAY_HINT = 'Человеко-часы в день по окнам: сколько человек в окне × длина окна в часах, сложено за смену';
 
 /** Дробные бывают у FTE (0,5 ставки) и у часов в день — пишем через запятую. */

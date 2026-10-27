@@ -51,10 +51,10 @@ export interface StaffRoleNorm {
   fte: number | null;
   /**
    * Человеко-часы за месяц — колонка «ЧЕЛ-КО часы» как есть; null — в шаблоне
-   * пусто. Не пересчитывается и с `dailyHours × 31` не сходится: во всех
-   * лавках она равна сумме «норма окна × норма того же окна у М1» × 31, то
-   * есть вместо длины окон шаблон берёт строку М1. Отсюда и 0 у бариста:
-   * в М1 кофемашины нет.
+   * пусто. На сайте не показывается, вместо неё `monthlyHours`: во всех лавках
+   * это число равно сумме «норма окна × норма того же окна у М1» × 31, то есть
+   * вместо длины окон шаблон берёт строку М1. Отсюда и 0 у бариста: в М1
+   * кофемашины нет.
    */
   hours: number | null;
 }
@@ -122,6 +122,18 @@ export function dailyHours(slots: readonly StaffSlot[]): number | null {
     minutes += s.count * (s.to - s.from);
   }
   return Math.round(minutes / 6) / 10;
+}
+
+/** Дней в месяце для человеко-часов — как в шаблоне, он умножает на 31. */
+export const MONTH_DAYS = 31;
+
+/**
+ * Человеко-часы за месяц: день × 31. Колонку шаблона не берём — она посчитана
+ * не от длины окон (см. StaffRoleNorm.hours), и с днём не сходилась бы.
+ */
+export function monthlyHours(slots: readonly StaffSlot[]): number | null {
+  const day = dailyHours(slots);
+  return day == null ? null : Math.round(day * MONTH_DAYS * 10) / 10;
 }
 
 /** «11:00–16:00», «до 08:00». */

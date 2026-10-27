@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readStaffing } from './staffing-store';
-import { STAFF_ROLES, dailyHours, findStaffNorm, staffAt, staffAtAll } from './staffing';
+import { MONTH_DAYS, STAFF_ROLES, dailyHours, findStaffNorm, monthlyHours, staffAt, staffAtAll } from './staffing';
 
 test('нормы выхода из репозитория: у каждой лавки все должности и окна по порядку', () => {
   const { norms } = readStaffing();
@@ -54,10 +54,23 @@ test('человеко-часы в день: окно «до N» без нача
   assert.equal(dailyHours([{ from: null, to: 480, count: 0 }, { from: 480, to: 660, count: 1 }]), 3, 'пустое окно не мешает');
 });
 
-test('«чел.-ч/мес» из шаблона = (норма окна × норма окна у М1) × 31 — потому и не сходится с днём', () => {
+test('человеко-часы в месяц сходятся с днём: день × 31', () => {
+  const { norms } = readStaffing();
+  const m50 = findStaffNorm(norms, 'М50')!;
+  assert.equal(monthlyHours(m50.roles.cashier.slots), 1922, '62 × 31');
+  assert.equal(monthlyHours(m50.roles.cook.slots), 1426, '46 × 31');
+  for (const n of norms) {
+    for (const role of STAFF_ROLES) {
+      const day = dailyHours(n.roles[role].slots);
+      assert.equal(monthlyHours(n.roles[role].slots), day == null ? null : Math.round(day * MONTH_DAYS * 10) / 10, `${n.code}/${role}`);
+    }
+  }
+  assert.equal(monthlyHours([{ from: null, to: 480, count: 1 }]), null, 'нет дня — нет и месяца');
+});
+
+test('«ЧЕЛ-КО часы» из шаблона = (норма окна × норма окна у М1) × 31 — поэтому на сайте их нет', () => {
   // Фиксирует, откуда взялось число в шаблоне. Упадёт — значит, формулу в
-  // книге поправили: тогда комментарий у StaffRoleNorm.hours и подсказку на
-  // вкладке пора переписать.
+  // книге поправили: тогда комментарий у StaffRoleNorm.hours пора переписать.
   const { norms } = readStaffing();
   const m1 = findStaffNorm(norms, 'М1')!;
   for (const n of norms) {
@@ -65,7 +78,7 @@ test('«чел.-ч/мес» из шаблона = (норма окна × нор
       const r = n.roles[role];
       if (r.hours == null) continue;
       const byM1 = r.slots.reduce((sum, s, i) => sum + s.count * m1.roles[role].slots[i].count, 0);
-      assert.equal(r.hours, byM1 * 31, `${n.code}/${role}`);
+      assert.equal(r.hours, byM1 * MONTH_DAYS, `${n.code}/${role}`);
     }
   }
 });
