@@ -136,6 +136,28 @@ export function monthlyHours(slots: readonly StaffSlot[]): number | null {
   return day == null ? null : Math.round(day * MONTH_DAYS * 10) / 10;
 }
 
+/**
+ * Ставка в час, ₽. Сейчас у всех четырёх должностей одна — 310 ₽, но держим
+ * по должности: поменяется у кого-то одного — правится одна строка.
+ */
+export const STAFF_HOURLY_RATE: Record<StaffRole, number> = {
+  cashier: 310,
+  cook: 310,
+  barista: 310,
+  cleaner: 310,
+};
+
+/** Человеко-часы окна: человек × длина окна. null — окно «до N» без начала, а люди в нём есть. */
+export function slotPersonHours(slot: StaffSlot): number | null {
+  if (slot.count === 0) return 0;
+  return slot.from == null ? null : (slot.count * (slot.to - slot.from)) / 60;
+}
+
+/** Сколько заработают за эти человеко-часы по ставке, ₽, до рубля. */
+export function pay(personHours: number | null, rate: number): number | null {
+  return personHours == null ? null : Math.round(personHours * rate);
+}
+
 /** «11:00–16:00», «до 08:00». */
 export function slotLabel(slot: StaffSlot): string {
   return slot.from == null ? `до ${formatClock(slot.to)}` : `${formatClock(slot.from)}–${formatClock(slot.to)}`;

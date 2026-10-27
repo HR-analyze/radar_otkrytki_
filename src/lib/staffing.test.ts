@@ -1,7 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readStaffing } from './staffing-store';
-import { MONTH_DAYS, STAFF_ROLES, dailyHours, findStaffNorm, monthlyHours, staffAt, staffAtAll } from './staffing';
+import {
+  MONTH_DAYS,
+  STAFF_HOURLY_RATE,
+  STAFF_ROLES,
+  dailyHours,
+  findStaffNorm,
+  monthlyHours,
+  pay,
+  slotPersonHours,
+  staffAt,
+  staffAtAll,
+} from './staffing';
 
 test('нормы выхода из репозитория: у каждой лавки все должности и окна по порядку', () => {
   const { norms } = readStaffing();
@@ -66,6 +77,31 @@ test('человеко-часы в месяц сходятся с днём: де
     }
   }
   assert.equal(monthlyHours([{ from: null, to: 480, count: 1 }]), null, 'нет дня — нет и месяца');
+});
+
+test('деньги: человек × часы окна × 310 ₽, и окна в сумме дают день', () => {
+  const { norms } = readStaffing();
+  assert.ok(STAFF_ROLES.every((role) => STAFF_HOURLY_RATE[role] === 310), 'ставка у всех должностей 310 ₽/ч');
+  const m50 = findStaffNorm(norms, 'М50')!;
+  const cashier = m50.roles.cashier;
+  // 7:30–11, 4 кассира: 4 × 3,5 × 310
+  assert.equal(pay(slotPersonHours(cashier.slots[1]), 310), 4340);
+  assert.equal(pay(dailyHours(cashier.slots), 310), 19220, '62 × 310');
+  assert.equal(pay(monthlyHours(cashier.slots), 310), 595820, '1922 × 310');
+
+  for (const n of norms) {
+    for (const role of STAFF_ROLES) {
+      const { slots } = n.roles[role];
+      const rate = STAFF_HOURLY_RATE[role];
+      const sum = slots.reduce((s, slot) => s + pay(slotPersonHours(slot), rate)!, 0);
+      assert.equal(sum, pay(dailyHours(slots), rate), `${n.code}/${role}: окна не сходятся с днём`);
+    }
+  }
+});
+
+test('деньги: пустое окно — 0, окно «до N» без начала с людьми — неизвестно', () => {
+  assert.equal(pay(slotPersonHours({ from: null, to: 480, count: 0 }), 310), 0);
+  assert.equal(pay(slotPersonHours({ from: null, to: 480, count: 2 }), 310), null);
 });
 
 test('«ЧЕЛ-КО часы» из шаблона = (норма окна × норма окна у М1) × 31 — поэтому на сайте их нет', () => {

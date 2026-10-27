@@ -6,10 +6,13 @@ import {
   STAFF_ROLE_FORMS,
   STAFF_ROLE_TITLE,
   MONTH_DAYS,
+  STAFF_HOURLY_RATE,
   dailyHours,
   monthlyHours,
+  pay,
   slotAt,
   slotLabel,
+  slotPersonHours,
   slotShortLabel,
   staffAt,
   staffAtAll,
@@ -50,6 +53,8 @@ export function StaffingBoard({
   const head = norm ?? norms[0];
   const at = useMemo(() => (norm ? staffAt(norm, minutes) : staffAtAll(norms, minutes)), [norm, norms, minutes]);
   const total = at.reduce((a, r) => a + r.count, 0);
+  const rates = [...new Set(STAFF_ROLES.map((r) => STAFF_HOURLY_RATE[r]))];
+  const rateLabel = rates.length === 1 ? `${rates[0]} ₽/ч` : 'ставку должности';
 
   const pick = (next: { code?: string | null; minutes?: number }) => {
     const c = next.code !== undefined ? next.code : code;
@@ -169,10 +174,10 @@ export function StaffingBoard({
         <div>
           <h2 className="text-sm font-semibold">Шаблон по часам-пикам</h2>
           <p className="mt-0.5 text-xs muted">
-            Сколько человек должно быть на смене в каждом окне. Подсвечены окна, в которые попадает{' '}
-            {formatClock(minutes)}. Клик по строке оставит в таблице одну эту лавку, вернуть всю сеть — «Все
-            лавки» в фильтре. FTE — итого по штату, чел.-ч/день — по окнам: человек × длина окна, чел.-ч/мес —
-            день × {MONTH_DAYS}.
+            Сколько человек должно быть на смене в каждом окне, а под ними — сколько они заработают, ₽: человек ×
+            часы × {rateLabel}. Подсвечены окна, в которые попадает {formatClock(minutes)}. Клик по строке оставит в
+            таблице одну эту лавку, вернуть всю сеть — «Все лавки» в фильтре. FTE — итого по штату, ч/мес и ч/день —
+            человеко-часы: за день по окнам, за месяц — день × {MONTH_DAYS}.
           </p>
         </div>
         <div className="surface radar-scroll staffing-scroll">
@@ -180,11 +185,8 @@ export function StaffingBoard({
             <caption className="sr-only">График пиков: норма выхода сотрудников по лавкам и часовым окнам</caption>
             <thead>
               <tr>
-                <th rowSpan={2} className="radar-sticky px-3 py-2 text-left text-xs font-medium muted">
+                <th rowSpan={2} className="radar-sticky px-2 py-2 text-left text-xs font-medium muted">
                   Лавка
-                </th>
-                <th rowSpan={2} className="hidden px-2 py-2 text-left text-xs font-medium muted md:table-cell">
-                  Грейд
                 </th>
                 {STAFF_ROLES.map((role) => (
                   <th
@@ -202,31 +204,44 @@ export function StaffingBoard({
                   const slots = head.roles[role].slots;
                   const active = slotAt(slots, minutes);
                   return [
-                    ...slots.map((s, i) => (
-                      <th
-                        key={`${role}-${i}`}
-                        className="px-1.5 py-1.5 text-center text-[11px] font-medium whitespace-nowrap muted"
-                        style={{
-                          ...(i === 0 && { borderLeft: '1px solid var(--border)' }),
-                          ...(s === active && { background: ACTIVE_COLUMN, color: 'var(--text)' }),
-                        }}
-                      >
-                        {slotShortLabel(s)}
-                      </th>
-                    )),
-                    <th key={`${role}-fte`} className="px-1.5 py-1.5 text-center text-[11px] font-medium muted">
+                    ...slots.map((s, i) => {
+                      // «6:30–7:30» в две строки, начало над концом: в одну строку шапка
+                      // из 24 окон не влезает в экран.
+                      const [from, to] = slotShortLabel(s).split('–');
+                      return (
+                        <th
+                          key={`${role}-${i}`}
+                          className="px-[3px] py-1 text-center text-[11px] leading-tight font-medium whitespace-nowrap muted"
+                          style={{
+                            ...(i === 0 && { borderLeft: '1px solid var(--border)' }),
+                            ...(s === active && { background: ACTIVE_COLUMN, color: 'var(--text)' }),
+                          }}
+                        >
+                          {to == null ? (
+                            from
+                          ) : (
+                            <>
+                              {from}
+                              <br />
+                              {to}
+                            </>
+                          )}
+                        </th>
+                      );
+                    }),
+                    <th key={`${role}-fte`} className="px-[3px] py-1 text-center text-[11px] font-medium muted">
                       <Hint text="Итого по штату" below>
                         FTE
                       </Hint>
                     </th>,
-                    <th key={`${role}-h`} className="px-1.5 py-1.5 text-center text-[11px] font-medium whitespace-nowrap muted">
+                    <th key={`${role}-h`} className="px-[3px] py-1 text-center text-[11px] font-medium whitespace-nowrap muted">
                       <Hint text={MONTH_HINT} below>
-                        чел.-ч/мес
+                        ч/мес
                       </Hint>
                     </th>,
-                    <th key={`${role}-d`} className="px-1.5 py-1.5 text-center text-[11px] font-medium whitespace-nowrap muted">
+                    <th key={`${role}-d`} className="px-[3px] py-1 text-center text-[11px] font-medium whitespace-nowrap muted">
                       <Hint text={DAY_HINT} below>
-                        чел.-ч/день
+                        ч/день
                       </Hint>
                     </th>,
                   ];
@@ -242,7 +257,7 @@ export function StaffingBoard({
                     onClick={() => pick({ code: n.code })}
                     className="cursor-pointer"
                   >
-                    <td className="radar-sticky px-3 py-1 whitespace-nowrap" style={selected ? { background: SELECTED_ROW } : undefined}>
+                    <td className="radar-sticky px-2 py-1 whitespace-nowrap" style={selected ? { background: SELECTED_ROW } : undefined}>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -250,19 +265,19 @@ export function StaffingBoard({
                           pick({ code: n.code });
                         }}
                         aria-current={selected ? 'true' : undefined}
-                        className={`text-left hover:underline ${selected ? 'font-semibold' : ''}`}
+                        title={`${n.code} ${n.name}`}
+                        // Длинное название («Даниловская мануфактура») раздувало колонку на
+                        // сотню пикселей, и таблица не влезала в экран — режем многоточием.
+                        className={`block max-w-[8.5rem] truncate text-left hover:underline ${selected ? 'font-semibold' : ''}`}
                       >
                         {n.code} {n.name}
                       </button>
-                    </td>
-                    <td
-                      className="hidden px-2 py-1 text-xs whitespace-nowrap muted md:table-cell"
-                      style={selected ? { background: SELECTED_ROW } : undefined}
-                    >
-                      {n.grade ?? '—'}
+                      {/* Грейд — под названием, а не отдельной колонкой: строка и так в два этажа, а колонка съедала ширину. */}
+                      {n.grade && <div className="text-[10px] muted">{n.grade}</div>}
                     </td>
                     {STAFF_ROLES.flatMap((role) => {
                       const r = n.roles[role];
+                      const rate = STAFF_HOURLY_RATE[role];
                       const active = slotAt(r.slots, minutes);
                       const day = dailyHours(r.slots);
                       const month = monthlyHours(r.slots);
@@ -270,7 +285,7 @@ export function StaffingBoard({
                         ...r.slots.map((s, i) => (
                           <td
                             key={`${role}-${i}`}
-                            className={`px-1.5 py-1 text-center text-xs tabular-nums ${s.count === 0 ? 'muted' : ''}`}
+                            className={`px-[3px] py-1 text-center text-xs whitespace-nowrap tabular-nums ${s.count === 0 ? 'muted' : ''}`}
                             style={{
                               ...(i === 0 && { borderLeft: '1px solid var(--border)' }),
                               ...(selected && { background: SELECTED_ROW }),
@@ -278,28 +293,31 @@ export function StaffingBoard({
                             }}
                           >
                             {formatCount(s.count)}
+                            <Rub value={pay(slotPersonHours(s), rate)} />
                           </td>
                         )),
                         <td
                           key={`${role}-fte`}
-                          className="px-1.5 py-1 text-center text-xs tabular-nums muted"
+                          className="px-[3px] py-1 text-center text-xs tabular-nums muted"
                           style={selected ? { background: SELECTED_ROW } : undefined}
                         >
                           {r.fte == null ? '—' : formatCount(r.fte)}
                         </td>,
                         <td
                           key={`${role}-h`}
-                          className="px-1.5 py-1 text-center text-xs tabular-nums muted"
+                          className="px-[3px] py-1 text-center text-xs whitespace-nowrap tabular-nums muted"
                           style={selected ? { background: SELECTED_ROW } : undefined}
                         >
                           {month == null ? '—' : formatCount(month)}
+                          <Rub value={pay(month, rate)} />
                         </td>,
                         <td
                           key={`${role}-d`}
-                          className="px-1.5 py-1 text-center text-xs tabular-nums muted"
+                          className="px-[3px] py-1 text-center text-xs whitespace-nowrap tabular-nums muted"
                           style={selected ? { background: SELECTED_ROW } : undefined}
                         >
                           {day == null ? '—' : formatCount(day)}
+                          <Rub value={pay(day, rate)} />
                         </td>,
                       ];
                     })}
@@ -334,8 +352,29 @@ const SELECTED_CELL = 'color-mix(in srgb, var(--focus) 26%, var(--surface))';
  * строке глазами; месяц — день × 31. Колонку «ЧЕЛ-КО часы» из шаблона не
  * показываем: она посчитана не от длины окон (см. StaffRoleNorm.hours).
  */
-const MONTH_HINT = `Человеко-часы в месяц: «в день» × ${MONTH_DAYS}, как в шаблоне. Число из колонки шаблона не берём — оно посчитано не от длины окон`;
-const DAY_HINT = 'Человеко-часы в день по окнам: сколько человек в окне × длина окна в часах, сложено за смену';
+const MONTH_HINT = `Человеко-часы в месяц: «ч/день» × ${MONTH_DAYS}, как в шаблоне, под ними — они же в рублях. Число из колонки шаблона не берём — оно посчитано не от длины окон`;
+const DAY_HINT = 'Человеко-часы в день по окнам: сколько человек в окне × длина окна в часах, сложено за смену. Под ними — они же в рублях';
+
+/**
+ * Вторая строка клетки — рубли. Знак ₽ не пишем: в каждой из 36 клеток он
+ * съедал ширину, а таблица должна влезать в экран; что это рубли — в подписи.
+ */
+function Rub({ value }: { value: number | null }) {
+  return <div className="text-[10px] leading-tight font-normal muted">{value == null ? '—' : formatRub(value)}</div>;
+}
+
+/**
+ * 595820 → «595 820» через узкий неразрывный пробел, а четырёхзначные — слитно,
+ * «1860», как и принято в русском наборе. Тут это не только типографика: в
+ * узких колонках окон «1 860 3 720» читалось бы одним числом — пробел внутри
+ * числа почти не отличим от зазора между колонками.
+ *
+ * Не toLocaleString: на сервере и в браузере разделитель разряда бывает
+ * разный (U+00A0 и U+202F), и React ругался бы на расхождение разметки.
+ */
+function formatRub(n: number): string {
+  return Math.abs(n) < 10_000 ? String(n) : String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f');
+}
 
 /** Дробные бывают у FTE (0,5 ставки) и у часов в день — пишем через запятую. */
 function formatCount(n: number): string {
