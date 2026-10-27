@@ -411,9 +411,18 @@ select {
  * обрезанными. С высотой по окну полоса всегда в кадре, а строка с датами
  * липнет к верху рамки. Листать вбок помогают и кнопки «◀ ▶» (см. HScroll).
  */
-.kpi-scroll {
+.kpi-scroll,
+.staffing-scroll {
   max-height: calc(100dvh - var(--header-h, 3.75rem) - 6rem);
   min-height: 18rem;
   overflow: auto;
   overscroll-behavior: contain;
 }
+
+/*
+ * График пиков: шапка в два этажа — должности, под ними окна. Липнуть к
+ * верху рамки обоим нельзя, второй этаж лёг бы поверх первого. Поэтому у
+ * первого этажа высота задана явно, а второй прилипает ровно под ним.
+ */
+.staffing-table thead tr:first-child th:not([rowspan]) { height: 1.75rem; }
+.staffing-table thead tr:nth-child(2) th { top: 1.75rem; }

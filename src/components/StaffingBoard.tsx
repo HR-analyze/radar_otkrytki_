@@ -143,12 +143,12 @@ export function StaffingBoard({
           <h2 className="text-sm font-semibold">Шаблон по часам-пикам</h2>
           <p className="mt-0.5 text-xs muted">
             Сколько человек должно быть на смене в каждом окне. Подсвечены выбранная лавка и окна, в которые
-            попадает {formatClock(minutes)}. Клик по строке — выбрать лавку. FTE — штатных единиц, чел.-ч —
+            попадает {formatClock(minutes)}. Клик по строке — выбрать лавку. FTE — итого по штату, чел.-ч —
             человеко-часов в месяц.
           </p>
         </div>
-        <div className="surface radar-scroll">
-          <table className="radar-table w-full text-sm">
+        <div className="surface radar-scroll staffing-scroll">
+          <table className="radar-table staffing-table w-full text-sm">
             <caption className="sr-only">График пиков: норма выхода сотрудников по лавкам и часовым окнам</caption>
             <thead>
               <tr>
@@ -187,7 +187,9 @@ export function StaffingBoard({
                       </th>
                     )),
                     <th key={`${role}-fte`} className="px-1.5 py-1.5 text-center text-[11px] font-medium muted">
-                      FTE
+                      <abbr title="Итого по штату" className="cursor-help">
+                        FTE
+                      </abbr>
                     </th>,
                     <th key={`${role}-h`} className="px-1.5 py-1.5 text-center text-[11px] font-medium whitespace-nowrap muted">
                       чел.-ч
@@ -268,8 +270,12 @@ export function StaffingBoard({
   );
 }
 
-/** Подложка окна, в которое попало выбранное время. */
-const ACTIVE_COLUMN = 'color-mix(in srgb, var(--focus) 10%, transparent)';
+/**
+ * Подложка окна, в которое попало выбранное время. Непрозрачная: шапка с
+ * окнами липнет к верху рамки, и сквозь прозрачную проступали бы строки,
+ * уехавшие под неё.
+ */
+const ACTIVE_COLUMN = 'color-mix(in srgb, var(--focus) 10%, var(--surface))';
 
 /**
  * Подложка выбранной лавки. Непрозрачная: колонка с названием липнет к краю,
