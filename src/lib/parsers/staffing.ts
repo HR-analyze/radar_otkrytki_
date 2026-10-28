@@ -70,7 +70,8 @@ type Column =
   | { kind: 'extra'; role: ExtraRole };
 
 export function parseStaffing(buffer: Buffer, sheetName = STAFFING_SHEET): StaffingParseResult {
-  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false, raw: false });
+  // cellStyles — ради скрытых строк (`!rows[i].hidden`): см. «фильтр» ниже.
+  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false, raw: false, cellStyles: true });
   const actual = wb.SheetNames.find((n) => n.trim().toLowerCase() === sheetName.trim().toLowerCase());
   if (!actual) throw new Error(`В книге нет листа «${sheetName}»`);
 
@@ -120,21 +121,42 @@ export function parseStaffing(buffer: Buffer, sheetName = STAFFING_SHEET): Staff
 
   const pickers = readPickers(wb, warnings);
 
+  /*
+   * Фильтр. ТД расписывают свои лавки в общей книге, включив автофильтр:
+   * чужие лавки скрыты, и строку расстановки под М04 он вписывает туда, где
+   * её видит, — а в файле между ними лежит скрытая М06. Поэтому видимая
+   * строка расстановки относится к ближайшей ВИДИМОЙ лавке выше, а скрытая —
+   * просто к лавке над ней. Проверено на семи книгах 28.10.2026: в 33 спорных
+   * случаях из 44 расстановка сходится с нормой видимой лавки (у М04 — 16
+   * окон из 16), со скрытой — в одном, в остальных поровну.
+   */
+  const sheet = wb.Sheets[actual];
+  const top = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s.r : 0;
+  const hidden = (r: number) => Boolean(sheet['!rows']?.[top + r]?.hidden);
+
   const norms: StaffNorm[] = [];
   const seen = new Set<string>();
-  // Лавка, к которой относятся строки дислокаций ниже; null — блок кончился.
+  // Лавка, к которой относятся строки дислокаций ниже: последняя вообще и
+  // последняя видимая; null — блок кончился.
   let current: StaffNorm | null = null;
+  let visible: StaffNorm | null = null;
   for (let r = 1; r < grid.length; r++) {
     const row = grid[r] ?? [];
     const shop = parseShop(row[at.name]);
     if (!shop) {
-      if (!row.some((v) => /[а-яa-z]/i.test(String(v ?? '')))) current = null;
-      else if (current) annotate(current, row, header, columns, at);
+      if (!row.some((v) => /[а-яa-z]/i.test(String(v ?? '')))) {
+        current = null;
+        visible = null;
+        continue;
+      }
+      const target = hidden(r) ? current : visible;
+      if (target) annotate(target, row, header, columns, at);
       continue;
     }
     if (seen.has(shop.code)) {
       warnings.push(`Строка ${r + 1}: лавка ${shop.code} встречается второй раз — взята первая`);
       current = null;
+      if (!hidden(r)) visible = null;
       continue;
     }
     seen.add(shop.code);
@@ -175,6 +197,7 @@ export function parseStaffing(buffer: Buffer, sheetName = STAFFING_SHEET): Staff
       roles: byRole,
     };
     norms.push(current);
+    if (!hidden(r)) visible = current;
   }
 
   if (norms.length === 0) warnings.push(`В листе «${actual}» не нашлось ни одной лавки`);

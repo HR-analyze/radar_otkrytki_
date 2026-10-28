@@ -48,8 +48,9 @@ test('слияние книг: разные правки одной клетки
 });
 
 test('слияние книг: расстановка должности — целиком из последней книги, где она есть', () => {
-  const early = [[{ count: 1, place: 'касса' }], [{ count: 2, place: 'прием' }]];
-  const late = [[{ count: 2, place: 'линия' }], []];
+  // Обе сходятся с нормой в одном окне — ничья, берём более позднюю книгу.
+  const early = [[{ count: 1, place: 'касса' }], [{ count: 5, place: 'официант' }]];
+  const late = [[{ count: 1, place: 'линия' }], []];
   const { norms, conflicts } = mergeStaffing([
     { name: 'старая', norms: [norm('М1', [1, 2], early)] },
     { name: 'пустая', norms: [norm('М1', [1, 2])] },
@@ -58,11 +59,29 @@ test('слияние книг: расстановка должности — ц�
   // Второе окно не добирается из старой книги — должность целиком из новой.
   assert.deepEqual(norms[0].roles.cashier.posts, late);
   assert.equal(conflicts.length, 1);
-  assert.match(conflicts[0], /М1 Кассир: расстановка разная в старая, новая — взята из новая/);
+  assert.match(conflicts[0], /М1 Кассир: расстановка разная в старая, новая — взята из новая \(сходится с нормой в 1 окн\.\)/);
 });
 
 test('слияние книг: лавка, которой нет ни в одной книге, не пропадает', () => {
   const { norms, conflicts } = mergeStaffing([{ name: 'а', norms: [norm('М1', [1])] }], [norm('М81', [2])]);
   assert.deepEqual(norms.map((n) => n.code), ['М1', 'М81']);
   assert.match(conflicts[0], /М81: нет ни в одной книге/);
+});
+
+test('слияние книг: из разных расстановок — та, что сходится с нормой лавки', () => {
+  const fits = [[{ count: 1, place: 'касса' }], [{ count: 2, place: 'официант' }]];
+  const wrong = [[{ count: 3, place: 'линия' }], [{ count: 3, place: 'линия' }]];
+  const { norms, conflicts } = mergeStaffing([
+    { name: 'тд', norms: [norm('М1', [1, 2], fits)] },
+    // Книга позже, но её строки съехали из-под соседней лавки.
+    { name: 'без фильтра', norms: [norm('М1', [1, 2], wrong)] },
+  ]);
+  assert.deepEqual(norms[0].roles.cashier.posts, fits);
+  assert.match(conflicts[0], /взята из тд \(сходится с нормой в 2 окн\.\)/);
+});
+
+test('слияние книг: должности по норме нет — расстановку не берём', () => {
+  const { norms, conflicts } = mergeStaffing([{ name: 'а', norms: [norm('М16', [0, 0], [[{ count: 1, place: 'линия' }], []])] }]);
+  assert.equal(norms[0].roles.cashier.posts, undefined);
+  assert.match(conflicts[0], /М16 Кассир: по норме никого/);
 });

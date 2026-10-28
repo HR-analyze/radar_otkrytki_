@@ -188,3 +188,25 @@ test('«прием» — это официант, кроме «прием пос
   assert.deepEqual(m1.roles.cashier.posts![1].map((p) => p.place), ['официант', 'официант( доставка)']);
   assert.deepEqual(m1.roles.cook.posts![0].map((p) => p.place), ['прием поставки', 'приготовление продукции']);
 });
+
+test('фильтр Excel: видимая строка расстановки — к ближайшей видимой лавке выше', () => {
+  // Как в книге ТД: М01 видна, М73 скрыта фильтром, строка расстановки
+  // лежит в файле после М73, но автор видел и писал её под М01.
+  const posts: unknown[] = HEADER.map(() => null);
+  posts[4] = '1 кондитерка/1 хлебка';
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([HEADER, M1, M73, posts, DURATIONS]);
+  ws['!rows'] = [{}, {}, { hidden: true }, {}, {}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Шаблон по часам-пикам');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(SHR), 'ШР по лавкам');
+  const { norms } = parseStaffing(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer);
+
+  assert.deepEqual(norms[0].roles.cashier.posts![0].map((p) => p.place), ['кулинария', 'хлебка']);
+  assert.equal(norms[1].roles.cashier.posts, undefined, 'скрытой М73 расстановка не досталась');
+
+  // Скрытая строка расстановки — как раньше, к лавке прямо над ней.
+  ws['!rows'] = [{}, {}, { hidden: true }, { hidden: true }, {}];
+  const again = parseStaffing(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer).norms;
+  assert.ok(again[1].roles.cashier.posts, 'скрытая строка — к скрытой М73');
+  assert.equal(again[0].roles.cashier.posts, undefined);
+});

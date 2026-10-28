@@ -1,6 +1,7 @@
 import {
   STAFF_ROLES,
   STAFF_ROLE_TITLE,
+  postsHeadcount,
   slotShortLabel,
   type StaffNorm,
   type StaffPost,
@@ -112,8 +113,16 @@ export function mergeStaffing(books: StaffingBook[], base: readonly StaffNorm[] 
           copies.map((c) => ({ book: c.book, value: c.norm.roles[role].posts ?? [] })),
           `${code} ${title}`,
           conflicts,
+          // Из разных расстановок — та, что сходится с нормой лавки.
+          (p) => p.filter((w, i) => postsHeadcount(w, role) === slots[i]?.count).length,
         );
-        if (posts.length) merged.posts = slots.map((_, i) => posts[i] ?? []);
+        // Должности в лавке по норме нет (кассиры у М16), а расстановка есть —
+        // это строка, съехавшая из-под соседней лавки. Не берём.
+        if (posts.length && slots.every((s) => s.count === 0)) {
+          conflicts.push(`${code} ${title}: по норме никого, а расстановка есть — не взята (строка из-под соседней лавки?)`);
+        } else if (posts.length) {
+          merged.posts = slots.map((_, i) => posts[i] ?? []);
+        }
         return [role, merged];
       }),
     ) as StaffNorm['roles'];
@@ -146,14 +155,32 @@ export function mergeStaffing(books: StaffingBook[], base: readonly StaffNorm[] 
   return { norms, edits, conflicts };
 }
 
-/** Последняя непустая расстановка; разные тексты в разных книгах — в отчёт. */
-function latest<T extends StaffPost[] | StaffPost[][]>(values: Vote<T>[], label: string, conflicts: string[]): T | [] {
+/**
+ * Расстановка из нескольких книг. С `score` — та, у которой больше окон
+ * сходится с нормой лавки (число людей в постах = норма окна), при равенстве —
+ * из книги, указанной позже; без `score` — просто последняя непустая.
+ *
+ * Зачем счёт: книги расписаны под фильтром Excel, и у книги, где фильтр
+ * перед сохранением сняли, строки расстановки стоят под чужими лавками
+ * (кассиры «линия/доставка» у М16, где кассиров по норме нет). Последней
+ * такая книга быть может, а сходиться с нормой — нет.
+ */
+function latest<T extends StaffPost[] | StaffPost[][]>(
+  values: Vote<T>[],
+  label: string,
+  conflicts: string[],
+  score?: (posts: T) => number,
+): T | [] {
   const filled = values.filter((v) => v.value.flat().length > 0);
   if (filled.length === 0) return [];
-  const chosen = filled[filled.length - 1];
+  let chosen = filled[filled.length - 1];
+  if (score) {
+    for (const v of filled) if (score(v.value) > score(chosen.value)) chosen = v;
+  }
   const differs = filled.filter((v) => JSON.stringify(v.value) !== JSON.stringify(chosen.value));
   if (differs.length) {
-    conflicts.push(`${label}: расстановка разная в ${[...differs.map((d) => d.book), chosen.book].join(', ')} — взята из ${chosen.book}`);
+    const why = score ? ` (сходится с нормой в ${score(chosen.value)} окн.)` : '';
+    conflicts.push(`${label}: расстановка разная в ${[...differs.map((d) => d.book), chosen.book].join(', ')} — взята из ${chosen.book}${why}`);
   }
   return chosen.value;
 }
