@@ -19,6 +19,11 @@ import { readStaffing, type StaffingSeed } from './staffing-store';
 export interface StaffRoleEdit {
   counts: number[];
   posts: StaffPost[][];
+  /**
+   * Время окон, [начало, конец] в минутах от полуночи, параллельно counts.
+   * Поля нет — время как в шаблоне (правки, сохранённые до 28.10.2026).
+   */
+  times?: [number, number][];
 }
 
 export interface StaffingEdit {
@@ -32,8 +37,8 @@ export function canEditStaffing(): boolean {
 }
 
 /**
- * Наложить правки на нормы. Окна правка не двигает — только числа и посты:
- * если в новом шаблоне у должности стало другое число окон, правка этой
+ * Наложить правки на нормы: числа, посты и время окон. Число окон правка не
+ * меняет: если в новом шаблоне у должности их стало другое число, правка этой
  * должности не подходит и пропускается (лавка поедет по шаблону), а не
  * разъезжается по чужим окнам.
  */
@@ -49,7 +54,10 @@ export function applyStaffingEdits(norms: readonly StaffNorm[], edits: readonly 
       if (!e || e.counts.length !== base.slots.length) continue;
       roles[role] = {
         ...base,
-        slots: base.slots.map((s, i) => ({ ...s, count: e.counts[i] })),
+        slots: base.slots.map((s, i) => {
+          const t = e.times?.length === base.slots.length ? e.times[i] : null;
+          return { ...s, ...(t && { from: t[0], to: t[1] }), count: e.counts[i] };
+        }),
         // Через normalizePlace и на чтении: правило мест могло поменяться после
         // того, как правку сохранили («прием» → «официант»).
         posts: base.slots.map((_, i) => (e.posts[i] ?? []).map((p) => ({ ...p, place: normalizePlace(p.place) }))),
@@ -60,9 +68,12 @@ export function applyStaffingEdits(norms: readonly StaffNorm[], edits: readonly 
 }
 
 /**
- * Разбор правки из запроса. Окна должны совпасть с текущими, числа — целые
- * от 0 до 50, постов в окне — не больше 20, место — не длиннее 80 знаков:
- * всё остальное — опечатка или чужой запрос, и в базу оно не пойдёт.
+ * Разбор правки из запроса. Окон — столько же, сколько в шаблоне, числа —
+ * целые от 0 до 50, постов в окне — не больше 20, место — не длиннее 80
+ * знаков. Время окна — «ЧЧ:ММ», начало раньше конца, окна идут по порядку и
+ * не наезжают друг на друга: иначе в одну минуту действовали бы два окна, и
+ * калькулятор показывал бы первое попавшееся. Всё остальное — опечатка или
+ * чужой запрос, и в базу оно не пойдёт.
  */
 export function parseStaffingEdit(
   norm: StaffNorm,
@@ -72,7 +83,7 @@ export function parseStaffingEdit(
   if (!raw || typeof raw !== 'object') return { ok: false, error: 'Нет правок' };
   const roles: StaffingEdit['roles'] = {};
   for (const role of STAFF_ROLES) {
-    const r = (raw as Record<string, unknown>)[role] as { counts?: unknown; posts?: unknown } | undefined;
+    const r = (raw as Record<string, unknown>)[role] as { counts?: unknown; posts?: unknown; times?: unknown } | undefined;
     if (!r) continue;
     const slots = norm.roles[role].slots;
     if (!Array.isArray(r.counts) || r.counts.length !== slots.length) {
@@ -100,10 +111,35 @@ export function parseStaffingEdit(
       }
       posts.push(clean);
     }
-    roles[role] = { counts, posts };
+    let times: [number, number][] | undefined;
+    if (r.times != null) {
+      if (!Array.isArray(r.times) || r.times.length !== slots.length) {
+        return { ok: false, error: `${role}: время нужно для всех ${slots.length} окон` };
+      }
+      times = [];
+      for (const t of r.times as unknown[]) {
+        const [a, b] = Array.isArray(t) ? t.map(clock) : [null, null];
+        if (a == null || b == null || a >= b) return { ok: false, error: `${role}: у окна начало должно быть раньше конца` };
+        const prev = times[times.length - 1];
+        if (prev && a < prev[1]) return { ok: false, error: `${role}: окна наезжают друг на друга — ${fmt(a)} раньше ${fmt(prev[1])}` };
+        times.push([a, b]);
+      }
+    }
+    roles[role] = { counts, posts, ...(times && { times }) };
   }
   return { ok: true, roles };
 }
+
+/** «07:30» или 450 → минуты от полуночи; конец суток — «24:00» → 1440. */
+function clock(v: unknown): number | null {
+  if (typeof v === 'number') return Number.isInteger(v) && v >= 0 && v <= 1440 ? v : null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(v ?? '').trim());
+  if (!m) return null;
+  const minutes = Number(m[1]) * 60 + Number(m[2]);
+  return Number(m[2]) < 60 && minutes <= 1440 ? minutes : null;
+}
+
+const fmt = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 
 export async function readStaffingEdits(): Promise<StaffingEdit[]> {
   const rows = await readRows();

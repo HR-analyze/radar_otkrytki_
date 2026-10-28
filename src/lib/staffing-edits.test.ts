@@ -39,3 +39,23 @@ test('правка из запроса: проверка чисел и мест,
   }
   assert.equal(parseStaffingEdit(m50, {}).ok, false);
 });
+
+test('правка времени окон: окно сдвигается, наезды и перевёрнутые окна — ошибка', () => {
+  const counts = m50.roles.cashier.slots.map((s) => s.count);
+  const times = [['06:30', '07:30'], ['07:30', '11:30'], ['11:30', '16:00'], ['16:00', '17:30'], ['17:30', '21:00'], ['21:00', '23:00']];
+  const ok = parseStaffingEdit(m50, { roles: { cashier: { counts, posts: [], times } } });
+  assert.ok(ok.ok);
+  const [edited] = applyStaffingEdits([m50], [{ shopCode: 'М50', roles: ok.ok ? ok.roles : {}, updatedAt: 'x' }]);
+  assert.deepEqual(edited.roles.cashier.slots[1], { from: 450, to: 690, count: counts[1] }, '7:30–11:30');
+  assert.equal(edited.roles.cashier.slots[2].from, 690);
+
+  const bad = (t: string[][]) => parseStaffingEdit(m50, { roles: { cashier: { counts, posts: [], times: t } } }).ok;
+  assert.equal(bad([['06:30', '07:30'], ['07:00', '11:00'], ...times.slice(2)]), false, 'наезд 7:00 < 7:30');
+  assert.equal(bad([['07:30', '06:30'], ...times.slice(1)]), false, 'начало позже конца');
+  assert.equal(bad(times.slice(1)), false, 'окон меньше, чем в шаблоне');
+  assert.equal(bad([['6:3', '07:30'], ...times.slice(1)]), false, 'не время');
+
+  // Старые правки без времени — окна как в шаблоне.
+  const [old] = applyStaffingEdits([m50], [{ shopCode: 'М50', roles: { cashier: { counts, posts: [] } }, updatedAt: 'x' }]);
+  assert.deepEqual(old.roles.cashier.slots.map((s) => [s.from, s.to]), m50.roles.cashier.slots.map((s) => [s.from, s.to]));
+});

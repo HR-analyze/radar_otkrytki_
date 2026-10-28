@@ -22,7 +22,8 @@ export const TEMPLATE_ROLES: readonly TemplateRole[] = ['cashier', 'cook', 'bari
 /**
  * Должности, которых в шаблоне нет: у каждой одно окно на весь день.
  *
- *   замы по бару и по залу — всегда по одному в каждой лавке, 6:30–18:00;
+ *   зам по бару — всегда по одному в каждой лавке, 6:30–18:00;
+ *   зам по залу — всегда по одному в каждой лавке, 6:30–23:00 (до закрытия);
  *   сборщик заказов        — где он есть в «ШР по лавкам», 7:00–16:00.
  */
 export const EXTRA_ROLES: readonly ExtraRole[] = ['barDeputy', 'hallDeputy', 'picker'];
@@ -36,7 +37,7 @@ export function isExtraRole(role: StaffRole): role is ExtraRole {
 /** Окно дополнительной должности; count — сколько, если не берётся из ШР. */
 export const EXTRA_ROLE_SLOT: Record<ExtraRole, StaffSlot> = {
   barDeputy: { from: 6 * 60 + 30, to: 18 * 60, count: 1 },
-  hallDeputy: { from: 6 * 60 + 30, to: 18 * 60, count: 1 },
+  hallDeputy: { from: 6 * 60 + 30, to: 23 * 60, count: 1 },
   picker: { from: 7 * 60, to: 16 * 60, count: 0 },
 };
 

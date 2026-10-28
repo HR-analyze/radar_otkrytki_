@@ -111,13 +111,13 @@ test('время и лавка из адреса', () => {
   assert.equal(findStaffNorm(norms, ''), null);
 });
 
-test('замы — по одному всегда, 6:30–18:00; сборщик — по «ШР по лавкам», 7:00–16:00', () => {
+test('замы — по одному всегда (бар 6:30–18:00, зал 6:30–23:00); сборщик — по «ШР по лавкам», 7:00–16:00', () => {
   const { norms, warnings } = parseStaffing(book([M1, M73, DURATIONS]));
   assert.deepEqual(warnings, []);
   const [m1, m73] = norms;
   for (const n of norms) {
     assert.deepEqual(n.roles.barDeputy.slots, [{ from: 390, to: 1080, count: 1 }]);
-    assert.deepEqual(n.roles.hallDeputy.slots, [{ from: 390, to: 1080, count: 1 }]);
+    assert.deepEqual(n.roles.hallDeputy.slots, [{ from: 390, to: 1380, count: 1 }], 'зам по залу — до закрытия');
   }
   assert.deepEqual(m1.roles.picker.slots, [{ from: 420, to: 960, count: 1 }]);
   assert.equal(m73.roles.picker.slots[0].count, 0);

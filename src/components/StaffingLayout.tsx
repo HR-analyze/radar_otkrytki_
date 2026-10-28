@@ -244,14 +244,17 @@ function Block({
 }) {
   const counted = postsHeadcount(posts, role);
   const off = counted != null && counted !== slot.count;
+  // Люди по норме есть, а где стоят — не написано: это та же дыра, что
+  // «расписано 1 из 3», только целиком. Красным, чтобы её заполнили.
+  const empty = posts.length === 0 && slot.count > 0;
   return (
     <div
       className="mx-0.5 flex min-w-0 flex-col gap-1 rounded-lg border px-2 py-1.5 text-[13px] leading-snug"
       title={`${slotLabel(slot)} · ${slot.count} чел.${posts.length ? ` · ${postsLabel(posts)}` : ''}`}
       style={{
         ...style,
-        borderColor: off ? 'var(--red)' : active ? 'var(--focus)' : 'var(--border)',
-        borderWidth: off ? 2 : 1,
+        borderColor: off || empty ? 'var(--red)' : active ? 'var(--focus)' : 'var(--border)',
+        borderWidth: off || empty ? 2 : 1,
         ...(active && { background: ACTIVE }),
       }}
     >
@@ -276,7 +279,9 @@ function Block({
           ))}
         </ul>
       ) : (
-        <div className="text-xs italic muted">не расписано</div>
+        <div className="text-xs font-bold" style={{ color: 'var(--red)' }}>
+          не расписано
+        </div>
       )}
       {off && (
         <div className="text-xs font-bold" style={{ color: 'var(--red)' }}>
@@ -366,6 +371,15 @@ function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
   const [counts, setCounts] = useState(() =>
     Object.fromEntries(roles.map((r) => [r, norm.roles[r].slots.map((s) => String(s.count))])) as Record<StaffRole, string[]>,
   );
+  // Время окна — «07:30» для <input type="time">; «до 8» без начала шаблона
+  // показываем с получасом раньше конца, как его рисует таймлайн.
+  const [times, setTimes] = useState(() =>
+    Object.fromEntries(
+      roles.map((r) => [r, norm.roles[r].slots.map((s) => [formatClock(s.from ?? s.to - 30), formatClock(s.to)] as [string, string])]),
+    ) as Record<StaffRole, [string, string][]>,
+  );
+  const setTime = (role: StaffRole, i: number, end: 0 | 1, value: string) =>
+    setTimes((t) => ({ ...t, [role]: t[role].map((v, k) => (k === i ? (end === 0 ? [value, v[1]] : [v[0], value]) : v)) }));
   const [texts, setTexts] = useState(() =>
     Object.fromEntries(
       roles.map((r) => [
@@ -395,6 +409,8 @@ function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
                 r,
                 {
                   counts: counts[r].map((c) => Number(c || 0)),
+                  // «23:00» конца суток браузер отдаёт как есть; «00:00» в конце — это полночь.
+                  times: times[r].map(([a, b]) => [a, b === '00:00' ? '24:00' : b]),
                   // Пост на строку; «/» внутри строки тоже делит людей, как в шаблоне.
                   posts: texts[r].map((t) => t.split('\n').flatMap((line) => parsePosts(line))),
                 },
@@ -417,8 +433,9 @@ function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs muted">
-        Число — сколько человек должно быть в окне по норме (меняет и таблицу ниже). Посты — по одному на строку:
-        «2 прием», «1 кулинария, хлебка».
+        Время окна — начало и конец; окна одной должности идут по порядку и не наезжают друг на друга. Число —
+        сколько человек должно быть в окне по норме (меняет и таблицу ниже). Посты — по одному на строку: «2
+        официант», «1 кулинария, хлебка».
       </p>
       {roles.map((role) => (
         <div key={role} className="grid gap-2 sm:grid-cols-[8rem_1fr] sm:items-start">
@@ -426,8 +443,29 @@ function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {norm.roles[role].slots.map((slot, i) => (
               <label key={i} className="flex flex-col gap-1 rounded-md border p-1.5 text-xs" style={{ borderColor: 'var(--border)' }}>
+                <span className="flex flex-wrap items-center gap-1">
+                  <input
+                    type="time"
+                    step={1800}
+                    value={times[role][i][0]}
+                    onChange={(e) => setTime(role, i, 0, e.target.value)}
+                    className="h-7 rounded border px-1 tabular-nums"
+                    style={INPUT_STYLE}
+                    aria-label={`${STAFF_ROLE_TITLE[role]}, окно ${i + 1}: начало`}
+                  />
+                  <span className="muted">–</span>
+                  <input
+                    type="time"
+                    step={1800}
+                    value={times[role][i][1]}
+                    onChange={(e) => setTime(role, i, 1, e.target.value)}
+                    className="h-7 rounded border px-1 tabular-nums"
+                    style={INPUT_STYLE}
+                    aria-label={`${STAFF_ROLE_TITLE[role]}, окно ${i + 1}: конец`}
+                  />
+                </span>
                 <span className="flex items-center justify-between gap-1">
-                  <span className="font-semibold tabular-nums">{slotLabel(slot)}</span>
+                  <span className="muted">человек</span>
                   <input
                     type="number"
                     min={0}
