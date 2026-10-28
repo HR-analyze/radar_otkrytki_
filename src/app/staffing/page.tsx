@@ -42,7 +42,8 @@ export default async function StaffingPage({
   }
 
   const shop = findStaffNorm(norms, one('shop'));
-  const minutes = parseTimeOfDay(one('time')) ?? minutesNowMsk();
+  const fixed = parseTimeOfDay(one('time'));
+  const minutes = fixed ?? minutesNowMsk();
 
   return (
     <div className="flex flex-col gap-5">
@@ -57,6 +58,7 @@ export default async function StaffingPage({
         norms={norms}
         initialCode={shop?.code ?? null}
         initialMinutes={minutes}
+        initialLive={fixed == null}
         editable={editable}
         unlocked={unlocked}
       />

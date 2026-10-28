@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   EXTRA_ROLES,
   STAFF_ROLES,
@@ -44,6 +44,7 @@ export function StaffingBoard({
   norms,
   initialCode,
   initialMinutes,
+  initialLive = false,
   editable = false,
   unlocked = false,
 }: {
@@ -51,6 +52,8 @@ export function StaffingBoard({
   /** null — «Все лавки». */
   initialCode: string | null;
   initialMinutes: number;
+  /** Время не задано в адресе — идём за текущим временем по Москве. */
+  initialLive?: boolean;
   /** Правка графика возможна: пароль задан, хранилище есть. */
   editable?: boolean;
   /** Пароль на правку уже введён. */
@@ -58,6 +61,20 @@ export function StaffingBoard({
 }) {
   const [code, setCode] = useState(initialCode);
   const [minutes, setMinutes] = useState(initialMinutes);
+  /**
+   * «Сейчас»: время идёт за часами по Москве и обновляется раз в минуту, а в
+   * адрес не пишется. Раньше в адрес писалось любое время, в том числе
+   * текущее на момент выбора лавки, — и ссылка, открытая через полтора часа,
+   * показывала красную черту на давно прошедшем 15:26. Выставили время руками —
+   * оно замирает и попадает в адрес, кнопка «Сейчас» возвращает живое.
+   */
+  const [live, setLive] = useState(initialLive);
+  useEffect(() => {
+    if (!live) return;
+    setMinutes(minutesNowMsk());
+    const timer = window.setInterval(() => setMinutes(minutesNowMsk()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [live]);
   const norm = code == null ? null : (norms.find((n) => n.code === code) ?? null);
   const shown = norm ? [norm] : norms;
   // Окна в шаблоне одни на все лавки — шапке таблицы годится любая.
@@ -70,13 +87,15 @@ export function StaffingBoard({
       ? `${rates[0]} ₽/ч`
       : `ставку должности (${rates.map((rate) => `${rate} ₽/ч — ${STAFF_ROLES.filter((r) => STAFF_HOURLY_RATE[r] === rate).map((r) => STAFF_ROLE_SHORT[r].toLowerCase()).join(', ')}`).join('; ')})`;
 
-  const pick = (next: { code?: string | null; minutes?: number }) => {
+  const pick = (next: { code?: string | null; minutes?: number; live?: boolean }) => {
     const c = next.code !== undefined ? next.code : code;
     const m = next.minutes ?? minutes;
+    const l = next.live ?? (next.minutes != null ? false : live);
     if (next.code !== undefined) setCode(next.code);
     if (next.minutes != null) setMinutes(next.minutes);
-    const q = new URLSearchParams(c ? { shop: c, time: formatClock(m) } : { time: formatClock(m) });
-    window.history.replaceState(null, '', `?${q}`);
+    setLive(l);
+    const q = new URLSearchParams({ ...(c && { shop: c }), ...(!l && { time: formatClock(m) }) });
+    window.history.replaceState(null, '', q.size ? `?${q}` : window.location.pathname);
   };
 
   return (
@@ -115,10 +134,15 @@ export function StaffingBoard({
               />
               <button
                 type="button"
-                onClick={() => pick({ minutes: minutesNowMsk() })}
+                onClick={() => pick({ minutes: minutesNowMsk(), live: true })}
                 className="h-10 rounded-lg border px-3 text-sm whitespace-nowrap hover:opacity-80"
-                style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
-                title="Текущее время по Москве"
+                style={{
+                  borderColor: live ? 'var(--focus)' : 'var(--border)',
+                  background: live ? 'color-mix(in srgb, var(--focus) 15%, var(--surface))' : 'var(--surface)',
+                  color: 'var(--text)',
+                }}
+                aria-pressed={live}
+                title={live ? 'Время идёт за часами по Москве' : 'Вернуться к текущему времени по Москве'}
               >
                 Сейчас
               </button>
