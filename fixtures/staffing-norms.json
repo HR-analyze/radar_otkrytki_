@@ -24,28 +24,23 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "доставка + линия" },
-              { "count": null, "place": "ЗД касса" }
+              { "count": 1, "place": "доставка + линия" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -104,14 +99,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -143,28 +148,23 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "доставка + линия" },
-              { "count": null, "place": "ЗД касса" }
+              { "count": 1, "place": "доставка + линия" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -223,14 +223,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -393,14 +403,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -477,14 +497,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -631,14 +661,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -715,14 +755,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -763,23 +813,19 @@
             [
               { "count": 3, "place": "прием" },
               { "count": 1, "place": "доставка" },
-              { "count": null, "place": "ЗД касса" },
               { "count": 2, "place": "повара разогрев" }
             ],
             [
               { "count": 2, "place": "прием" },
               { "count": 1, "place": "доставка" },
-              { "count": null, "place": "ЗД касса" },
               { "count": 1, "place": "повар разогрев" }
             ],
             [
               { "count": 2, "place": "прием" },
-              { "count": 1, "place": "кассир разогрев" },
-              { "count": null, "place": "ЗД касса-доставка" }
+              { "count": 1, "place": "кассир разогрев" }
             ],
             [
-              { "count": 2, "place": "прием-разогрев" },
-              { "count": null, "place": "ЗД касса-доставка" }
+              { "count": 2, "place": "прием-разогрев" }
             ]
           ]
         },
@@ -824,14 +870,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -974,14 +1030,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -1125,14 +1191,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -1209,14 +1285,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -1286,14 +1372,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -1442,14 +1538,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -1527,14 +1633,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -1566,28 +1682,23 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -1644,14 +1755,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -1721,14 +1842,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -1866,14 +1997,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -1943,14 +2084,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -2084,14 +2235,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -2123,28 +2284,23 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -2201,14 +2357,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -2278,14 +2444,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -2317,28 +2493,23 @@
             [],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -2395,14 +2566,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -2545,14 +2726,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -2696,14 +2887,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -2862,14 +3063,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -2939,14 +3150,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -3105,14 +3326,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -3182,14 +3413,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -3232,26 +3473,22 @@
               { "count": 3, "place": "прием" },
               { "count": null, "place": "сборщик" },
               { "count": 1, "place": "касса" },
-              { "count": null, "place": "ЗД касса" },
               { "count": 2, "place": "повара разогрев" }
             ],
             [
               { "count": 3, "place": "прием" },
               { "count": 1, "place": "касса" },
               { "count": null, "place": "сборщик" },
-              { "count": null, "place": "ЗД касса" },
               { "count": 1, "place": "повар разогрев" }
             ],
             [
               { "count": 2, "place": "прием" },
               { "count": 1, "place": "сборщик" },
-              { "count": 1, "place": "разогрев" },
-              { "count": null, "place": "ЗД касса" }
+              { "count": 1, "place": "разогрев" }
             ],
             [
               { "count": 2, "place": "прием" },
-              { "count": 1, "place": "разогрев-доставка" },
-              { "count": null, "place": "ЗД касса" }
+              { "count": 1, "place": "разогрев-доставка" }
             ]
           ]
         },
@@ -3296,14 +3533,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -3373,14 +3620,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -3415,20 +3672,16 @@
               { "count": 1, "place": "линия+доставка" }
             ],
             [
-              { "count": 4, "place": "линия" },
-              { "count": null, "place": "зд касса" }
+              { "count": 4, "place": "линия" }
             ],
             [
-              { "count": 3, "place": "линия" },
-              { "count": null, "place": "зд касса" }
+              { "count": 3, "place": "линия" }
             ],
             [
-              { "count": 3, "place": "линия" },
-              { "count": null, "place": "зд касса" }
+              { "count": 3, "place": "линия" }
             ],
             [
-              { "count": 2, "place": "линия" },
-              { "count": null, "place": "зд касса" }
+              { "count": 2, "place": "линия" }
             ]
           ]
         },
@@ -3708,7 +3961,12 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
@@ -3718,7 +3976,7 @@
           "hours": null,
           "posts": [
             [
-              { "count": null, "place": "касса" }
+              { "count": 1, "place": "касса" }
             ]
           ]
         },
@@ -3862,7 +4120,12 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
@@ -3872,7 +4135,7 @@
           "hours": null,
           "posts": [
             [
-              { "count": null, "place": "касса" }
+              { "count": 1, "place": "касса" }
             ]
           ]
         },
@@ -4142,14 +4405,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -4181,18 +4454,15 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
@@ -4200,8 +4470,7 @@
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -4258,14 +4527,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -4335,14 +4614,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -4505,14 +4794,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -4559,19 +4858,14 @@
             ],
             [
               { "count": 4, "place": "прием" },
-              { "count": null, "place": "ЗД бар касса" },
-              { "count": null, "place": "ЗД зал касса" },
               { "count": 2, "place": "повара разогрев" }
             ],
             [
               { "count": 3, "place": "прием" },
-              { "count": null, "place": "ЗД бар касса" },
-              { "count": null, "place": "ЗД зал касса" },
               { "count": 1, "place": "повара разогрев" }
             ],
             [
               { "count": 2, "place": "прием" },
-              { "count": null, "place": "ЗД зал касса" },
               { "count": 1, "place": "касса" }
             ],
             [
@@ -4628,19 +4922,7 @@
             { "from": 1200, "to": 1380, "count": 0 }
           ],
           "fte": 0,
-          "hours": 0,
-          "posts": [
-            [],
-            [
-              { "count": null, "place": "ЗД бар касса" }
-            ],
-            [
-              { "count": null, "place": "ЗД бар касса" }
-            ],
-            [],
-            [],
-            []
-          ]
+          "hours": 0
         },
         "cleaner": {
           "slots": [
@@ -4685,14 +4967,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -4844,14 +5136,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -4883,18 +5185,15 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
@@ -4902,8 +5201,7 @@
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -4960,14 +5258,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -5003,12 +5311,10 @@
             [
               { "count": 1, "place": "касса" },
               { "count": 1, "place": "прием" },
-              { "count": 1, "place": "разогрев" },
-              { "count": null, "place": "ЗД доставка" }
+              { "count": 1, "place": "разогрев" }
             ],
             [
               { "count": 3, "place": "прием( доставка)" },
-              { "count": null, "place": "ЗД зал касса" },
               { "count": 1, "place": "разогрев" }
             ],
             [
@@ -5018,13 +5324,11 @@
             ],
             [
               { "count": 1, "place": "прием" },
-              { "count": null, "place": "ЗД зал касса" },
               { "count": 1, "place": "доставка" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": null, "place": "ЗД доставка" }
+              { "count": 1, "place": "прием" }
             ]
           ]
         },
@@ -5116,14 +5420,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -5200,14 +5514,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -5243,12 +5567,10 @@
             [
               { "count": 1, "place": "касса" },
               { "count": 1, "place": "прием" },
-              { "count": 1, "place": "разогрев" },
-              { "count": null, "place": "ЗД доставка" }
+              { "count": 1, "place": "разогрев" }
             ],
             [
               { "count": 2, "place": "приема" },
-              { "count": null, "place": "ЗД зал кассса" },
               { "count": 1, "place": "разогрев" },
               { "count": 1, "place": "доставка" }
             ],
@@ -5257,8 +5579,7 @@
               { "count": 1, "place": "касса" }
             ],
             [
-              { "count": 2, "place": "прием( доставка)" },
-              { "count": 1, "place": "ЗД зал касса" }
+              { "count": 2, "place": "прием( доставка)" }
             ],
             [
               { "count": 1, "place": "касса" },
@@ -5354,14 +5675,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -5404,28 +5735,23 @@
             [],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -5482,14 +5808,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -5559,14 +5895,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -5606,7 +5952,6 @@
             ],
             [
               { "count": 3, "place": "прием" },
-              { "count": null, "place": "ЗД зал касса" },
               { "count": 1, "place": "разогрев" }
             ],
             [
@@ -5614,8 +5959,7 @@
               { "count": 1, "place": "касса" }
             ],
             [
-              { "count": 2, "place": "прием" },
-              { "count": null, "place": "ЗД зал касса" }
+              { "count": 2, "place": "прием" }
             ],
             [
               { "count": 1, "place": "касса" },
@@ -5711,14 +6055,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -5796,14 +6150,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -5835,28 +6199,23 @@
             [],
             [
               { "count": 4, "place": "линия" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "касса" }
             ],
             [
               { "count": 4, "place": "линия" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "касса" }
             ],
             [
               { "count": 4, "place": "линия" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "касса" }
             ],
             [
               { "count": 4, "place": "линия" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "касса" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "касса" }
             ]
           ]
         },
@@ -5896,19 +6255,7 @@
             { "from": 1200, "to": 1380, "count": 2 }
           ],
           "fte": 4,
-          "hours": 0,
-          "posts": [
-            [],
-            [
-              { "count": null, "place": "ЗД бар касса" }
-            ],
-            [
-              { "count": null, "place": "ЗД бар касса" }
-            ],
-            [],
-            [],
-            []
-          ]
+          "hours": 0
         },
         "cleaner": {
           "slots": [
@@ -5953,14 +6300,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -6004,13 +6361,11 @@
             [
               { "count": 1, "place": "прием" },
               { "count": 1, "place": "касса бар" },
-              { "count": null, "place": "ЗД зал касса" },
               { "count": 1, "place": "разогрев" }
             ],
             [
               { "count": 2, "place": "прием" },
               { "count": 1, "place": "касса бар" },
-              { "count": null, "place": "ЗД зал касса" },
               { "count": 1, "place": "разогрев" }
             ],
             [
@@ -6020,13 +6375,11 @@
             ],
             [
               { "count": 1, "place": "касса бар" },
-              { "count": 1, "place": "прием" },
-              { "count": null, "place": "ЗД касса" }
+              { "count": 1, "place": "прием" }
             ],
             [
               { "count": 1, "place": "касса бар" },
-              { "count": 1, "place": "прием" },
-              { "count": null, "place": "ЗД касса" }
+              { "count": 1, "place": "прием" }
             ]
           ]
         },
@@ -6118,14 +6471,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -6167,18 +6530,15 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
@@ -6186,8 +6546,7 @@
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -6244,14 +6603,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -6283,28 +6652,23 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -6361,14 +6725,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -6408,12 +6782,10 @@
             ],
             [
               { "count": 3, "place": "прием" },
-              { "count": null, "place": "ЗД зала касса" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 3, "place": "прием" },
-              { "count": null, "place": "ЗД зала касса" }
+              { "count": 3, "place": "прием" }
             ],
             [
               { "count": 1, "place": "прием" },
@@ -6513,14 +6885,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -6560,28 +6942,23 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -6638,14 +7015,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -7091,14 +7478,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -7246,14 +7643,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -7425,14 +7832,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -7471,28 +7888,23 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -7549,14 +7961,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -7626,14 +8048,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -7668,14 +8100,12 @@
             ],
             [
               { "count": 1, "place": "касса бар" },
-              { "count": 1, "place": "ЗД касса" },
               { "count": 1, "place": "прием(доставка)" },
               { "count": 1, "place": "разогрев" }
             ],
             [
               { "count": 1, "place": "касса бар" },
               { "count": 2, "place": "прием(доставка)" },
-              { "count": null, "place": "ЗД зал касса" },
               { "count": 1, "place": "разогрев" }
             ],
             [
@@ -7685,13 +8115,11 @@
             ],
             [
               { "count": 1, "place": "касса бар" },
-              { "count": 1, "place": "прием(доставка)" },
-              { "count": null, "place": "ЗД касса" }
+              { "count": 1, "place": "прием(доставка)" }
             ],
             [
               { "count": 1, "place": "прием(доставка)" },
-              { "count": 1, "place": "касса бар" },
-              { "count": null, "place": "ЗД касса" }
+              { "count": 1, "place": "касса бар" }
             ]
           ]
         },
@@ -7783,14 +8211,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -7867,14 +8305,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -7906,28 +8354,23 @@
             [],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "касса" }
             ],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "касса" }
             ],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "касса" }
             ],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "касса" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "касса" }
             ]
           ]
         },
@@ -7986,14 +8429,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -8025,28 +8478,23 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -8103,14 +8551,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -8289,28 +8747,23 @@
             [],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -8367,14 +8820,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -8406,28 +8869,23 @@
             [],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -8484,14 +8942,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -8653,14 +9121,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -8692,28 +9170,23 @@
             [],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -8770,14 +9243,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -8809,28 +9292,23 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -8887,14 +9365,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -8926,28 +9414,23 @@
             [],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -9004,14 +9487,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -9173,14 +9666,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -9250,14 +9753,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -9297,22 +9810,18 @@
             ],
             [
               { "count": 3, "place": "прием(доставка)" },
-              { "count": null, "place": "ЗД зала касса" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 3, "place": "прием(доставка)" },
-              { "count": null, "place": "ЗД зала касса" }
+              { "count": 3, "place": "прием(доставка)" }
             ],
             [
               { "count": 1, "place": "прием" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "ЗД доставка" }
+              { "count": 1, "place": "касса" }
             ],
             [
               { "count": 1, "place": "прием" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "ЗД доставка" }
+              { "count": 1, "place": "касса" }
             ]
           ]
         },
@@ -9404,14 +9913,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -9488,14 +10007,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -9669,27 +10198,22 @@
             [
               { "count": 1, "place": "касса" },
               { "count": 1, "place": "прием" },
-              { "count": 1, "place": "разогрев" },
-              { "count": null, "place": "ЗД доставка" }
-            ],
-            [
-              { "count": 3, "place": "прием(доставка)" },
-              { "count": null, "place": "ЗД зала касса" },
               { "count": 1, "place": "разогрев" }
             ],
             [
               { "count": 3, "place": "прием(доставка)" },
-              { "count": null, "place": "ЗД зала касса" }
+              { "count": 1, "place": "разогрев" }
+            ],
+            [
+              { "count": 3, "place": "прием(доставка)" }
             ],
             [
               { "count": 1, "place": "прием" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "ЗД доставка" }
+              { "count": 1, "place": "касса" }
             ],
             [
               { "count": 1, "place": "прием" },
-              { "count": 1, "place": "касса" },
-              { "count": null, "place": "ЗД доставка" }
+              { "count": 1, "place": "касса" }
             ]
           ]
         },
@@ -9781,14 +10305,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -9962,28 +10496,23 @@
             [],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 3, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 2, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ],
             [
               { "count": 1, "place": "линия" },
-              { "count": 1, "place": "линия+доставка" },
-              { "count": null, "place": "зд касса" }
+              { "count": 1, "place": "линия+доставка" }
             ]
           ]
         },
@@ -10127,14 +10656,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -10237,20 +10776,16 @@
               { "count": null, "place": "подгтовка бара, настройка" }
             ],
             [
-              { "count": null, "place": "бар" },
-              { "count": 1, "place": "ЗД Бар" }
+              { "count": null, "place": "бар" }
             ],
             [
-              { "count": null, "place": "бар" },
-              { "count": 1, "place": "ЗД Бар" }
+              { "count": null, "place": "бар" }
             ],
             [
-              { "count": null, "place": "бар" },
-              { "count": 1, "place": "ЗД Бар касса" }
+              { "count": null, "place": "бар" }
             ],
             [
-              { "count": null, "place": "бар" },
-              { "count": 1, "place": "ЗД Бар касса" }
+              { "count": null, "place": "бар" }
             ],
             [
               { "count": null, "place": "бар, закрытие" }
@@ -10299,14 +10834,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [
@@ -10376,14 +10921,24 @@
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "hallDeputy": {
           "slots": [
             { "from": 390, "to": 1080, "count": 1 }
           ],
           "fte": null,
-          "hours": null
+          "hours": null,
+          "posts": [
+            [
+              { "count": 1, "place": "касса" }
+            ]
+          ]
         },
         "picker": {
           "slots": [

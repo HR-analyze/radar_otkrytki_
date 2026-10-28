@@ -92,8 +92,8 @@ export function isManaged(pathname: string): boolean {
  * Значение куки — SHA-256 от пароля с солью. Считается через Web Crypto:
  * проверка пароля выполняется в proxy — там, где node:crypto может быть недоступен.
  */
-export async function tokenFor(value: string): Promise<string> {
-  const data = new TextEncoder().encode(`radar:manage:${value}`);
+export async function tokenFor(value: string, scope = 'manage'): Promise<string> {
+  const data = new TextEncoder().encode(`radar:${scope}:${value}`);
   const digest = await crypto.subtle.digest('SHA-256', data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -105,6 +105,28 @@ export async function isUnlocked(cookieValue: string | undefined): Promise<boole
   if (!cookieValue) return false;
 
   return cookieValue === (await tokenFor(expected));
+}
+
+/* -------------------------- правка «Графика пиков» -------------------------- */
+
+/**
+ * Правка «Графика пиков» — под своим паролем, не под паролем «Витрин»:
+ * смотреть вкладку должны все, а править нормы и расстановку — те, кому
+ * дали этот пароль. Пароль — в переменной окружения RADAR_STAFFING_PASSWORD.
+ *
+ * В отличие от пароля «Витрин», не задан — значит править нельзя никому, а
+ * не «открыто всем»: открытая без пароля правка норм была бы тихой дырой.
+ */
+export const STAFFING_COOKIE = 'radar_staffing';
+
+export function staffingPassword(): string | undefined {
+  return process.env.RADAR_STAFFING_PASSWORD || undefined;
+}
+
+export async function isStaffingUnlocked(cookieValue: string | undefined): Promise<boolean> {
+  const expected = staffingPassword();
+  if (!expected || !cookieValue) return false;
+  return timingSafeEqual(cookieValue, await tokenFor(expected, 'staffing'));
 }
 
 /* ------------------------------ крон-роуты ------------------------------ */

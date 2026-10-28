@@ -170,3 +170,12 @@ test('дислокации: «м81» с маленькой буквы — тож
   assert.equal(norms[0].roles.hallDeputy.slots[0].count, 1, '0 в колонке «Зд зал» не отменяет константу');
   assert.deepEqual(norms[0].roles.cashier.posts![0], [{ count: 1, place: 'выпечка' }]);
 });
+
+test('дислокации: «ЗД …» в окнах других должностей убираются, у замов — касса', () => {
+  const posts: unknown[] = HEADER.map(() => null);
+  posts[5] = '4 прием(доставка)/ЗД зал касса/зд касса/1 ЗД прием/зам доставка/1 разогрев';
+  const { norms } = parseStaffing(book([M1, posts, DURATIONS]));
+  assert.deepEqual(norms[0].roles.cashier.posts![1].map((p) => p.place), ['прием(доставка)', 'разогрев']);
+  assert.deepEqual(norms[0].roles.barDeputy.posts, [[{ count: 1, place: 'касса' }]]);
+  assert.deepEqual(norms[0].roles.hallDeputy.posts, [[{ count: 1, place: 'касса' }]]);
+});

@@ -1,4 +1,6 @@
-import { readStaffing } from '@/lib/staffing-store';
+import { cookies } from 'next/headers';
+import { readStaffingLive, canEditStaffing } from '@/lib/staffing-edits';
+import { STAFFING_COOKIE, isStaffingUnlocked, staffingPassword } from '@/lib/auth';
 import { findStaffNorm, parseTimeOfDay } from '@/lib/staffing';
 import { minutesNowMsk } from '@/lib/time';
 import { StaffingBoard } from '@/components/StaffingBoard';
@@ -25,7 +27,11 @@ export default async function StaffingPage({
     return Array.isArray(v) ? v[0] : v;
   };
 
-  const { norms, source, builtAt } = readStaffing();
+  const { norms, source, builtAt } = await readStaffingLive();
+  // Править можно, если пароль на правку задан и хранилище есть; войти —
+  // кнопкой на вкладке, тогда кука уже стоит.
+  const editable = Boolean(staffingPassword()) && canEditStaffing();
+  const unlocked = editable && (await isStaffingUnlocked((await cookies()).get(STAFFING_COOKIE)?.value));
   if (norms.length === 0) {
     return (
       <div className="surface p-8 text-center text-sm muted">
@@ -47,7 +53,13 @@ export default async function StaffingPage({
           на этот момент. Источник — {source}, собран {builtAt.split('-').reverse().join('.')}.
         </p>
       </div>
-      <StaffingBoard norms={norms} initialCode={shop?.code ?? null} initialMinutes={minutes} />
+      <StaffingBoard
+        norms={norms}
+        initialCode={shop?.code ?? null}
+        initialMinutes={minutes}
+        editable={editable}
+        unlocked={unlocked}
+      />
     </div>
   );
 }

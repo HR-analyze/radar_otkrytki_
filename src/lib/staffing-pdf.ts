@@ -630,7 +630,8 @@ function layoutSection(norm: StaffNorm): Content {
     { text: 'Где стоят', style: 'th' },
   ];
   const body: TableCell[][] = [];
-  for (const role of STAFF_ROLES) {
+  // Замы сверху, сборщик внизу — как на вкладке.
+  for (const role of ['barDeputy', 'hallDeputy', ...TEMPLATE_ROLES, 'picker'] as const) {
     const r = norm.roles[role];
     const rows = r.slots
       .map((slot, i) => ({ slot, posts: r.posts?.[i] ?? [] }))
@@ -647,7 +648,7 @@ function layoutSection(norm: StaffNorm): Content {
         {
           text: [
             { text: posts.length ? postsLabel(posts) : 'не расписано', color: posts.length ? INK : MUTED },
-            off ? { text: `   ${offText(counted!, slot.count)}`, color: '#b45309', fontSize: 7 } : '',
+            off ? { text: `   ${offText(counted!, slot.count)}`, color: '#dc2626', bold: true, fontSize: 7 } : '',
           ],
         },
       ]);

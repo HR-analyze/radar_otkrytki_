@@ -134,6 +134,8 @@ export interface StaffNorm {
   roles: Record<StaffRole, StaffRoleNorm>;
   /** Расстановка; поля нет — лавку ещё не расписали. */
   layout?: StaffLayout;
+  /** Когда лавку правили на сайте (ISO); поля нет — лавка по шаблону. */
+  editedAt?: string;
 }
 
 /** Ответ калькулятора по одной должности. */
@@ -391,11 +393,14 @@ export function offText(counted: number, norm: number): string {
   return counted < norm ? `расписано ${counted} из ${norm}` : `расписано ${counted}, по норме ${norm}`;
 }
 
-/** Расписана ли у лавки хоть одна клетка. */
+/**
+ * Расписана ли у лавки хоть одна клетка. Замы не в счёт: их «касса» стоит у
+ * всех лавок по постановке, а не потому, что лавку расписали.
+ */
 export function hasLayout(norm: StaffNorm): boolean {
   return (
     (norm.layout?.stations.length ?? 0) > 0 ||
     (norm.layout?.remarks.length ?? 0) > 0 ||
-    STAFF_ROLES.some((r) => norm.roles[r].posts?.some((p) => p.length > 0))
+    [...TEMPLATE_ROLES, 'picker' as const].some((r) => norm.roles[r].posts?.some((p) => p.length > 0))
   );
 }

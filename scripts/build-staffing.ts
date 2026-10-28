@@ -21,7 +21,7 @@ import { parseStaffing } from '../src/lib/parsers/staffing';
 import { mergeStaffing } from '../src/lib/parsers/staffing-merge';
 import { compareShopNumber } from '../src/lib/shops';
 import { STAFFING_SEED_PATH } from '../src/lib/staffing-store';
-import type { StaffNorm } from '../src/lib/staffing';
+import { hasLayout, type StaffNorm } from '../src/lib/staffing';
 
 const sources = process.argv.slice(2);
 if (sources.length === 0) {
@@ -67,7 +67,7 @@ const json = JSON.stringify(seed, null, 2)
   .replace(/\{\s*"count": (null|\d+),\s*"place": ("(?:[^"\\]|\\.)*")\s*\}/g, '{ "count": $1, "place": $2 }');
 fs.writeFileSync(STAFFING_SEED_PATH, json + '\n', 'utf8');
 
-const laidOut = norms.filter((n) => n.layout || Object.values(n.roles).some((r) => r.posts)).length;
+const laidOut = norms.filter(hasLayout).length;
 console.log(`✓ ${norms.length} лавок, с дислокациями — ${laidOut} → ${STAFFING_SEED_PATH}`);
 if (edits.length) console.log(`\nПравки норм из книг (${edits.length}):`);
 for (const e of edits) console.log(`  ✎ ${e}`);

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { readStaffing } from '@/lib/staffing-store';
+import { readStaffingLive } from '@/lib/staffing-edits';
 import { selectStaffing, staffingFilename } from '@/lib/staffing-export';
 import { staffingXlsx } from '@/lib/staffing-xlsx';
 import { todayIso } from '@/lib/time';
@@ -17,7 +17,8 @@ export const dynamic = 'force-dynamic';
  * Без пароля, как и сама вкладка (см. auth.ts).
  */
 export async function GET(req: Request) {
-  const seed = readStaffing();
+  // С правками сайта поверх шаблона — то же, что на вкладке.
+  const seed = await readStaffingLive();
   const picked = selectStaffing(seed, new URL(req.url).searchParams.get('shop'));
   if ('error' in picked) return NextResponse.json({ ok: false, error: picked.error }, { status: 404 });
 

@@ -210,6 +210,16 @@ function migrate(db: BetterSqlite3.Database): void {
       updated_at  TEXT NOT NULL
     );
 
+    -- Правки «Графика пиков» с сайта: нормы окон и дислокации лавки. Как и
+    -- shop_norms, строка перекрывает сид: шаблон пересобрали — лавка без
+    -- правки поедет по новому, лавка с правкой останется на своих цифрах.
+    -- roles — JSON {роль: {counts: [...], posts: [[...]]}} (см. staffing-edits.ts).
+    CREATE TABLE IF NOT EXISTS staffing_edits (
+      shop_code  TEXT PRIMARY KEY,
+      roles      TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     -- Ручные нарушения конкурса: одна запись = один постоянный штраф.
     CREATE TABLE IF NOT EXISTS contest_violations (
       id         TEXT PRIMARY KEY,

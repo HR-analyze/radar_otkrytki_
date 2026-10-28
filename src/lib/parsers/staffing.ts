@@ -7,6 +7,7 @@ import {
   parsePosts,
   type ExtraRole,
   type StaffNorm,
+  type StaffPost,
   type StaffRole,
   type StaffRoleNorm,
   type TemplateRole,
@@ -143,7 +144,13 @@ export function parseStaffing(buffer: Buffer, sheetName = STAFFING_SHEET): Staff
     ) as Record<StaffRole, StaffRoleNorm>;
     for (const role of EXTRA_ROLES) {
       const count = role === 'picker' ? (pickers?.get(shop.code) ?? 0) : EXTRA_ROLE_SLOT[role].count;
-      byRole[role] = { slots: [{ ...EXTRA_ROLE_SLOT[role], count }], fte: null, hours: null };
+      byRole[role] = {
+        slots: [{ ...EXTRA_ROLE_SLOT[role], count }],
+        fte: null,
+        hours: null,
+        // Замы стоят на кассе — так по постановке, что бы ни было вписано в книге.
+        ...(role !== 'picker' && { posts: [[{ count: 1, place: DEPUTY_POST }]] }),
+      };
     }
 
     for (const [i, col] of columns) {
@@ -195,9 +202,10 @@ function annotate(
     if (i === at.name) {
       layout.stations.push(...parsePosts(text));
     } else if (col?.kind === 'slot') {
-      addPosts(norm.roles[col.role], col.index, text);
+      // «ЗД бар касса», «зд касса» в окне кассира — это замы, у них своя строка.
+      addPosts(norm.roles[col.role], col.index, text, (p) => !DEPUTY_RE.test(p.place));
     } else if (col?.kind === 'extra') {
-      addPosts(norm.roles[col.role], 0, text);
+      if (col.role === 'picker') addPosts(norm.roles[col.role], 0, text);
     } else {
       const title = header[i]?.split(/\r?\n/)[0].trim();
       layout.remarks.push(title && !/^(то план|грейд|кофемашина)$/i.test(title) ? `${title}: ${text}` : text);
@@ -205,11 +213,19 @@ function annotate(
   });
 }
 
-function addPosts(role: StaffRoleNorm, index: number, text: string): void {
+function addPosts(role: StaffRoleNorm, index: number, text: string, keep: (p: StaffPost) => boolean = () => true): void {
+  const posts = parsePosts(text).filter(keep);
+  if (posts.length === 0) return;
   role.posts ??= role.slots.map(() => []);
   while (role.posts.length <= index) role.posts.push([]);
-  role.posts[index].push(...parsePosts(text));
+  role.posts[index].push(...posts);
 }
+
+/** Пост зама в чужом окне: «ЗД бар касса», «зд касса», «1 ЗД прием», «зам доставка». */
+const DEPUTY_RE = /^(зд|з\/д|зам)(?![а-я])/i;
+
+/** Где стоят замы — всегда касса. */
+export const DEPUTY_POST = 'касса';
 
 /**
  * Сколько сборщиков в лавке — колонка «Сборщик заказа» листа «ШР по лавкам».

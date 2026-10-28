@@ -44,11 +44,17 @@ export function StaffingBoard({
   norms,
   initialCode,
   initialMinutes,
+  editable = false,
+  unlocked = false,
 }: {
   norms: StaffNorm[];
   /** null — «Все лавки». */
   initialCode: string | null;
   initialMinutes: number;
+  /** Правка графика возможна: пароль задан, хранилище есть. */
+  editable?: boolean;
+  /** Пароль на правку уже введён. */
+  unlocked?: boolean;
 }) {
   const [code, setCode] = useState(initialCode);
   const [minutes, setMinutes] = useState(initialMinutes);
@@ -182,7 +188,14 @@ export function StaffingBoard({
         </div>
       </section>
 
-      <StaffingLayout norm={norm} norms={norms} minutes={minutes} onPick={(c) => pick({ code: c })} />
+      <StaffingLayout
+        norm={norm}
+        norms={norms}
+        minutes={minutes}
+        onPick={(c) => pick({ code: c })}
+        editable={editable}
+        unlocked={unlocked}
+      />
 
       {/* --- шаблон целиком --- */}
       <section className="flex flex-col gap-2">
