@@ -1,0 +1,178 @@
+import { STAFF_ROLES, normalizePlace, type StaffNorm, type StaffPost, type StaffRole } from './staffing';
+
+/**
+ * Единые названия функционалов (мест в расстановке) — вкладка «Функционалы».
+ *
+ * ТД пишут одно и то же по-разному: «разогрев», «разог», «разлгрев»,
+ * «повар разогре». Привести это в книгах руками нельзя — их семь, и завтра
+ * впишут восьмое написание. Поэтому словарь: «как написано → как называем»,
+ * одна строка на написание. Поправили строку — название меняется во всех
+ * лавках, окнах и выгрузках сразу.
+ *
+ * Словарь накладывается последним, поверх книг, правил руководства и правок
+ * лавок (см. readStaffingLive): переименовать можно и то, что пишет правило
+ * («подготовка витрин»). Совпали два места в одном окне после переименования —
+ * люди складываются: «1 разог» + «2 разогрев» → «3 разогрев».
+ *
+ * Модуль без сервера: страница вкладки собирает список написаний в браузере.
+ */
+
+/** Строка словаря: написание (как в книгах) и единое название. */
+export interface PlaceAlias {
+  place: string;
+  name: string;
+}
+
+/**
+ * Явные опечатки и обрезки из книг 28.10.2026 — словарь по умолчанию, пока
+ * их не поправили на вкладке. Строка с сайта главнее: вернуть «разог» как
+ * есть — вписать «разог» в единое название.
+ */
+export const DEFAULT_PLACE_ALIASES: readonly PlaceAlias[] = [
+  { place: 'разог', name: 'разогрев' },
+  { place: 'разлгрев', name: 'разогрев' },
+  { place: 'повар разогре', name: 'повар разогрев' },
+  { place: 'повара разогрев', name: 'повар разогрев' },
+  { place: 'витр', name: 'витрина' },
+  { place: 'загот', name: 'заготовки' },
+  { place: 'подгтовка бара, настройка', name: 'подготовка бара, настройка' },
+  { place: 'официант + дост', name: 'официант + доставка' },
+  { place: 'официант( доставка)', name: 'официант + доставка' },
+  { place: 'официант(доставка)', name: 'официант + доставка' },
+  { place: 'разогрев-доставка', name: 'разогрев + доставка' },
+  { place: 'доставка-разогрев', name: 'разогрев + доставка' },
+  { place: 'разогрев(доставка)', name: 'разогрев + доставка' },
+  { place: 'сборкщик доставки', name: 'сборщик доставки' },
+];
+
+/** Ключ написания: «Официант+дост» и «официант + дост» — одна строка словаря. */
+export function placeKey(place: string): string {
+  return normalizePlace(place).toLowerCase();
+}
+
+/** Словарь по ключу написания: строки с сайта поверх словаря по умолчанию. */
+export function placeAliasMap(
+  saved: readonly PlaceAlias[],
+  defaults: readonly PlaceAlias[] = DEFAULT_PLACE_ALIASES,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const a of [...defaults, ...saved]) map.set(placeKey(a.place), normalizePlace(a.name) || normalizePlace(a.place));
+  return map;
+}
+
+/**
+ * Единое название написания. Цепочку «а → б, б → в» проходим до конца — так
+ * переименование группы одной строкой («разогрев» → «разогрев блюд») тянет за
+ * собой и все её опечатки. Петля «а → б → а» останавливается на повторе.
+ */
+export function resolvePlace(place: string, aliases: ReadonlyMap<string, string>): string {
+  let name = normalizePlace(place);
+  const seen = new Set<string>();
+  for (;;) {
+    const key = name.toLowerCase();
+    const next = aliases.get(key);
+    if (next == null || seen.has(key)) return name;
+    seen.add(key);
+    name = next;
+  }
+}
+
+/** Переименовать места окна; одинаковые после переименования — сложить. */
+function renamePosts(posts: readonly StaffPost[], aliases: ReadonlyMap<string, string>): StaffPost[] {
+  const out: StaffPost[] = [];
+  for (const p of posts) {
+    const place = resolvePlace(p.place, aliases);
+    const same = out.find((q) => q.place.toLowerCase() === place.toLowerCase() && q.count != null && p.count != null);
+    if (same) same.count! += p.count!;
+    else out.push({ count: p.count, place });
+  }
+  return out;
+}
+
+/** Нормы с едиными названиями мест — во всех окнах и в местах лавки. */
+export function applyPlaceAliases(norms: readonly StaffNorm[], aliases: ReadonlyMap<string, string>): StaffNorm[] {
+  if (aliases.size === 0) return [...norms];
+  return norms.map((n) => {
+    const roles = { ...n.roles };
+    for (const role of STAFF_ROLES) {
+      const r = roles[role];
+      if (r.posts) roles[role] = { ...r, posts: r.posts.map((w) => renamePosts(w, aliases)) };
+    }
+    return {
+      ...n,
+      roles,
+      ...(n.layout && { layout: { ...n.layout, stations: renamePosts(n.layout.stations, aliases) } }),
+    };
+  });
+}
+
+/** Где встречается написание: окно должности или «места лавки» из шапки расстановки. */
+export type PlaceSource = StaffRole | 'stations';
+
+/** Написание со всеми его появлениями — строка таблицы на вкладке. */
+export interface PlaceUsage {
+  /** Ключ словаря (см. placeKey). */
+  key: string;
+  /** Как написано — самое частое написание с этим ключом. */
+  place: string;
+  /** Сколько раз встречается: окно × лавка. */
+  uses: number;
+  /** Коды лавок, по порядку норм. */
+  shops: string[];
+  /** Какие должности (и места лавки), по порядку STAFF_ROLES. */
+  sources: PlaceSource[];
+}
+
+/**
+ * Все написания мест по сети — ДО словаря: иначе «разог», уже сведённый к
+ * «разогрев», пропал бы из таблицы, и вернуть его было бы негде.
+ */
+export function collectPlaces(norms: readonly StaffNorm[]): PlaceUsage[] {
+  const acc = new Map<string, { spellings: Map<string, number>; uses: number; shops: Set<string>; sources: Set<PlaceSource> }>();
+  const add = (place: string, shop: string, source: PlaceSource) => {
+    const spelling = normalizePlace(place);
+    if (!spelling) return;
+    const key = spelling.toLowerCase();
+    const a = acc.get(key) ?? { spellings: new Map(), uses: 0, shops: new Set(), sources: new Set() };
+    a.spellings.set(spelling, (a.spellings.get(spelling) ?? 0) + 1);
+    a.uses += 1;
+    a.shops.add(shop);
+    a.sources.add(source);
+    acc.set(key, a);
+  };
+  for (const n of norms) {
+    for (const role of STAFF_ROLES) for (const w of n.roles[role].posts ?? []) for (const p of w) add(p.place, n.code, role);
+    for (const p of n.layout?.stations ?? []) add(p.place, n.code, 'stations');
+  }
+  const order: PlaceSource[] = [...STAFF_ROLES, 'stations'];
+  const shopOrder = new Map(norms.map((n, i) => [n.code, i]));
+  return [...acc].map(([key, a]) => ({
+    key,
+    place: [...a.spellings].sort((x, y) => y[1] - x[1])[0][0],
+    uses: a.uses,
+    shops: [...a.shops].sort((x, y) => shopOrder.get(x)! - shopOrder.get(y)!),
+    sources: order.filter((s) => a.sources.has(s)),
+  }));
+}
+
+/** Строк в словаре не больше — с запасом к сотне написаний по сети. */
+export const MAX_PLACE_ALIASES = 1000;
+
+/**
+ * Разбор словаря из запроса: { aliases: [{ place, name }] }. Пустое название
+ * — «оставить как написано». Длина — до 80 знаков, как у поста в правке лавки.
+ */
+export function parsePlaceAliases(body: unknown): { ok: true; aliases: PlaceAlias[] } | { ok: false; error: string } {
+  const raw = (body as { aliases?: unknown })?.aliases;
+  if (!Array.isArray(raw) || raw.length === 0) return { ok: false, error: 'Нет правок' };
+  if (raw.length > MAX_PLACE_ALIASES) return { ok: false, error: `Строк больше ${MAX_PLACE_ALIASES}` };
+  const out = new Map<string, PlaceAlias>();
+  for (const a of raw) {
+    const place = normalizePlace(String((a as PlaceAlias)?.place ?? ''));
+    if (!place) return { ok: false, error: 'Пустое написание' };
+    const name = normalizePlace(String((a as PlaceAlias)?.name ?? '')) || place;
+    if (place.length > 80 || name.length > 80) return { ok: false, error: `«${place.slice(0, 30)}…»: длиннее 80 знаков` };
+    out.set(place.toLowerCase(), { place, name });
+  }
+  return { ok: true, aliases: [...out.values()] };
+}

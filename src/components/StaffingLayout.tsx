@@ -300,7 +300,8 @@ const ACTIVE = 'color-mix(in srgb, var(--focus) 12%, var(--surface))';
 
 /* --------------------------------- правка --------------------------------- */
 
-function EditButton({ unlocked, onEdit }: { unlocked: boolean; onEdit: () => void }) {
+/** Кнопка правки; без пароля — сначала спрашивает его. Её же берёт вкладка «Функционалы». */
+export function EditButton({ unlocked, onEdit }: { unlocked: boolean; onEdit: () => void }) {
   const router = useRouter();
   const [asking, setAsking] = useState(false);
   const [password, setPassword] = useState('');

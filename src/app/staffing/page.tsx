@@ -4,6 +4,7 @@ import { STAFFING_COOKIE, isStaffingUnlocked, staffingPassword } from '@/lib/aut
 import { findStaffNorm, parseTimeOfDay } from '@/lib/staffing';
 import { minutesNowMsk } from '@/lib/time';
 import { StaffingBoard } from '@/components/StaffingBoard';
+import { StaffingTabs } from '@/components/StaffingTabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,7 +48,8 @@ export default async function StaffingPage({
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
+      <StaffingTabs current="board" />
+      <div className="-mt-2">
         <h1 className="text-2xl font-semibold tracking-tight">График пиков</h1>
         <p className="mt-1 text-sm muted">
           Сколько человек каждой должности должно быть на смене. Выберите лавку и время — радар покажет норму

@@ -1,6 +1,7 @@
 import { manualDbWritable, openManualDb } from './manual-db';
 import { STAFF_ROLES, normalizePlace, type StaffNorm, type StaffPost, type StaffRole } from './staffing';
 import { readStaffing, readStaffingBook, type StaffingSeed } from './staffing-store';
+import { applyPlaceAliases, placeAliasMap, placeKey, type PlaceAlias } from './staffing-places';
 
 /**
  * Правки «Графика пиков» с сайта: сколько человек в окне и кто где стоит.
@@ -178,8 +179,11 @@ export async function readStaffingEdits(): Promise<StaffingEdit[]> {
   });
 }
 
-/** Нормы из репозитория с правками сайта поверх — то, что видят вкладка и выгрузки. */
-export async function readStaffingLive(): Promise<StaffingSeed> {
+/**
+ * Нормы с правками лавок, но ещё со своими написаниями мест — из них вкладка
+ * «Функционалы» собирает список написаний (см. collectPlaces).
+ */
+export async function readStaffingUnnamed(): Promise<StaffingSeed> {
   const seed = readStaffing();
   try {
     return { ...seed, norms: applyStaffingEdits(seed.norms, await readStaffingEdits(), readStaffingBook().norms) };
@@ -188,6 +192,62 @@ export async function readStaffingLive(): Promise<StaffingSeed> {
     // когда вернётся база.
     return seed;
   }
+}
+
+/**
+ * Нормы из репозитория с правками сайта поверх и едиными названиями мест —
+ * то, что видят вкладка и выгрузки.
+ */
+export async function readStaffingLive(): Promise<StaffingSeed> {
+  const seed = await readStaffingUnnamed();
+  return { ...seed, norms: applyPlaceAliases(seed.norms, placeAliasMap(await readPlaceAliasesSafe())) };
+}
+
+/* ------------------------- единые названия мест ------------------------- */
+
+/** Строки словаря, сохранённые с сайта (без словаря по умолчанию). */
+export async function readPlaceAliases(): Promise<PlaceAlias[]> {
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgRows } = await import('./postgres');
+    return pgRows<{ place: string; name: string }>('SELECT place, name FROM radar_pg_staffing_places');
+  }
+  const db = await openManualDb();
+  if (!db) return [];
+  return db.prepare(`SELECT place, name FROM staffing_places`).all() as PlaceAlias[];
+}
+
+/** То же, но без базы — пустой список: названия идут по словарю по умолчанию. */
+export async function readPlaceAliasesSafe(): Promise<PlaceAlias[]> {
+  try {
+    return await readPlaceAliases();
+  } catch {
+    return [];
+  }
+}
+
+/** Сохранить строки словаря; остальные строки не трогаются. */
+export async function savePlaceAliases(aliases: readonly PlaceAlias[], now: string): Promise<void> {
+  const rows = aliases.map((a) => [placeKey(a.place), a.name, now] as const);
+  if (process.env.RADAR_STORAGE === 'postgres') {
+    const { pgTx } = await import('./postgres');
+    await pgTx(async (c) => {
+      for (const r of rows) {
+        await c.query(
+          'INSERT INTO radar_pg_staffing_places(place,name,updated_at) VALUES($1,$2,$3) ' +
+            'ON CONFLICT(place) DO UPDATE SET name=excluded.name,updated_at=excluded.updated_at',
+          [...r],
+        );
+      }
+    });
+    return;
+  }
+  const db = await openManualDb();
+  if (!db) throw new Error('Названия негде хранить: нет базы ручных данных');
+  const put = db.prepare(
+    `INSERT INTO staffing_places(place, name, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(place) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
+  );
+  db.transaction(() => rows.forEach((r) => put.run(...r)))();
 }
 
 export async function saveStaffingEdit(shopCode: string, roles: StaffingEdit['roles'], now: string): Promise<void> {

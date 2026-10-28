@@ -220,6 +220,15 @@ function migrate(db: BetterSqlite3.Database): void {
       updated_at TEXT NOT NULL
     );
 
+    -- Единые названия функционалов «Графика пиков» (вкладка «Функционалы»):
+    -- написание из книг (ключ — в нижнем регистре) → как называем во всех
+    -- лавках. См. staffing-places.ts.
+    CREATE TABLE IF NOT EXISTS staffing_places (
+      place      TEXT PRIMARY KEY,
+      name       TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     -- Ручные нарушения конкурса: одна запись = один постоянный штраф.
     CREATE TABLE IF NOT EXISTS contest_violations (
       id         TEXT PRIMARY KEY,
