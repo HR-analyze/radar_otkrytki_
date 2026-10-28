@@ -12,16 +12,53 @@ import { formatClock } from './time';
  * считает прямо в браузере, без похода за данными на каждую смену времени.
  */
 
-export type StaffRole = 'cashier' | 'cook' | 'barista' | 'cleaner';
+export type TemplateRole = 'cashier' | 'cook' | 'barista' | 'cleaner';
+export type ExtraRole = 'barDeputy' | 'hallDeputy' | 'picker';
+export type StaffRole = TemplateRole | ExtraRole;
 
-/** Порядок — как в шаблоне: так таблицу на сайте легко сверить с Excel. */
-export const STAFF_ROLES: readonly StaffRole[] = ['cashier', 'cook', 'barista', 'cleaner'];
+/** Должности из шаблона: у каждой свои окна. Порядок — как в шаблоне. */
+export const TEMPLATE_ROLES: readonly TemplateRole[] = ['cashier', 'cook', 'barista', 'cleaner'];
+
+/**
+ * Должности, которых в шаблоне нет: у каждой одно окно на весь день.
+ *
+ *   замы по бару и по залу — всегда по одному в каждой лавке, 6:30–18:00;
+ *   сборщик заказов        — где он есть в «ШР по лавкам», 7:00–16:00.
+ */
+export const EXTRA_ROLES: readonly ExtraRole[] = ['barDeputy', 'hallDeputy', 'picker'];
+
+export const STAFF_ROLES: readonly StaffRole[] = [...TEMPLATE_ROLES, ...EXTRA_ROLES];
+
+export function isExtraRole(role: StaffRole): role is ExtraRole {
+  return (EXTRA_ROLES as readonly StaffRole[]).includes(role);
+}
+
+/** Окно дополнительной должности; count — сколько, если не берётся из ШР. */
+export const EXTRA_ROLE_SLOT: Record<ExtraRole, StaffSlot> = {
+  barDeputy: { from: 6 * 60 + 30, to: 18 * 60, count: 1 },
+  hallDeputy: { from: 6 * 60 + 30, to: 18 * 60, count: 1 },
+  picker: { from: 7 * 60, to: 16 * 60, count: 0 },
+};
 
 export const STAFF_ROLE_TITLE: Record<StaffRole, string> = {
   cook: 'Повар',
   cashier: 'Кассир',
   barista: 'Бариста',
   cleaner: 'Уборщик',
+  barDeputy: 'ЗД по бару',
+  hallDeputy: 'ЗД по залу',
+  picker: 'Сборщик заказов',
+};
+
+/** Короткое название — для шапки таблицы, где на колонку пара сантиметров. */
+export const STAFF_ROLE_SHORT: Record<StaffRole, string> = {
+  cook: 'Повар',
+  cashier: 'Кассир',
+  barista: 'Бариста',
+  cleaner: 'Уборщик',
+  barDeputy: 'ЗД бар',
+  hallDeputy: 'ЗД зал',
+  picker: 'Сборщик',
 };
 
 /** Склонение для ответа калькулятора: «2 повара», «5 кассиров». */
@@ -30,6 +67,9 @@ export const STAFF_ROLE_FORMS: Record<StaffRole, [string, string, string]> = {
   cashier: ['кассир', 'кассира', 'кассиров'],
   barista: ['бариста', 'бариста', 'бариста'],
   cleaner: ['уборщик', 'уборщика', 'уборщиков'],
+  barDeputy: ['зам по бару', 'зама по бару', 'замов по бару'],
+  hallDeputy: ['зам по залу', 'зама по залу', 'замов по залу'],
+  picker: ['сборщик', 'сборщика', 'сборщиков'],
 };
 
 /** Часовое окно и сколько человек в нём должно быть. */
@@ -57,6 +97,29 @@ export interface StaffRoleNorm {
    * кофемашины нет.
    */
   hours: number | null;
+  /**
+   * Дислокации: кто где стоит в каждом окне, параллельно `slots` —
+   * posts[i] относится к slots[i]. Пустой массив — для окна не расписано;
+   * поля нет — для лавки не расписано вовсе.
+   */
+  posts?: StaffPost[][];
+}
+
+/**
+ * Пост — «2 прием», «1 кулинария, хлебка», «ЗД бар касса». Число людей есть
+ * не всегда: «ЗД зал касса» — это зам, его в число кассиров не считаем.
+ */
+export interface StaffPost {
+  count: number | null;
+  place: string;
+}
+
+/** Расстановка лавки целиком — то, что вписано под ней вне колонок окон. */
+export interface StaffLayout {
+  /** Рабочие места лавки: «2 кассы / 3 приема / ЗД бар / сборщик». */
+  stations: StaffPost[];
+  /** Пометки: «завтраки до 14 и 16», «не хватает 1 кассира…». */
+  remarks: string[];
 }
 
 export interface StaffNorm {
@@ -69,6 +132,8 @@ export interface StaffNorm {
   /** Есть ли кофемашина — от неё зависит, нужен ли бариста. */
   coffeeMachine: boolean | null;
   roles: Record<StaffRole, StaffRoleNorm>;
+  /** Расстановка; поля нет — лавку ещё не расписали. */
+  layout?: StaffLayout;
 }
 
 /** Ответ калькулятора по одной должности. */
@@ -137,14 +202,18 @@ export function monthlyHours(slots: readonly StaffSlot[]): number | null {
 }
 
 /**
- * Ставка в час, ₽. Сейчас у всех четырёх должностей одна — 310 ₽, но держим
- * по должности: поменяется у кого-то одного — правится одна строка.
+ * Ставка в час, ₽, по должности: у четырёх должностей шаблона — 310 ₽, у
+ * замов — 350 ₽, у сборщика — 280 ₽. Поменяется у кого-то — правится строка.
  */
 export const STAFF_HOURLY_RATE: Record<StaffRole, number> = {
   cashier: 310,
   cook: 310,
   barista: 310,
   cleaner: 310,
+  // Замы — 350 ₽/ч по постановке; сборщик — 280 ₽/ч, как в «ШР по лавкам».
+  barDeputy: 350,
+  hallDeputy: 350,
+  picker: 280,
 };
 
 /** Человеко-часы окна: человек × длина окна. null — окно «до N» без начала, а люди в нём есть. */
@@ -243,5 +312,90 @@ export function findStaffNorm(norms: readonly StaffNorm[], query: string | undef
     norms.find((n) => n.code.toLowerCase() === code) ??
     norms.find((n) => `${n.code} ${n.name}`.toLowerCase().includes(q)) ??
     null
+  );
+}
+
+/* ------------------------------ дислокации ------------------------------ */
+
+/**
+ * Пост из клетки шаблона: «1 касса/2 прием» → [1 касса, 2 прием].
+ *
+ * Пишут по-разному: через «/» и «\\», с пробелами и без («1касса»), с
+ * буквой должности («2к линия, 1ск касса» — 2 кассира, 1 старший кассир).
+ * Запятая людей не делит: «1 кулинария, хлебка» — один человек на двух
+ * местах. Одинаковые места в одном окне складываются: «1 кондитерка/1
+ * кулинария» — это 2 кулинария (см. normalizePlace).
+ */
+export function parsePosts(text: string | null | undefined): StaffPost[] {
+  const posts: StaffPost[] = [];
+  // «/» и «\\» делят людей всегда, запятая — только перед числом: «2к линия,
+  // 1ск касса» — двое разных, «1 кулинария, хлебка» — один на двух местах.
+  for (const raw of String(text ?? '').split(/[\/\\]+|,\s*(?=\d)/)) {
+    const seg = raw.replace(/\s+/g, ' ').trim();
+    if (!seg) continue;
+    // Число со звёздочкой, двоеточием или дефисом — время («11*-16*», «7:00»), не люди.
+    const m = /^(\d+)(?![\d*:.\-])\s*(?:(ск|к|п)(?=\s))?\s*(.*)$/i.exec(seg);
+    const count = m ? Number(m[1]) : null;
+    const rest = m ? m[3] : seg;
+    const senior = m?.[2]?.toLowerCase() === 'ск' ? 'ст. кассир: ' : '';
+    const place = normalizePlace(senior + rest);
+    if (!place) continue;
+    const same = posts.find((p) => p.place.toLowerCase() === place.toLowerCase() && p.count != null && count != null);
+    if (same) same.count! += count!;
+    else posts.push({ count, place });
+  }
+  return posts;
+}
+
+/**
+ * Одно место — одно название. Главное правило — «кондитерка = кулинария»:
+ * в одних лавках пишут так, в других этак, а место одно. Заодно «ё» → «е»
+ * («приём» и «прием» — одно) и обрезанное «кулинар» → «кулинария».
+ */
+export function normalizePlace(text: string): string {
+  return text
+    .replace(/ё/g, 'е')
+    .replace(/Ё/g, 'Е')
+    .replace(/кондитерск[а-я]*|кондитерк[а-я]*/gi, 'кулинария')
+    .replace(/кулинар(?![а-я])/gi, 'кулинария')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,;.+]+|[\s,;.+]+$/g, '')
+    .trim();
+}
+
+/** «2 прием · 1 касса · ЗД зал касса». */
+export function postsLabel(posts: readonly StaffPost[]): string {
+  return posts.map((p) => (p.count == null ? p.place : `${p.count} ${p.place}`)).join(' · ');
+}
+
+/** Слова, по которым в чужой колонке видно другую должность: «1 повар разогрев». */
+const OTHER_ROLE: Record<TemplateRole, RegExp> = {
+  cashier: /^(повар|бариста|уборщ|зд|зам|сборщ)/i,
+  cook: /^(кассир|бариста|уборщ|зд|зам|сборщ)/i,
+  barista: /^(кассир|повар|уборщ|зд|зам|сборщ)/i,
+  cleaner: /^(кассир|повар|бариста|зд|зам|сборщ)/i,
+};
+
+/**
+ * Сколько людей этой должности в расстановке окна — чтобы сверить с нормой.
+ * Посты без числа и посты другой должности («1 повар разогрев» в колонке
+ * кассира, «ЗД бар касса») не считаем. null — чисел в расстановке нет вовсе.
+ */
+export function postsHeadcount(posts: readonly StaffPost[], role: StaffRole): number | null {
+  const own = posts.filter((p) => p.count != null && !(role in OTHER_ROLE && OTHER_ROLE[role as TemplateRole].test(p.place)));
+  return own.length ? own.reduce((s, p) => s + p.count!, 0) : null;
+}
+
+/** «расписано 2 из 4» — расписали не всех; «расписано 5, по норме 4» — лишние. */
+export function offText(counted: number, norm: number): string {
+  return counted < norm ? `расписано ${counted} из ${norm}` : `расписано ${counted}, по норме ${norm}`;
+}
+
+/** Расписана ли у лавки хоть одна клетка. */
+export function hasLayout(norm: StaffNorm): boolean {
+  return (
+    (norm.layout?.stations.length ?? 0) > 0 ||
+    (norm.layout?.remarks.length ?? 0) > 0 ||
+    STAFF_ROLES.some((r) => norm.roles[r].posts?.some((p) => p.length > 0))
   );
 }

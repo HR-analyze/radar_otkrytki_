@@ -5,6 +5,7 @@ import {
   STAFF_ROLES,
   STAFF_ROLE_TITLE,
   pay,
+  postsLabel,
   roleTotals,
   slotPersonHours,
   slotShortLabel,
@@ -151,10 +152,12 @@ const DATA_HEADER = [
   'Чел.-ч',
   'Ставка, ₽/ч',
   'Заработок, ₽',
+  'Где стоят',
 ] as const;
 
 /**
- * Строка — одно окно одной должности в одной лавке. Неудобно читать глазами,
+ * Строка — одно окно одной должности в одной лавке, с расстановкой: кто где
+ * стоит («1 касса · 2 прием»). Неудобно читать глазами,
  * зато сводная таблица по такой строится в два клика: «заработок по грейдам»,
  * «сколько поваров в сети в 11–16» и что угодно ещё.
  */
@@ -163,7 +166,7 @@ function dataSheet(shown: StaffNorm[]): XLSX.WorkSheet {
   for (const n of shown) {
     for (const role of STAFF_ROLES) {
       const rate = STAFF_HOURLY_RATE[role];
-      for (const s of n.roles[role].slots) {
+      for (const [i, s] of n.roles[role].slots.entries()) {
         rows.push([
           n.code,
           n.name,
@@ -179,6 +182,8 @@ function dataSheet(shown: StaffNorm[]): XLSX.WorkSheet {
           slotPersonHours(s),
           rate,
           pay(slotPersonHours(s), rate),
+          // Дислокации окна, «кондитерка» уже приведена к «кулинарии».
+          postsLabel(n.roles[role].posts?.[i] ?? []),
         ]);
       }
     }
@@ -191,7 +196,7 @@ function dataSheet(shown: StaffNorm[]): XLSX.WorkSheet {
     numberFormat(sheet, r, 11, RUB);
     numberFormat(sheet, r, 12, RUB);
   }
-  sheet['!cols'] = [7, 28, 11, 11, 10, 11, 8, 8, 12, 9, 8, 11, 13].map((wch) => ({ wch }));
+  sheet['!cols'] = [7, 28, 11, 11, 16, 11, 8, 8, 12, 9, 8, 11, 13, 60].map((wch) => ({ wch }));
   sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ r: 0, c: 0 }, { r: rows.length, c: DATA_HEADER.length - 1 }) };
   return sheet;
 }
@@ -218,10 +223,13 @@ function notesSheet({ shown, source, builtAt, generatedAt = new Date() }: Staffi
       'Ставка',
       rates.length === 1
         ? `${rates[0]} ₽ в час у всех должностей.`
-        : STAFF_ROLES.map((r) => `${STAFF_ROLE_TITLE[r]} — ${STAFF_HOURLY_RATE[r]} ₽/ч`).join(', '),
+        : STAFF_ROLES.map((r) => `${STAFF_ROLE_TITLE[r]} — ${STAFF_HOURLY_RATE[r]} ₽/ч`).join(', ') + '.',
     ],
     ['Заработок, ₽', 'Человеко-часы × ставка. За окно, за день и за месяц; окна в сумме дают ровно день.'],
     ['Итого по сети', 'Функция ПРОМЕЖУТОЧНЫЕ.ИТОГИ: при включённом фильтре — только по видимым лавкам.'],
+    ['Замы', 'ЗД по бару и ЗД по залу — всегда по одному в каждой лавке, 6:30–18:00.'],
+    ['Сборщик заказов', 'Там, где он есть в «ШР по лавкам», 7:00–16:00.'],
+    ['Где стоят', 'Дислокации из строк под лавкой в шаблоне. Кондитерка и кулинария — одно место.'],
     [
       '«ЧЕЛ-КО часы»',
       'Колонка шаблона не используется: она посчитана от строки М1, а не от длины окон, и с днём не сходится.',

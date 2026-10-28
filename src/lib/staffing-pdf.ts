@@ -12,7 +12,14 @@ import {
 import {
   MONTH_DAYS,
   STAFF_HOURLY_RATE,
+  EXTRA_ROLES,
   STAFF_ROLES,
+  TEMPLATE_ROLES,
+  hasLayout,
+  isExtraRole,
+  offText,
+  postsHeadcount,
+  postsLabel,
   STAFF_ROLE_FORMS,
   STAFF_ROLE_TITLE,
   pay,
@@ -78,7 +85,12 @@ export function staffingReportDefinition(input: StaffingReportInput): TDocumentD
     totals: sumRoleTotals(shown.map((n) => roleTotals(n.roles[role], role))),
     peak: rolePeak(shown, role),
   }));
-  const all = sumRoleTotals(byRole.map((r) => r.totals));
+  // Штат — по должностям шаблона: у замов и сборщика FTE в шаблоне нет, и
+  // общий итог иначе стал бы неизвестным.
+  const all = {
+    ...sumRoleTotals(byRole.map((r) => r.totals)),
+    fte: sumRoleTotals(byRole.filter((r) => !isExtraRole(r.role)).map((r) => r.totals)).fte,
+  };
 
   return {
     pageSize: 'A4',
@@ -109,7 +121,9 @@ export function staffingReportDefinition(input: StaffingReportInput): TDocumentD
       // Вся сеть — каждая должность с нового листа: разорванная посередине,
       // таблица поваров читалась бы как хвост кассиров. Одна лавка — все четыре
       // подряд на втором листе: по строке на должность листы были бы пустыми.
-      ...STAFF_ROLES.map((role, i) => roleSection(shown, role, one == null || i === 0)),
+      ...TEMPLATE_ROLES.map((role, i) => roleSection(shown, role, one == null || i === 0)),
+      extrasSection(shown, one == null),
+      ...(one && hasLayout(one) ? [layoutSection(one)] : []),
     ],
     styles: {
       h1: { fontSize: 16, bold: true },
@@ -159,9 +173,9 @@ function header(shown: StaffNorm[], one: StaffNorm | null, generatedAt: Date): C
 function kpiRow(all: StaffRoleTotals, shops: number, one: StaffNorm | null): Content {
   const tiles: [string, string, string][] = [
     ['Человеко-часов в день', num(all.day), `в месяц — ${num(all.month)}`],
-    ['Заработок в день', `${num(all.dayPay)} ₽`, rateText()],
+    ['Заработок в день', `${num(all.dayPay)} ₽`, 'по ставкам должностей'],
     ['Заработок в месяц', `${num(all.monthPay)} ₽`, `день × ${MONTH_DAYS}`],
-    ['Штат, FTE', num(all.fte), one ? 'по шаблону' : `на ${shops} ${plural(shops, 'лавку', 'лавки', 'лавок')}`],
+    ['Штат, FTE', num(all.fte), one ? 'без замов и сборщика' : `на ${shops} ${plural(shops, 'лавку', 'лавки', 'лавок')}, без замов и сборщиков`],
   ];
   return { columns: tiles.map(([title, value, hint]) => tile(title, value, hint)) };
 }
@@ -241,6 +255,9 @@ const ROLE_COLOR: Record<StaffRole, string> = {
   cook: '#f59e0b',
   barista: '#a855f7',
   cleaner: '#14b8a6',
+  barDeputy: '#e11d48',
+  hallDeputy: '#0ea5e9',
+  picker: '#84cc16',
 };
 
 /** Ширина полосы набора: A4 альбомом минус поля. */
@@ -528,6 +545,140 @@ function totalsCells(t: StaffRoleTotals, bold = false, fillColor?: string): Tabl
   ];
 }
 
+/* --------------------------- замы и сборщик ---------------------------- */
+
+/**
+ * Замы и сборщик — одной таблицей, а не разделом на должность: окно у них
+ * одно на весь день, и по сети таблица из 82 строк «1» ничего бы не сказала.
+ * По сети — сколько их и во что обходятся, плюс где есть сборщик.
+ */
+function extrasSection(shown: StaffNorm[], breakBefore: boolean): Content {
+  const many = shown.length > 1;
+  const head: TableCell[] = [
+    { text: 'Должность', style: 'th' },
+    { text: 'Окно', style: 'th' },
+    { text: 'Ставка', style: 'th', alignment: 'right' },
+    ...(many ? [{ text: 'Лавок', style: 'th', alignment: 'right' } as TableCell] : []),
+    { text: 'Человек', style: 'th', alignment: 'right' },
+    { text: 'Чел.-ч в день', style: 'th', alignment: 'right' },
+    { text: '₽ в день', style: 'th', alignment: 'right' },
+    { text: '₽ в месяц', style: 'th', alignment: 'right' },
+  ];
+  const body: TableCell[][] = EXTRA_ROLES.map((role) => {
+    const t = sumRoleTotals(shown.map((n) => roleTotals(n.roles[role], role)));
+    const people = shown.reduce((s, n) => s + n.roles[role].slots[0].count, 0);
+    const shops = shown.filter((n) => n.roles[role].slots[0].count > 0).length;
+    return [
+      { text: STAFF_ROLE_TITLE[role], bold: true },
+      { text: slotLabel(shown[0].roles[role].slots[0]), color: MUTED },
+      { text: `${STAFF_HOURLY_RATE[role]} ₽/ч`, alignment: 'right', color: MUTED },
+      ...(many ? [{ text: `${shops} из ${shown.length}`, alignment: 'right', color: MUTED } as TableCell] : []),
+      { text: num(people), alignment: 'right', bold: true },
+      { text: num(t.day), alignment: 'right' },
+      { text: num(t.dayPay), alignment: 'right' },
+      { text: num(t.monthPay), alignment: 'right', bold: true },
+    ];
+  });
+
+  const pickers = shown.filter((n) => n.roles.picker.slots[0].count > 0).map((n) => n.code);
+  return {
+    pageBreak: breakBefore ? 'before' : undefined,
+    margin: [0, breakBefore ? 0 : 16, 0, 0],
+    stack: [
+      { text: 'Замы и сборщик заказов', style: 'h2' },
+      {
+        text:
+          'Замы по бару и по залу — всегда по одному в лавке, 6:30–18:00. Сборщик — там, где он есть ' +
+          'в «ШР по лавкам», 7:00–16:00.',
+        fontSize: 7.5,
+        color: MUTED,
+        margin: [0, 2, 0, 6],
+      },
+      {
+        table: { headerRows: 1, widths: [90, 70, 50, ...(many ? [50] : []), 50, '*', '*', '*'], body: [head, ...body] },
+        layout: gridLayout(1, 0, false),
+      },
+      ...(many
+        ? [
+            {
+              text: [
+                { text: `Сборщик заказов есть в ${pickers.length} ${plural(pickers.length, 'лавке', 'лавках', 'лавках')}: `, bold: true },
+                pickers.join(', ') || '—',
+              ],
+              fontSize: 7,
+              color: MUTED,
+              margin: [0, 6, 0, 0],
+            } as Content,
+          ]
+        : []),
+    ],
+  };
+}
+
+/* ------------------------- расстановка лавки --------------------------- */
+
+/**
+ * Кто где стоит: по каждой должности окна, норма и посты из шаблона. Не
+ * сходится расстановка с нормой («расписано 2 из 4») — так и
+ * пишем: это вопрос к тому, кто расписывал, а не опечатка в отчёте.
+ */
+function layoutSection(norm: StaffNorm): Content {
+  const head: TableCell[] = [
+    { text: 'Должность', style: 'th' },
+    { text: 'Окно', style: 'th' },
+    { text: 'По норме', style: 'th', alignment: 'right' },
+    { text: 'Где стоят', style: 'th' },
+  ];
+  const body: TableCell[][] = [];
+  for (const role of STAFF_ROLES) {
+    const r = norm.roles[role];
+    const rows = r.slots
+      .map((slot, i) => ({ slot, posts: r.posts?.[i] ?? [] }))
+      .filter(({ slot, posts }) => slot.count > 0 || posts.length > 0);
+    rows.forEach(({ slot, posts }, i) => {
+      const counted = postsHeadcount(posts, role);
+      const off = counted != null && counted !== slot.count;
+      body.push([
+        i === 0
+          ? { text: STAFF_ROLE_TITLE[role], bold: true, rowSpan: rows.length }
+          : {},
+        { text: slotLabel(slot), color: MUTED },
+        { text: num(slot.count), alignment: 'right', bold: true },
+        {
+          text: [
+            { text: posts.length ? postsLabel(posts) : 'не расписано', color: posts.length ? INK : MUTED },
+            off ? { text: `   ${offText(counted!, slot.count)}`, color: '#b45309', fontSize: 7 } : '',
+          ],
+        },
+      ]);
+    });
+  }
+
+  const layout = norm.layout;
+  return {
+    pageBreak: 'before',
+    stack: [
+      { text: 'Расстановка по дислокациям', style: 'h2' },
+      {
+        text: `${norm.code} ${norm.name}: кто где стоит в каждом окне — как расписано в шаблоне. Кондитерка и кулинария — одно место.`,
+        fontSize: 7.5,
+        color: MUTED,
+        margin: [0, 2, 0, 6],
+      },
+      ...(layout?.stations.length
+        ? [{ text: [{ text: 'Рабочие места: ', bold: true }, postsLabel(layout.stations)], margin: [0, 0, 0, 3] } as Content]
+        : []),
+      ...(layout?.remarks.length
+        ? [{ text: [{ text: 'Пометки: ', bold: true }, layout.remarks.join('; ')], margin: [0, 0, 0, 6] } as Content]
+        : []),
+      {
+        table: { headerRows: 1, dontBreakRows: true, widths: [90, 70, 44, '*'], body: [head, ...body] },
+        layout: gridLayout(1, 0, false),
+      },
+    ],
+  };
+}
+
 /* -------------------------------- мелочи -------------------------------- */
 
 /**
@@ -575,9 +726,13 @@ function num(n: number | null): string {
   return frac ? `${grouped},${frac}` : grouped;
 }
 
+/** «Ставки: 310 ₽/ч — кассир, повар…; 350 ₽/ч — ЗД по бару, ЗД по залу». */
 function rateText(): string {
   const rates = [...new Set(STAFF_ROLES.map((r) => STAFF_HOURLY_RATE[r]))];
-  return rates.length === 1
-    ? `Ставка ${rates[0]} ₽/ч у всех должностей`
-    : `Ставки: ${STAFF_ROLES.map((r) => `${STAFF_ROLE_TITLE[r].toLowerCase()} ${STAFF_HOURLY_RATE[r]} ₽/ч`).join(', ')}`;
+  if (rates.length === 1) return `Ставка ${rates[0]} ₽/ч у всех должностей`;
+  const groups = rates.map((rate) => {
+    const roles = STAFF_ROLES.filter((r) => STAFF_HOURLY_RATE[r] === rate).map((r) => STAFF_ROLE_TITLE[r].replace(/^[А-Я][а-я]/, (w) => w.toLowerCase()));
+    return `${rate} ₽/ч — ${roles.join(', ')}`;
+  });
+  return `Ставки: ${groups.join('; ')}`;
 }

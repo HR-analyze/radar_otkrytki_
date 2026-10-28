@@ -2,9 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import {
+  EXTRA_ROLES,
   STAFF_ROLES,
   STAFF_ROLE_FORMS,
+  STAFF_ROLE_SHORT,
   STAFF_ROLE_TITLE,
+  TEMPLATE_ROLES,
+  postsLabel,
   MONTH_DAYS,
   STAFF_HOURLY_RATE,
   dailyHours,
@@ -21,6 +25,7 @@ import {
 import { formatClock, minutesNowMsk } from '@/lib/time';
 import { plural } from '@/lib/plural';
 import { Hint } from './Hint';
+import { StaffingLayout } from './StaffingLayout';
 
 /**
  * График пиков: калькулятор «лавка + время → сколько людей на смене» и под
@@ -54,7 +59,10 @@ export function StaffingBoard({
   const at = useMemo(() => (norm ? staffAt(norm, minutes) : staffAtAll(norms, minutes)), [norm, norms, minutes]);
   const total = at.reduce((a, r) => a + r.count, 0);
   const rates = [...new Set(STAFF_ROLES.map((r) => STAFF_HOURLY_RATE[r]))];
-  const rateLabel = rates.length === 1 ? `${rates[0]} ₽/ч` : 'ставку должности';
+  const rateLabel =
+    rates.length === 1
+      ? `${rates[0]} ₽/ч`
+      : `ставку должности (${rates.map((rate) => `${rate} ₽/ч — ${STAFF_ROLES.filter((r) => STAFF_HOURLY_RATE[r] === rate).map((r) => STAFF_ROLE_SHORT[r].toLowerCase()).join(', ')}`).join('; ')})`;
 
   const pick = (next: { code?: string | null; minutes?: number }) => {
     const c = next.code !== undefined ? next.code : code;
@@ -153,21 +161,28 @@ export function StaffingBoard({
             {total === 0 && <span className="muted"> — по шаблону в это время смены нет</span>}
           </p>
 
-          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {at.map((a) => (
-              <div key={a.role} className="rounded-lg border p-3" style={{ borderColor: 'var(--border)' }}>
-                <div className="text-xs muted">{STAFF_ROLE_TITLE[a.role]}</div>
-                <div className={`mt-1 text-3xl font-semibold tabular-nums ${a.count === 0 ? 'muted' : ''}`}>
-                  {formatCount(a.count)}
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+            {at.map((a) => {
+              // Где эти люди стоят сейчас — дислокации окна, если лавку расписали.
+              const posts = norm && a.slot ? norm.roles[a.role].posts?.[norm.roles[a.role].slots.indexOf(a.slot)] : undefined;
+              return (
+                <div key={a.role} className="rounded-lg border p-3" style={{ borderColor: 'var(--border)' }}>
+                  <div className="text-xs muted">{STAFF_ROLE_TITLE[a.role]}</div>
+                  <div className={`mt-1 text-3xl font-semibold tabular-nums ${a.count === 0 ? 'muted' : ''}`}>
+                    {formatCount(a.count)}
+                  </div>
+                  <div className="mt-0.5 text-xs muted">
+                    {a.slot ? `окно ${slotLabel(a.slot)}` : 'вне окон шаблона'}
+                  </div>
+                  {posts && posts.length > 0 && <div className="mt-1.5 text-xs leading-snug">{postsLabel(posts)}</div>}
                 </div>
-                <div className="mt-0.5 text-xs muted">
-                  {a.slot ? `окно ${slotLabel(a.slot)}` : 'вне окон шаблона'}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
+
+      <StaffingLayout norm={norm} norms={norms} minutes={minutes} onPick={(c) => pick({ code: c })} />
 
       {/* --- шаблон целиком --- */}
       <section className="flex flex-col gap-2">
@@ -200,7 +215,8 @@ export function StaffingBoard({
             Сколько человек должно быть на смене в каждом окне, а под ними — сколько они заработают, ₽: человек ×
             часы × {rateLabel}. Подсвечены окна, в которые попадает {formatClock(minutes)}. Клик по строке оставит в
             таблице одну эту лавку, вернуть всю сеть — «Все лавки» в фильтре. FTE — итого по штату, ч/мес и ч/день —
-            человеко-часы: за день по окнам, за месяц — день × {MONTH_DAYS}.
+            человеко-часы: за день по окнам, за месяц — день × {MONTH_DAYS}. Замы — по одному в лавке,
+            6:30–18:00, сборщик — по ШР, 7:00–16:00; под числом у них заработок за день.
           </p>
         </div>
         <div className="surface radar-scroll staffing-scroll">
@@ -211,7 +227,7 @@ export function StaffingBoard({
                 <th rowSpan={2} className="radar-sticky px-2 py-2 text-left text-xs font-medium muted">
                   Лавка
                 </th>
-                {STAFF_ROLES.map((role) => (
+                {TEMPLATE_ROLES.map((role) => (
                   <th
                     key={role}
                     colSpan={head.roles[role].slots.length + 3}
@@ -221,9 +237,16 @@ export function StaffingBoard({
                     {STAFF_ROLE_TITLE[role]}
                   </th>
                 ))}
+                <th
+                  colSpan={EXTRA_ROLES.length}
+                  className="px-2 pt-2 text-center text-xs font-semibold whitespace-nowrap"
+                  style={{ borderLeft: '1px solid var(--border)' }}
+                >
+                  Замы и сборщик
+                </th>
               </tr>
               <tr>
-                {STAFF_ROLES.flatMap((role) => {
+                {TEMPLATE_ROLES.flatMap((role) => {
                   const slots = head.roles[role].slots;
                   const active = slotAt(slots, minutes);
                   return [
@@ -234,7 +257,7 @@ export function StaffingBoard({
                       return (
                         <th
                           key={`${role}-${i}`}
-                          className="px-[3px] py-1 text-center text-[11px] leading-tight font-medium whitespace-nowrap muted"
+                          className="px-[2px] py-1 text-center text-[11px] leading-tight font-medium whitespace-nowrap muted"
                           style={{
                             ...(i === 0 && { borderLeft: '1px solid var(--border)' }),
                             ...(s === active && { background: ACTIVE_COLUMN, color: 'var(--text)' }),
@@ -252,22 +275,43 @@ export function StaffingBoard({
                         </th>
                       );
                     }),
-                    <th key={`${role}-fte`} className="px-[3px] py-1 text-center text-[11px] font-medium muted">
+                    <th key={`${role}-fte`} className="px-[2px] py-1 text-center text-[11px] font-medium muted">
                       <Hint text="Итого по штату" below>
                         FTE
                       </Hint>
                     </th>,
-                    <th key={`${role}-h`} className="px-[3px] py-1 text-center text-[11px] font-medium whitespace-nowrap muted">
+                    <th key={`${role}-h`} className="px-[2px] py-1 text-center text-[11px] font-medium whitespace-nowrap muted">
                       <Hint text={MONTH_HINT} below>
                         ч/мес
                       </Hint>
                     </th>,
-                    <th key={`${role}-d`} className="px-[3px] py-1 text-center text-[11px] font-medium whitespace-nowrap muted">
+                    <th key={`${role}-d`} className="px-[2px] py-1 text-center text-[11px] font-medium whitespace-nowrap muted">
                       <Hint text={DAY_HINT} below>
                         ч/день
                       </Hint>
                     </th>,
                   ];
+                })}
+                {/* У замов и сборщика окно одно на весь день — по колонке на должность. */}
+                {EXTRA_ROLES.map((role, i) => {
+                  const s = head.roles[role].slots[0];
+                  const on = slotAt([s], minutes) != null;
+                  return (
+                    <th
+                      key={role}
+                      className="px-[2px] py-1 text-center text-[11px] leading-tight font-medium whitespace-nowrap muted"
+                      style={{
+                        ...(i === 0 && { borderLeft: '1px solid var(--border)' }),
+                        ...(on && { background: ACTIVE_COLUMN, color: 'var(--text)' }),
+                      }}
+                    >
+                      <Hint text={`${STAFF_ROLE_TITLE[role]}: ${slotLabel(s)}, ${STAFF_HOURLY_RATE[role]} ₽/ч. Под числом — заработок за день, ₽`} below>
+                        {EXTRA_HEAD[role][0]}
+                        <br />
+                        {EXTRA_HEAD[role][1]}
+                      </Hint>
+                    </th>
+                  );
                 })}
               </tr>
             </thead>
@@ -291,14 +335,14 @@ export function StaffingBoard({
                         title={`${n.code} ${n.name}`}
                         // Длинное название («Даниловская мануфактура») раздувало колонку на
                         // сотню пикселей, и таблица не влезала в экран — режем многоточием.
-                        className={`block max-w-[8.5rem] truncate text-left hover:underline ${selected ? 'font-semibold' : ''}`}
+                        className={`block max-w-[7.5rem] truncate text-left hover:underline ${selected ? 'font-semibold' : ''}`}
                       >
                         {n.code} {n.name}
                       </button>
                       {/* Грейд — под названием, а не отдельной колонкой: строка и так в два этажа, а колонка съедала ширину. */}
                       {n.grade && <div className="text-[10px] muted">{n.grade}</div>}
                     </td>
-                    {STAFF_ROLES.flatMap((role) => {
+                    {TEMPLATE_ROLES.flatMap((role) => {
                       const r = n.roles[role];
                       const rate = STAFF_HOURLY_RATE[role];
                       const active = slotAt(r.slots, minutes);
@@ -308,7 +352,7 @@ export function StaffingBoard({
                         ...r.slots.map((s, i) => (
                           <td
                             key={`${role}-${i}`}
-                            className={`px-[3px] py-1 text-center text-xs whitespace-nowrap tabular-nums ${s.count === 0 ? 'muted' : ''}`}
+                            className={`px-[2px] py-1 text-center text-xs whitespace-nowrap tabular-nums ${s.count === 0 ? 'muted' : ''}`}
                             style={{
                               ...(i === 0 && { borderLeft: '1px solid var(--border)' }),
                               ...(selected && { background: SELECTED_ROW }),
@@ -321,14 +365,14 @@ export function StaffingBoard({
                         )),
                         <td
                           key={`${role}-fte`}
-                          className="px-[3px] py-1 text-center text-xs tabular-nums muted"
+                          className="px-[2px] py-1 text-center text-xs tabular-nums muted"
                           style={selected ? { background: SELECTED_ROW } : undefined}
                         >
                           {r.fte == null ? '—' : formatCount(r.fte)}
                         </td>,
                         <td
                           key={`${role}-h`}
-                          className="px-[3px] py-1 text-center text-xs whitespace-nowrap tabular-nums muted"
+                          className="px-[2px] py-1 text-center text-xs whitespace-nowrap tabular-nums muted"
                           style={selected ? { background: SELECTED_ROW } : undefined}
                         >
                           {month == null ? '—' : formatCount(month)}
@@ -336,13 +380,31 @@ export function StaffingBoard({
                         </td>,
                         <td
                           key={`${role}-d`}
-                          className="px-[3px] py-1 text-center text-xs whitespace-nowrap tabular-nums muted"
+                          className="px-[2px] py-1 text-center text-xs whitespace-nowrap tabular-nums muted"
                           style={selected ? { background: SELECTED_ROW } : undefined}
                         >
                           {day == null ? '—' : formatCount(day)}
                           <Rub value={pay(day, rate)} />
                         </td>,
                       ];
+                    })}
+                    {EXTRA_ROLES.map((role, i) => {
+                      const s = n.roles[role].slots[0];
+                      const on = slotAt([s], minutes) != null;
+                      return (
+                        <td
+                          key={role}
+                          className={`px-[2px] py-1 text-center text-xs whitespace-nowrap tabular-nums ${s.count === 0 ? 'muted' : ''}`}
+                          style={{
+                            ...(i === 0 && { borderLeft: '1px solid var(--border)' }),
+                            ...(selected && { background: SELECTED_ROW }),
+                            ...(on && { background: selected ? SELECTED_CELL : ACTIVE_COLUMN, fontWeight: 600 }),
+                          }}
+                        >
+                          {formatCount(s.count)}
+                          <Rub value={pay(slotPersonHours(s), STAFF_HOURLY_RATE[role])} />
+                        </td>
+                      );
                     })}
                   </tr>
                 );
@@ -354,6 +416,17 @@ export function StaffingBoard({
     </div>
   );
 }
+
+/**
+ * Шапка колонок замов и сборщика — в две строки, а окно — в подсказке и в
+ * подписи над таблицей: «ЗД бар 6:30–18» в одну строку раздвигал таблицу
+ * за край экрана в 1440 px.
+ */
+const EXTRA_HEAD: Record<(typeof EXTRA_ROLES)[number], [string, string]> = {
+  barDeputy: ['ЗД', 'бар'],
+  hallDeputy: ['ЗД', 'зал'],
+  picker: ['Сбор-', 'щик'],
+};
 
 /**
  * Подложка окна, в которое попало выбранное время. Непрозрачная: шапка с

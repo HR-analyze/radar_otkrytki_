@@ -56,8 +56,8 @@ test('«все лавки»: по каждой должности сумма н�
 test('человеко-часы в день: человек в окне × длина окна, сложено за смену', () => {
   const m50 = findStaffNorm(readStaffing().norms, 'М50');
   assert.ok(m50, 'М50 нет в нормах');
-  // 2·1 + 4·3,5 + 4·5 + 4·1,5 + 4·3,5 + 3·2
-  assert.equal(dailyHours(m50.roles.cashier.slots), 62);
+  // 2·1 + 5·3,5 + 5·5 + 5·1,5 + 5·3,5 + 3·2 — у М50 кассиров 5: правка из книги ТД
+  assert.equal(dailyHours(m50.roles.cashier.slots), 75.5);
   // 4·1,5 + 4·3 + 4·5 + 3·2 + 1·2 + 0·3
   assert.equal(dailyHours(m50.roles.cook.slots), 46);
   assert.equal(dailyHours([{ from: 390, to: 450, count: 1 }, { from: 450, to: 480, count: 1 }]), 1.5, 'полчаса — 0,5');
@@ -71,7 +71,7 @@ test('человеко-часы в день: окно «до N» без нача
 test('человеко-часы в месяц сходятся с днём: день × 31', () => {
   const { norms } = readStaffing();
   const m50 = findStaffNorm(norms, 'М50')!;
-  assert.equal(monthlyHours(m50.roles.cashier.slots), 1922, '62 × 31');
+  assert.equal(monthlyHours(m50.roles.cashier.slots), 2340.5, '75,5 × 31');
   assert.equal(monthlyHours(m50.roles.cook.slots), 1426, '46 × 31');
   for (const n of norms) {
     for (const role of STAFF_ROLES) {
@@ -84,13 +84,17 @@ test('человеко-часы в месяц сходятся с днём: де
 
 test('деньги: человек × часы окна × 310 ₽, и окна в сумме дают день', () => {
   const { norms } = readStaffing();
-  assert.ok(STAFF_ROLES.every((role) => STAFF_HOURLY_RATE[role] === 310), 'ставка у всех должностей 310 ₽/ч');
+  assert.deepEqual(
+    STAFF_ROLES.map((role) => STAFF_HOURLY_RATE[role]),
+    [310, 310, 310, 310, 350, 350, 280],
+    'шаблон — 310 ₽/ч, замы — 350, сборщик — 280',
+  );
   const m50 = findStaffNorm(norms, 'М50')!;
   const cashier = m50.roles.cashier;
-  // 7:30–11, 4 кассира: 4 × 3,5 × 310
-  assert.equal(pay(slotPersonHours(cashier.slots[1]), 310), 4340);
-  assert.equal(pay(dailyHours(cashier.slots), 310), 19220, '62 × 310');
-  assert.equal(pay(monthlyHours(cashier.slots), 310), 595820, '1922 × 310');
+  // 7:30–11, 5 кассиров: 5 × 3,5 × 310
+  assert.equal(pay(slotPersonHours(cashier.slots[1]), 310), 5425);
+  assert.equal(pay(dailyHours(cashier.slots), 310), 23405, '75,5 × 310');
+  assert.equal(pay(monthlyHours(cashier.slots), 310), 725555, '2340,5 × 310');
 
   for (const n of norms) {
     for (const role of STAFF_ROLES) {
@@ -125,16 +129,16 @@ test('«ЧЕЛ-КО часы» из шаблона = (норма окна × н�
 test('итоги должности: штат, часы и рубли, по сети — сумма, пик — по сумме окон', () => {
   const { norms } = readStaffing();
   const m50 = findStaffNorm(norms, 'М50')!;
-  assert.deepEqual(roleTotals(m50.roles.cashier, 'cashier'), { fte: 9, day: 62, month: 1922, dayPay: 19220, monthPay: 595820 });
+  assert.deepEqual(roleTotals(m50.roles.cashier, 'cashier'), { fte: 10, day: 75.5, month: 2340.5, dayPay: 23405, monthPay: 725555 });
 
   const two = [m50, findStaffNorm(norms, 'М1')!];
   const sum = sumRoleTotals(two.map((n) => roleTotals(n.roles.cashier, 'cashier')));
-  assert.deepEqual(sum, { fte: 15, day: 101.5, month: 3146.5, dayPay: 31465, monthPay: 975415 });
+  assert.deepEqual(sum, { fte: 16, day: 115, month: 3565, dayPay: 35650, monthPay: 1105150 });
   assert.equal(sumRoleTotals([{ fte: null, day: 1, month: 31, dayPay: 310, monthPay: 9610 }]).fte, null, 'без числа — неизвестно');
 
-  // М50: кассиров по 4 с 7:30 до 21 — пик первое такое окно.
+  // М50: кассиров по 5 с 7:30 до 21 — пик первое такое окно.
   const peak = rolePeak([m50], 'cashier')!;
-  assert.equal(peak.count, 4);
+  assert.equal(peak.count, 5);
   assert.equal(peak.slot.from, 450);
   assert.equal(rolePeak([findStaffNorm(norms, 'М1')!], 'barista'), null, 'в М1 бариста нет');
 });
