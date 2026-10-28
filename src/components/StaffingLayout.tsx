@@ -12,6 +12,7 @@ import {
   postsLabel,
   slotAt,
   slotLabel,
+  slotShortLabel,
   type StaffNorm,
   type StaffRole,
   type StaffSlot,
@@ -203,20 +204,31 @@ function RoleRow({
       <div className="pr-2 pt-1.5 text-sm font-medium" style={{ gridRow: row, gridColumn: 1 }}>
         {STAFF_ROLE_TITLE[role]}
       </div>
-      {r.slots.map((slot, i) => (
-        <Block
-          key={i}
-          slot={slot}
-          posts={r.posts?.[i] ?? []}
-          role={role}
-          active={slot === active}
-          style={{ gridRow: row, gridColumn: `${col(slot.from ?? slot.to - STEP)} / ${col(slot.to)}` }}
-        />
-      ))}
+      {r.slots.map((slot, i) => {
+        const posts = r.posts?.[i] ?? [];
+        // Пустое окно («0 чел., никого») блоком не рисуем: оно только
+        // занимало место и отвлекало от тех окон, где люди есть.
+        if (slot.count === 0 && posts.length === 0) return null;
+        return (
+          <Block
+            key={i}
+            slot={slot}
+            posts={posts}
+            role={role}
+            active={slot === active}
+            style={{ gridRow: row, gridColumn: `${col(slot.from ?? slot.to - STEP)} / ${col(slot.to)}` }}
+          />
+        );
+      })}
     </>
   );
 }
 
+/**
+ * Блок окна. Читается сверху вниз: время окна, сколько человек — плашкой, и
+ * посты, где число людей выделено жирным: «**4** линия». Шрифт крупнее, чем
+ * в остальной таблице, — это главное, ради чего блок открывают.
+ */
 function Block({
   slot,
   posts,
@@ -234,37 +246,49 @@ function Block({
   const off = counted != null && counted !== slot.count;
   return (
     <div
-      className="mx-px min-w-0 rounded-md border px-1.5 py-1 text-xs leading-snug"
+      className="mx-0.5 flex min-w-0 flex-col gap-1 rounded-lg border px-2 py-1.5 text-[13px] leading-snug"
       title={`${slotLabel(slot)} · ${slot.count} чел.${posts.length ? ` · ${postsLabel(posts)}` : ''}`}
       style={{
         ...style,
-        borderColor: off ? 'var(--red)' : 'var(--border)',
+        borderColor: off ? 'var(--red)' : active ? 'var(--focus)' : 'var(--border)',
         borderWidth: off ? 2 : 1,
         ...(active && { background: ACTIVE }),
-        ...(slot.count === 0 && posts.length === 0 && { opacity: 0.55 }),
       }}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-x-1.5">
-        <span className="font-semibold tabular-nums">{slotLabel(slot)}</span>
-        <span className="font-semibold tabular-nums">{slot.count} чел.</span>
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+        <span className="font-bold tabular-nums" style={{ color: 'var(--text)' }}>
+          {slotShortLabel(slot)}
+        </span>
+        <span
+          className="rounded px-1.5 py-px text-xs font-bold tabular-nums"
+          style={{ background: COUNT_BG, color: 'var(--text)' }}
+        >
+          {slot.count} чел.
+        </span>
       </div>
       {posts.length > 0 ? (
-        <ul className="mt-0.5">
+        <ul className="flex flex-col gap-0.5">
           {posts.map((p, k) => (
-            <li key={k}>{p.count == null ? p.place : `${p.count} ${p.place}`}</li>
+            <li key={k} style={{ color: 'var(--text)' }}>
+              {p.count != null && <b className="tabular-nums">{p.count} </b>}
+              {p.place}
+            </li>
           ))}
         </ul>
       ) : (
-        <div className="mt-0.5 muted">{slot.count === 0 ? 'никого' : 'не расписано'}</div>
+        <div className="text-xs italic muted">не расписано</div>
       )}
       {off && (
-        <div className="mt-0.5 font-semibold" style={{ color: 'var(--red)' }}>
+        <div className="text-xs font-bold" style={{ color: 'var(--red)' }}>
           {offText(counted, slot.count)}
         </div>
       )}
     </div>
   );
 }
+
+/** Плашка «5 чел.»: заметна и в светлой, и в тёмной теме. */
+const COUNT_BG = 'color-mix(in srgb, var(--text) 10%, transparent)';
 
 /** Окно, в которое попадает время: та же подложка, что у столбца в таблице. */
 const ACTIVE = 'color-mix(in srgb, var(--focus) 12%, var(--surface))';
