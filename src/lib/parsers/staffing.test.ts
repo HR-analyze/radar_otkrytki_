@@ -143,10 +143,10 @@ test('дислокации: строки под лавкой — посты ок
   const [m1, m73] = norms;
   const cashier = m1.roles.cashier.posts!;
   assert.deepEqual(cashier[0], [{ count: 2, place: 'кулинария' }], 'кондитерка = кулинария, места складываются');
-  assert.deepEqual(cashier[1].map((p) => p.place), ['касса', 'прием', 'повар разогрев']);
-  assert.deepEqual(cashier[2], [{ count: 2, place: 'прием' }, { count: 1, place: 'касса' }], 'вторая строка — то же окно');
+  assert.deepEqual(cashier[1].map((p) => p.place), ['касса', 'официант', 'повар разогрев']);
+  assert.deepEqual(cashier[2], [{ count: 2, place: 'официант' }, { count: 1, place: 'касса' }], 'вторая строка — то же окно');
   assert.deepEqual(m1.roles.cook.posts![0].map((p) => p.count), [1, 1]);
-  assert.deepEqual(m1.layout?.stations, [{ count: 2, place: 'кассы' }, { count: 3, place: 'прием' }]);
+  assert.deepEqual(m1.layout?.stations, [{ count: 2, place: 'кассы' }, { count: 3, place: 'официант' }]);
   assert.deepEqual(m1.layout?.remarks, ['не хватает 1 кассира']);
 
   // Под М73 сразу идёт служебная строка, а строка-образец ниже неё — не М73.
@@ -175,7 +175,16 @@ test('дислокации: «ЗД …» в окнах других должно
   const posts: unknown[] = HEADER.map(() => null);
   posts[5] = '4 прием(доставка)/ЗД зал касса/зд касса/1 ЗД прием/зам доставка/1 разогрев';
   const { norms } = parseStaffing(book([M1, posts, DURATIONS]));
-  assert.deepEqual(norms[0].roles.cashier.posts![1].map((p) => p.place), ['прием(доставка)', 'разогрев']);
+  assert.deepEqual(norms[0].roles.cashier.posts![1].map((p) => p.place), ['официант(доставка)', 'разогрев']);
   assert.deepEqual(norms[0].roles.barDeputy.posts, [[{ count: 1, place: 'касса' }]]);
   assert.deepEqual(norms[0].roles.hallDeputy.posts, [[{ count: 1, place: 'касса' }]]);
+});
+
+test('«прием» — это официант, кроме «прием поставки» у поваров', () => {
+  const posts: unknown[] = HEADER.map(() => null);
+  posts[5] = '2 приём/1 приема( доставка)';
+  posts[9] = '1 прием поставки/1 приготовление продукции';
+  const [m1] = parseStaffing(book([M1, posts, DURATIONS])).norms;
+  assert.deepEqual(m1.roles.cashier.posts![1].map((p) => p.place), ['официант', 'официант( доставка)']);
+  assert.deepEqual(m1.roles.cook.posts![0].map((p) => p.place), ['прием поставки', 'приготовление продукции']);
 });

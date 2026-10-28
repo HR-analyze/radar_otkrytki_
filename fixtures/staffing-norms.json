@@ -275,23 +275,23 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -433,7 +433,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "прием" }
+          { "count": 3, "place": "официант" }
         ],
         "remarks": []
       }
@@ -549,23 +549,23 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -691,7 +691,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 4, "place": "прием" }
+          { "count": 4, "place": "официант" }
         ],
         "remarks": []
       }
@@ -806,26 +806,26 @@
               { "count": 1, "place": "кулинария" }
             ],
             [
-              { "count": 2, "place": "прием" },
+              { "count": 2, "place": "официант" },
               { "count": 1, "place": "касса" },
               { "count": 1, "place": "повар разогрев" }
             ],
             [
-              { "count": 3, "place": "прием" },
+              { "count": 3, "place": "официант" },
               { "count": 1, "place": "доставка" },
               { "count": 2, "place": "повара разогрев" }
             ],
             [
-              { "count": 2, "place": "прием" },
+              { "count": 2, "place": "официант" },
               { "count": 1, "place": "доставка" },
               { "count": 1, "place": "повар разогрев" }
             ],
             [
-              { "count": 2, "place": "прием" },
+              { "count": 2, "place": "официант" },
               { "count": 1, "place": "кассир разогрев" }
             ],
             [
-              { "count": 2, "place": "прием-разогрев" }
+              { "count": 2, "place": "официант-разогрев" }
             ]
           ]
         },
@@ -922,23 +922,23 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -1060,7 +1060,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "приема" }
+          { "count": 3, "place": "официант" }
         ],
         "remarks": []
       }
@@ -1089,23 +1089,23 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -1221,7 +1221,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "приема" }
+          { "count": 3, "place": "официант" }
         ],
         "remarks": []
       }
@@ -1424,23 +1424,23 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 3, "place": "прием" }
+              { "count": 3, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 3, "place": "прием" }
+              { "count": 3, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -1568,7 +1568,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 4, "place": "приема" },
+          { "count": 4, "place": "официант" },
           { "count": 1, "place": "зд бар" }
         ],
         "remarks": []
@@ -2618,23 +2618,23 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -2756,7 +2756,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 4, "place": "приема" }
+          { "count": 4, "place": "официант" }
         ],
         "remarks": []
       }
@@ -3464,30 +3464,30 @@
               { "count": 1, "place": "кулинария" }
             ],
             [
-              { "count": 3, "place": "прием" },
+              { "count": 3, "place": "официант" },
               { "count": null, "place": "сборщик доставка" },
               { "count": 1, "place": "касса" },
               { "count": 1, "place": "повар разогрев" }
             ],
             [
-              { "count": 3, "place": "прием" },
+              { "count": 3, "place": "официант" },
               { "count": null, "place": "сборщик" },
               { "count": 1, "place": "касса" },
               { "count": 2, "place": "повара разогрев" }
             ],
             [
-              { "count": 3, "place": "прием" },
+              { "count": 3, "place": "официант" },
               { "count": 1, "place": "касса" },
               { "count": null, "place": "сборщик" },
               { "count": 1, "place": "повар разогрев" }
             ],
             [
-              { "count": 2, "place": "прием" },
+              { "count": 2, "place": "официант" },
               { "count": 1, "place": "сборщик" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 2, "place": "прием" },
+              { "count": 2, "place": "официант" },
               { "count": 1, "place": "разогрев-доставка" }
             ]
           ]
@@ -3856,24 +3856,24 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
-            ],
-            [
-              { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
+            ],
+            [
+              { "count": 1, "place": "касса" },
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -4013,23 +4013,23 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса" }
             ]
           ]
@@ -4172,31 +4172,31 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
-            ],
-            [
-              { "count": 1, "place": "касса" },
-              { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием+ дост" }
+              { "count": 1, "place": "касса" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант+ дост" }
+            ],
+            [
+              { "count": 1, "place": "касса" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -4666,23 +4666,23 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -4824,7 +4824,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 4, "place": "приема" }
+          { "count": 4, "place": "официант" }
         ],
         "remarks": []
       }
@@ -4853,24 +4853,24 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" },
+              { "count": 2, "place": "официант" },
               { "count": 1, "place": "повар разогрев" }
             ],
             [
-              { "count": 4, "place": "прием" },
+              { "count": 4, "place": "официант" },
               { "count": 2, "place": "повара разогрев" }
             ],
             [
-              { "count": 3, "place": "прием" },
+              { "count": 3, "place": "официант" },
               { "count": 1, "place": "повара разогрев" }
             ],
             [
-              { "count": 2, "place": "прием" },
+              { "count": 2, "place": "официант" },
               { "count": 1, "place": "касса" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -4997,7 +4997,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "приема" },
+          { "count": 3, "place": "официант" },
           { "count": null, "place": "ЗД бар" },
           { "count": null, "place": "сборщик" }
         ],
@@ -5028,23 +5028,23 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -5310,25 +5310,25 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 3, "place": "прием( доставка)" },
+              { "count": 3, "place": "официант( доставка)" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса" },
               { "count": 1, "place": "доставка" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "доставка" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -5450,7 +5450,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "приема" }
+          { "count": 3, "place": "официант" }
         ],
         "remarks": []
       }
@@ -5566,24 +5566,24 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 2, "place": "приема" },
+              { "count": 2, "place": "официант" },
               { "count": 1, "place": "разогрев" },
               { "count": 1, "place": "доставка" }
             ],
             [
-              { "count": 2, "place": "приема( доставка)" },
+              { "count": 2, "place": "официант( доставка)" },
               { "count": 1, "place": "касса" }
             ],
             [
-              { "count": 2, "place": "прием( доставка)" }
+              { "count": 2, "place": "официант( доставка)" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием( доставка)" }
+              { "count": 1, "place": "официант( доставка)" }
             ]
           ]
         },
@@ -5705,7 +5705,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 4, "place": "приема" },
+          { "count": 4, "place": "официант" },
           { "count": null, "place": "сборщик" }
         ],
         "remarks": [
@@ -5947,23 +5947,23 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 3, "place": "прием" },
+              { "count": 3, "place": "официант" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 2, "place": "прием" },
+              { "count": 2, "place": "официант" },
               { "count": 1, "place": "касса" }
             ],
             [
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -6085,7 +6085,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "приема" },
+          { "count": 3, "place": "официант" },
           { "count": null, "place": "сборщик" }
         ],
         "remarks": []
@@ -6330,7 +6330,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 4, "place": "приема" },
+          { "count": 4, "place": "официант" },
           { "count": null, "place": "ЗД бар" }
         ],
         "remarks": []
@@ -6359,27 +6359,27 @@
               { "count": 1, "place": "кулинария" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса бар" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 2, "place": "прием" },
+              { "count": 2, "place": "официант" },
               { "count": 1, "place": "касса бар" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса" },
               { "count": 1, "place": "касса бар" }
             ],
             [
               { "count": 1, "place": "касса бар" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса бар" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -6501,7 +6501,7 @@
       "layout": {
         "stations": [
           { "count": 3, "place": "кассы" },
-          { "count": 3, "place": "приема" },
+          { "count": 3, "place": "официант" },
           { "count": null, "place": "сборщик" }
         ],
         "remarks": [
@@ -6777,22 +6777,22 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 3, "place": "прием" },
+              { "count": 3, "place": "официант" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 3, "place": "прием" }
+              { "count": 3, "place": "официант" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса" }
             ]
           ]
@@ -6915,7 +6915,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "приема" },
+          { "count": 3, "place": "официант" },
           { "count": null, "place": "сборщик" }
         ],
         "remarks": []
@@ -7067,28 +7067,28 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
-            ],
-            [
-              { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием+ дост" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант+ дост" }
+            ],
+            [
+              { "count": 1, "place": "касса" },
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -7237,26 +7237,26 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
-            ],
-            [
-              { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
+            ],
+            [
+              { "count": 1, "place": "касса" },
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -7530,23 +7530,23 @@
             ],
             [
               { "count": 2, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 2, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 2, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 2, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ]
           ]
         },
@@ -7673,7 +7673,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "прием" },
+          { "count": 3, "place": "официант" },
           { "count": 1, "place": "сборщик" }
         ],
         "remarks": []
@@ -7703,23 +7703,23 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 2, "place": "прием" }
+              { "count": 2, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -7862,7 +7862,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "приема" }
+          { "count": 3, "place": "официант" }
         ],
         "remarks": []
       }
@@ -8100,25 +8100,25 @@
             ],
             [
               { "count": 1, "place": "касса бар" },
-              { "count": 1, "place": "прием(доставка)" },
+              { "count": 1, "place": "официант(доставка)" },
               { "count": 1, "place": "разогрев" }
             ],
             [
               { "count": 1, "place": "касса бар" },
-              { "count": 2, "place": "прием(доставка)" },
+              { "count": 2, "place": "официант(доставка)" },
               { "count": 1, "place": "разогрев" }
             ],
             [
               { "count": 1, "place": "касса бар" },
-              { "count": 1, "place": "прием(доставка)" },
+              { "count": 1, "place": "официант(доставка)" },
               { "count": 1, "place": "касса" }
             ],
             [
               { "count": 1, "place": "касса бар" },
-              { "count": 1, "place": "прием(доставка)" }
+              { "count": 1, "place": "официант(доставка)" }
             ],
             [
-              { "count": 1, "place": "прием(доставка)" },
+              { "count": 1, "place": "официант(доставка)" },
               { "count": 1, "place": "касса бар" }
             ]
           ]
@@ -8241,7 +8241,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "приема" }
+          { "count": 3, "place": "официант" }
         ],
         "remarks": []
       }
@@ -8603,29 +8603,29 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием+ дост" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант+ дост" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -9805,22 +9805,22 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием(доставка)" },
+              { "count": 1, "place": "официант(доставка)" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 3, "place": "прием(доставка)" },
+              { "count": 3, "place": "официант(доставка)" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 3, "place": "прием(доставка)" }
+              { "count": 3, "place": "официант(доставка)" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса" }
             ]
           ]
@@ -9943,7 +9943,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "приема" }
+          { "count": 3, "place": "официант" }
         ],
         "remarks": []
       }
@@ -10059,25 +10059,25 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
-            ],
-            [
-              { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
+            ],
+            [
+              { "count": 1, "place": "касса" },
+              { "count": 1, "place": "официант" }
             ]
           ]
         },
@@ -10197,22 +10197,22 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 3, "place": "прием(доставка)" },
+              { "count": 3, "place": "официант(доставка)" },
               { "count": 1, "place": "разогрев" }
             ],
             [
-              { "count": 3, "place": "прием(доставка)" }
+              { "count": 3, "place": "официант(доставка)" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса" }
             ],
             [
-              { "count": 1, "place": "прием" },
+              { "count": 1, "place": "официант" },
               { "count": 1, "place": "касса" }
             ]
           ]
@@ -10335,7 +10335,7 @@
       "layout": {
         "stations": [
           { "count": 2, "place": "кассы" },
-          { "count": 3, "place": "приема" }
+          { "count": 3, "place": "официант" }
         ],
         "remarks": []
       }
@@ -10364,25 +10364,25 @@
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
             ],
             [
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
-            ],
-            [
-              { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" },
+              { "count": 1, "place": "официант" }
             ],
             [
               { "count": 1, "place": "касса" },
-              { "count": 1, "place": "прием" }
+              { "count": 1, "place": "официант" }
+            ],
+            [
+              { "count": 1, "place": "касса" },
+              { "count": 1, "place": "официант" }
             ]
           ]
         },

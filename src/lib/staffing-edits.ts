@@ -50,7 +50,9 @@ export function applyStaffingEdits(norms: readonly StaffNorm[], edits: readonly 
       roles[role] = {
         ...base,
         slots: base.slots.map((s, i) => ({ ...s, count: e.counts[i] })),
-        posts: base.slots.map((_, i) => e.posts[i] ?? []),
+        // Через normalizePlace и на чтении: правило мест могло поменяться после
+        // того, как правку сохранили («прием» → «официант»).
+        posts: base.slots.map((_, i) => (e.posts[i] ?? []).map((p) => ({ ...p, place: normalizePlace(p.place) }))),
       };
     }
     return { ...n, roles, editedAt: edit.updatedAt };
