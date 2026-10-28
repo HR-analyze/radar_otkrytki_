@@ -380,6 +380,16 @@ function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
   );
   const setTime = (role: StaffRole, i: number, end: 0 | 1, value: string) =>
     setTimes((t) => ({ ...t, [role]: t[role].map((v, k) => (k === i ? (end === 0 ? [value, v[1]] : [v[0], value]) : v)) }));
+  const [initialTexts] = useState(() =>
+    Object.fromEntries(
+      roles.map((r) => [
+        r,
+        norm.roles[r].slots.map((_, i) =>
+          (norm.roles[r].posts?.[i] ?? []).map((p) => (p.count == null ? p.place : `${p.count} ${p.place}`)).join('\n'),
+        ),
+      ]),
+    ) as Record<StaffRole, string[]>,
+  );
   const [texts, setTexts] = useState(() =>
     Object.fromEntries(
       roles.map((r) => [
@@ -412,7 +422,11 @@ function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
                   // «23:00» конца суток браузер отдаёт как есть; «00:00» в конце — это полночь.
                   times: times[r].map(([a, b]) => [a, b === '00:00' ? '24:00' : b]),
                   // Пост на строку; «/» внутри строки тоже делит людей, как в шаблоне.
-                  posts: texts[r].map((t) => t.split('\n').flatMap((line) => parsePosts(line))),
+                  // Нетронутое окно — null: в нём остаётся книга или правило
+                  // руководства, и новое правило его потом тоже подхватит.
+                  posts: texts[r].map((t, i) =>
+                    t === initialTexts[r][i] ? null : t.split('\n').flatMap((line) => parsePosts(line)),
+                  ),
                 },
               ]),
             ),

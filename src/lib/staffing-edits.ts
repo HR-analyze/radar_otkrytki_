@@ -1,6 +1,6 @@
 import { manualDbWritable, openManualDb } from './manual-db';
 import { STAFF_ROLES, normalizePlace, type StaffNorm, type StaffPost, type StaffRole } from './staffing';
-import { readStaffing, type StaffingSeed } from './staffing-store';
+import { readStaffing, readStaffingBook, type StaffingSeed } from './staffing-store';
 
 /**
  * Правки «Графика пиков» с сайта: сколько человек в окне и кто где стоит.
@@ -18,7 +18,11 @@ import { readStaffing, type StaffingSeed } from './staffing-store';
 /** Правка одной должности: число людей в каждом окне и посты окна. */
 export interface StaffRoleEdit {
   counts: number[];
-  posts: StaffPost[][];
+  /**
+   * Посты окна; null — окно не трогали, в нём остаётся расстановка из книги
+   * или по правилам руководства (staffing-rules.ts).
+   */
+  posts: (StaffPost[] | null)[];
   /**
    * Время окон, [начало, конец] в минутах от полуночи, параллельно counts.
    * Поля нет — время как в шаблоне (правки, сохранённые до 28.10.2026).
@@ -42,8 +46,19 @@ export function canEditStaffing(): boolean {
  * должности не подходит и пропускается (лавка поедет по шаблону), а не
  * разъезжается по чужим окнам.
  */
-export function applyStaffingEdits(norms: readonly StaffNorm[], edits: readonly StaffingEdit[]): StaffNorm[] {
+export function applyStaffingEdits(
+  norms: readonly StaffNorm[],
+  edits: readonly StaffingEdit[],
+  /**
+   * Нормы как в книгах, до правил руководства. Нужны для старых правок: до
+   * 28.10.2026 форма сохраняла расстановку лавки целиком, и правка М50
+   * заморозила книжное «2 разогрев» поверх правила. Пост правки, который
+   * совпадает с книгой, — не правка, а копия: в этом окне работает правило.
+   */
+  book: readonly StaffNorm[] = norms,
+): StaffNorm[] {
   const byCode = new Map(edits.map((e) => [e.shopCode, e]));
+  const bookByCode = new Map(book.map((b) => [b.code, b]));
   return norms.map((n) => {
     const edit = byCode.get(n.code);
     if (!edit) return n;
@@ -60,7 +75,13 @@ export function applyStaffingEdits(norms: readonly StaffNorm[], edits: readonly 
         }),
         // Через normalizePlace и на чтении: правило мест могло поменяться после
         // того, как правку сохранили («прием» → «официант»).
-        posts: base.slots.map((_, i) => (e.posts[i] ?? []).map((p) => ({ ...p, place: normalizePlace(p.place) }))),
+        posts: base.slots.map((_, i) => {
+          const edited = e.posts[i];
+          if (edited == null) return base.posts?.[i] ?? [];
+          const clean = edited.map((p) => ({ ...p, place: normalizePlace(p.place) }));
+          const fromBook = bookByCode.get(n.code)?.roles[role].posts?.[i] ?? [];
+          return sameDislocation(clean, fromBook) ? (base.posts?.[i] ?? []) : clean;
+        }),
       };
     }
     return { ...n, roles, editedAt: edit.updatedAt };
@@ -94,8 +115,13 @@ export function parseStaffingEdit(
       return { ok: false, error: `${role}: людей в окне — целое число от 0 до 50` };
     }
     const postsRaw = Array.isArray(r.posts) ? r.posts : [];
-    const posts: StaffPost[][] = [];
+    const posts: (StaffPost[] | null)[] = [];
     for (let i = 0; i < slots.length; i++) {
+      // null — окно не трогали (форма шлёт только изменённые окна).
+      if (postsRaw[i] === null || postsRaw[i] === undefined) {
+        posts.push(null);
+        continue;
+      }
       const list = Array.isArray(postsRaw[i]) ? (postsRaw[i] as unknown[]) : [];
       if (list.length > 20) return { ok: false, error: `${role}: в окне больше 20 постов` };
       const clean: StaffPost[] = [];
@@ -156,7 +182,7 @@ export async function readStaffingEdits(): Promise<StaffingEdit[]> {
 export async function readStaffingLive(): Promise<StaffingSeed> {
   const seed = readStaffing();
   try {
-    return { ...seed, norms: applyStaffingEdits(seed.norms, await readStaffingEdits()) };
+    return { ...seed, norms: applyStaffingEdits(seed.norms, await readStaffingEdits(), readStaffingBook().norms) };
   } catch {
     // База недоступна — показываем шаблон, а не падаем: правки вернутся,
     // когда вернётся база.
@@ -207,4 +233,14 @@ async function readRows(): Promise<{ shop_code: string; roles: string; updated_a
     roles: string;
     updated_at: string;
   }[];
+}
+
+/** Одна и та же расстановка окна: те же места и числа, порядок неважен. */
+function sameDislocation(a: readonly StaffPost[], b: readonly StaffPost[]): boolean {
+  const key = (list: readonly StaffPost[]) =>
+    list
+      .map((p) => `${p.count ?? ''}|${normalizePlace(p.place).toLowerCase()}`)
+      .sort()
+      .join(';');
+  return key(a) === key(b);
 }

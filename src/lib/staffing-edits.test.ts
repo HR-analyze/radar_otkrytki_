@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyStaffingEdits, parseStaffingEdit } from './staffing-edits';
-import { readStaffing } from './staffing-store';
-import { findStaffNorm } from './staffing';
+import { readStaffing, readStaffingBook } from './staffing-store';
+import { findStaffNorm, postsLabel } from './staffing';
 
 const { norms } = readStaffing();
 const m50 = findStaffNorm(norms, 'М50')!;
@@ -58,4 +58,35 @@ test('правка времени окон: окно сдвигается, на�
   // Старые правки без времени — окна как в шаблоне.
   const [old] = applyStaffingEdits([m50], [{ shopCode: 'М50', roles: { cashier: { counts, posts: [] } }, updatedAt: 'x' }]);
   assert.deepEqual(old.roles.cashier.slots.map((s) => [s.from, s.to]), m50.roles.cashier.slots.map((s) => [s.from, s.to]));
+});
+
+test('правка не замораживает правила: нетронутые окна и копии книги — по правилу', () => {
+  const book = readStaffingBook().norms;
+  const ruled = readStaffing().norms;
+  const bookM50 = book.find((n) => n.code === 'М50')!;
+  const ruledM50 = ruled.find((n) => n.code === 'М50')!;
+  const counts = ruledM50.roles.cook.slots.map((s) => s.count);
+  const mine = [{ count: 4, place: 'кухня' }];
+
+  // Старая правка сохранила расстановку целиком: 8–11 — копия книги, 11–16 — своё.
+  const legacy = ruledM50.roles.cook.slots.map((_, i) => bookM50.roles.cook.posts?.[i] ?? []);
+  legacy[2] = mine;
+  const [a] = applyStaffingEdits(ruled.filter((n) => n.code === 'М50'), [
+    { shopCode: 'М50', roles: { cook: { counts, posts: legacy } }, updatedAt: 'x' },
+  ], book);
+  assert.deepEqual(a.roles.cook.posts![1], ruledM50.roles.cook.posts![1], '8–11: копия книги уступает правилу');
+  assert.match(postsLabel(a.roles.cook.posts![1]), /завтраки/);
+  assert.deepEqual(a.roles.cook.posts![2], mine, '11–16: настоящая правка остаётся');
+
+  // Новая правка: нетронутые окна — null.
+  const fresh = ruledM50.roles.cook.slots.map(() => null) as (null | typeof mine)[];
+  fresh[3] = mine;
+  const [b] = applyStaffingEdits(ruled.filter((n) => n.code === 'М50'), [
+    { shopCode: 'М50', roles: { cook: { counts, posts: fresh } }, updatedAt: 'x' },
+  ], book);
+  assert.deepEqual(b.roles.cook.posts![0], ruledM50.roles.cook.posts![0], '6:30–8 — по правилу');
+  assert.deepEqual(b.roles.cook.posts![3], mine);
+
+  const parsed = parseStaffingEdit(ruledM50, { roles: { cook: { counts, posts: fresh } } });
+  assert.ok(parsed.ok && parsed.roles.cook!.posts[0] === null, 'null из формы доезжает до базы как null');
 });
