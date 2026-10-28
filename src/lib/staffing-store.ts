@@ -1,5 +1,6 @@
 import seed from '../../fixtures/staffing-norms.json';
 import type { StaffNorm } from './staffing';
+import { applyStaffingRules } from './staffing-rules';
 
 /**
  * Нормы выхода сотрудников из репозитория — разобранный шаблон «по
@@ -19,6 +20,12 @@ export interface StaffingSeed {
 
 export const STAFFING_SEED_PATH = 'fixtures/staffing-norms.json';
 
+/**
+ * Нормы с расстановкой по правилам руководства поверх книг (см.
+ * staffing-rules.ts). Правила — в коде, а не в JSON: поменялось правило — не
+ * нужно пересобирать книги, а в JSON остаётся то, что вписали ТД.
+ */
 export function readStaffing(): StaffingSeed {
-  return seed as StaffingSeed;
+  const raw = seed as StaffingSeed;
+  return { ...raw, norms: applyStaffingRules(raw.norms) };
 }
