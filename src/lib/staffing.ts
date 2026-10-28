@@ -158,6 +158,58 @@ export function pay(personHours: number | null, rate: number): number | null {
   return personHours == null ? null : Math.round(personHours * rate);
 }
 
+/**
+ * Итоги должности в лавке: штат, человеко-часы и заработок за день и месяц.
+ * null — посчитать нельзя (FTE в шаблоне пусто, окно «до N» без начала).
+ */
+export interface StaffRoleTotals {
+  fte: number | null;
+  day: number | null;
+  month: number | null;
+  dayPay: number | null;
+  monthPay: number | null;
+}
+
+export function roleTotals(norm: StaffRoleNorm, role: StaffRole): StaffRoleTotals {
+  const rate = STAFF_HOURLY_RATE[role];
+  const day = dailyHours(norm.slots);
+  const month = monthlyHours(norm.slots);
+  return { fte: norm.fte, day, month, dayPay: pay(day, rate), monthPay: pay(month, rate) };
+}
+
+/**
+ * Сумма итогов по лавкам — для строки «Итого по сети». Одна лавка без числа
+ * делает сумму неизвестной: «итого» без неё было бы заниженным, а не итогом.
+ */
+export function sumRoleTotals(list: readonly StaffRoleTotals[]): StaffRoleTotals {
+  const sum = (key: keyof StaffRoleTotals): number | null => {
+    let total = 0;
+    for (const t of list) {
+      const v = t[key];
+      if (v == null) return null;
+      total += v;
+    }
+    // Часы — до десятых: 39,5 + 16,5 + … копят хвосты двоичной дроби.
+    return Math.round(total * 10) / 10;
+  };
+  return { fte: sum('fte'), day: sum('day'), month: sum('month'), dayPay: sum('dayPay'), monthPay: sum('monthPay') };
+}
+
+/**
+ * Пик должности: окно, где людей больше всего, и сколько их. По нескольким
+ * лавкам — по сумме: окна в шаблоне одни на все лавки, поэтому складываем
+ * окна по номеру. Ничья — первое по времени окно.
+ */
+export function rolePeak(norms: readonly StaffNorm[], role: StaffRole): { slot: StaffSlot; count: number } | null {
+  const slots = norms[0]?.roles[role].slots ?? [];
+  let best: { slot: StaffSlot; count: number } | null = null;
+  for (const [i, slot] of slots.entries()) {
+    const count = norms.reduce((s, n) => s + (n.roles[role].slots[i]?.count ?? 0), 0);
+    if (count > 0 && (best == null || count > best.count)) best = { slot, count };
+  }
+  return best;
+}
+
 /** «11:00–16:00», «до 08:00». */
 export function slotLabel(slot: StaffSlot): string {
   return slot.from == null ? `до ${formatClock(slot.to)}` : `${formatClock(slot.from)}–${formatClock(slot.to)}`;

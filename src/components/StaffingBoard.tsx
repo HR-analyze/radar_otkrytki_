@@ -172,7 +172,30 @@ export function StaffingBoard({
       {/* --- шаблон целиком --- */}
       <section className="flex flex-col gap-2">
         <div>
-          <h2 className="text-sm font-semibold">Шаблон по часам-пикам</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Шаблон по часам-пикам</h2>
+            {/* Обычные ссылки, а не кнопки с JS: файлы собираются на сервере и
+                должны скачиваться, даже если скрипты не загрузились. Выгружают
+                то же, что в таблице: всю сеть или выбранную лавку. */}
+            <div className="flex gap-2">
+              {(['xlsx', 'pdf'] as const).map((ext) => (
+                <a
+                  key={ext}
+                  href={`/api/staffing/${ext}${norm ? `?${new URLSearchParams({ shop: norm.code })}` : ''}`}
+                  className="rounded-lg border px-3 py-1.5 text-xs font-medium whitespace-nowrap hover:opacity-90"
+                  style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+                  title={
+                    ext === 'xlsx'
+                      ? 'Таблица Excel: люди и рубли по окнам, данные для сводных'
+                      : 'PDF для чтения и печати: график дня, итоги и окна по должностям'
+                  }
+                >
+                  ⬇ {ext === 'xlsx' ? 'Excel' : 'PDF'}
+                  <span className="muted"> · {norm ? norm.code : 'все лавки'}</span>
+                </a>
+              ))}
+            </div>
+          </div>
           <p className="mt-0.5 text-xs muted">
             Сколько человек должно быть на смене в каждом окне, а под ними — сколько они заработают, ₽: человек ×
             часы × {rateLabel}. Подсвечены окна, в которые попадает {formatClock(minutes)}. Клик по строке оставит в

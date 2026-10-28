@@ -9,7 +9,10 @@ import {
   findStaffNorm,
   monthlyHours,
   pay,
+  rolePeak,
+  roleTotals,
   slotPersonHours,
+  sumRoleTotals,
   staffAt,
   staffAtAll,
 } from './staffing';
@@ -117,4 +120,21 @@ test('«ЧЕЛ-КО часы» из шаблона = (норма окна × н�
       assert.equal(r.hours, byM1 * MONTH_DAYS, `${n.code}/${role}`);
     }
   }
+});
+
+test('итоги должности: штат, часы и рубли, по сети — сумма, пик — по сумме окон', () => {
+  const { norms } = readStaffing();
+  const m50 = findStaffNorm(norms, 'М50')!;
+  assert.deepEqual(roleTotals(m50.roles.cashier, 'cashier'), { fte: 9, day: 62, month: 1922, dayPay: 19220, monthPay: 595820 });
+
+  const two = [m50, findStaffNorm(norms, 'М1')!];
+  const sum = sumRoleTotals(two.map((n) => roleTotals(n.roles.cashier, 'cashier')));
+  assert.deepEqual(sum, { fte: 15, day: 101.5, month: 3146.5, dayPay: 31465, monthPay: 975415 });
+  assert.equal(sumRoleTotals([{ fte: null, day: 1, month: 31, dayPay: 310, monthPay: 9610 }]).fte, null, 'без числа — неизвестно');
+
+  // М50: кассиров по 4 с 7:30 до 21 — пик первое такое окно.
+  const peak = rolePeak([m50], 'cashier')!;
+  assert.equal(peak.count, 4);
+  assert.equal(peak.slot.from, 450);
+  assert.equal(rolePeak([findStaffNorm(norms, 'М1')!], 'barista'), null, 'в М1 бариста нет');
 });
