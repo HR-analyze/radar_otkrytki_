@@ -90,6 +90,13 @@ test('список написаний — до словаря, со счётом
   assert.equal(places.filter((p) => p.key === 'зд бар').length, 1);
   assert.equal(places.find((p) => p.key === 'зд бар')!.place, 'ЗД бар');
   assert.equal(new Set(places.map((p) => p.key)).size, places.length);
+  // Счёт по должностям — для фильтра и группировки на вкладке: в сумме — весь счёт.
+  for (const p of places) {
+    assert.deepEqual(Object.keys(p.bySource).sort(), [...p.sources].sort());
+    assert.equal(Object.values(p.bySource).reduce((s, b) => s + b!.uses, 0), p.uses);
+  }
+  const heat = places.find((p) => p.key === 'разогрев')!;
+  assert.ok(heat.bySource.cook!.uses < heat.uses, '«разогрев» есть и у повара, и у кассира');
 });
 
 test('словарь из запроса: пустое название — как написано, мусор не проходит', () => {

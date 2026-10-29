@@ -121,6 +121,8 @@ export interface PlaceUsage {
   shops: string[];
   /** Какие должности (и места лавки), по порядку STAFF_ROLES. */
   sources: PlaceSource[];
+  /** Счёт по каждой должности — для фильтра и группировки по должностям. */
+  bySource: Partial<Record<PlaceSource, { uses: number; shops: string[] }>>;
 }
 
 /**
@@ -128,16 +130,27 @@ export interface PlaceUsage {
  * «разогрев», пропал бы из таблицы, и вернуть его было бы негде.
  */
 export function collectPlaces(norms: readonly StaffNorm[]): PlaceUsage[] {
-  const acc = new Map<string, { spellings: Map<string, number>; uses: number; shops: Set<string>; sources: Set<PlaceSource> }>();
+  type Acc = {
+    spellings: Map<string, number>;
+    uses: number;
+    shops: Set<string>;
+    sources: Set<PlaceSource>;
+    bySource: Map<PlaceSource, { uses: number; shops: Set<string> }>;
+  };
+  const acc = new Map<string, Acc>();
   const add = (place: string, shop: string, source: PlaceSource) => {
     const spelling = normalizePlace(place);
     if (!spelling) return;
     const key = spelling.toLowerCase();
-    const a = acc.get(key) ?? { spellings: new Map(), uses: 0, shops: new Set(), sources: new Set() };
+    const a: Acc = acc.get(key) ?? { spellings: new Map(), uses: 0, shops: new Set(), sources: new Set(), bySource: new Map() };
     a.spellings.set(spelling, (a.spellings.get(spelling) ?? 0) + 1);
     a.uses += 1;
     a.shops.add(shop);
     a.sources.add(source);
+    const b = a.bySource.get(source) ?? { uses: 0, shops: new Set<string>() };
+    b.uses += 1;
+    b.shops.add(shop);
+    a.bySource.set(source, b);
     acc.set(key, a);
   };
   for (const n of norms) {
@@ -146,12 +159,14 @@ export function collectPlaces(norms: readonly StaffNorm[]): PlaceUsage[] {
   }
   const order: PlaceSource[] = [...STAFF_ROLES, 'stations'];
   const shopOrder = new Map(norms.map((n, i) => [n.code, i]));
+  const sortShops = (shops: Set<string>) => [...shops].sort((x, y) => shopOrder.get(x)! - shopOrder.get(y)!);
   return [...acc].map(([key, a]) => ({
     key,
     place: [...a.spellings].sort((x, y) => y[1] - x[1])[0][0],
     uses: a.uses,
-    shops: [...a.shops].sort((x, y) => shopOrder.get(x)! - shopOrder.get(y)!),
+    shops: sortShops(a.shops),
     sources: order.filter((s) => a.sources.has(s)),
+    bySource: Object.fromEntries([...a.bySource].map(([s, b]) => [s, { uses: b.uses, shops: sortShops(b.shops) }])),
   }));
 }
 

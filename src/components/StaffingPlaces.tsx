@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { STAFF_ROLE_SHORT, normalizePlace } from '@/lib/staffing';
+import { STAFF_ROLES, STAFF_ROLE_SHORT, STAFF_ROLE_TITLE, normalizePlace } from '@/lib/staffing';
 import {
   previewAliasChange,
   type PlaceAlias,
@@ -30,6 +30,36 @@ export interface PlaceRow extends PlaceUsage {
 const AUTHOR_KEY = 'radar.staffing.author';
 
 const SOURCE_LABEL = (s: PlaceSource) => (s === 'stations' ? 'места лавки' : STAFF_ROLE_SHORT[s].toLowerCase());
+const SOURCE_TITLE = (s: PlaceSource) => (s === 'stations' ? 'Места лавки' : STAFF_ROLE_TITLE[s]);
+const SOURCES: readonly PlaceSource[] = [...STAFF_ROLES, 'stations'];
+
+/** Группа таблицы: единое название и его написания, со счётом по выбранной должности. */
+interface Group {
+  name: string;
+  rows: PlaceRow[];
+  uses: number;
+  shops: number;
+}
+
+/**
+ * Группы по единому названию; source — только написания этой должности и
+ * её счёт («разогрев» у повара — 21 раз, а не 176 вместе с кассирами).
+ */
+function buildGroups(rows: readonly PlaceRow[], source: PlaceSource | null): Group[] {
+  const stat = (r: PlaceRow) => (source ? r.bySource[source]! : r);
+  const by = new Map<string, PlaceRow[]>();
+  for (const r of rows) {
+    if (source && !r.bySource[source]) continue;
+    by.set(r.name.toLowerCase(), [...(by.get(r.name.toLowerCase()) ?? []), r]);
+  }
+  return [...by.values()]
+    .map((list) => {
+      const sorted = [...list].sort((a, b) => stat(b).uses - stat(a).uses);
+      const shops = new Set(sorted.flatMap((r) => stat(r).shops));
+      return { name: sorted[0].name, rows: sorted, uses: sorted.reduce((s, r) => s + stat(r).uses, 0), shops: shops.size };
+    })
+    .sort((a, b) => b.uses - a.uses);
+}
 
 /**
  * Таблица функционалов: строки сгруппированы по единому названию, в группе —
@@ -89,24 +119,26 @@ export function StaffingPlaces({
     }
   };
 
-  const groups = useMemo(() => {
-    const by = new Map<string, PlaceRow[]>();
-    for (const r of rows) by.set(r.name.toLowerCase(), [...(by.get(r.name.toLowerCase()) ?? []), r]);
-    return [...by.values()]
-      .map((list) => {
-        const sorted = [...list].sort((a, b) => b.uses - a.uses);
-        const shops = new Set(sorted.flatMap((r) => r.shops));
-        return { name: sorted[0].name, rows: sorted, uses: sorted.reduce((s, r) => s + r.uses, 0), shops: shops.size };
-      })
-      .sort((a, b) => b.uses - a.uses);
-  }, [rows]);
+  const groups = useMemo(() => buildGroups(rows, null), [rows]);
 
+  // Должность: фильтр (одна) или группировка (все по очереди). Словарь при
+  // этом общий: «разогрев» у повара и у кассира — одна строка, переименуется
+  // у обоих; поэтому в колонке «Ещё у» видно, у кого ещё стоит написание.
+  const [role, setRole] = useState<PlaceSource | null>(null);
+  const [byRole, setByRole] = useState(true);
+  const present = SOURCES.filter((src) => rows.some((r) => r.bySource[src]));
   const q = query.trim().toLowerCase();
   const fresh = rows.filter((r) => !r.reviewed);
-  const shown = groups
-    .map((g) => (onlyNew ? { ...g, rows: g.rows.filter((r) => !r.reviewed) } : g))
-    .filter((g) => g.rows.length > 0)
-    .filter((g) => !q || g.name.toLowerCase().includes(q) || g.rows.some((r) => r.place.toLowerCase().includes(q)));
+  const narrow = (list: Group[]) =>
+    list
+      .map((g) => (onlyNew ? { ...g, rows: g.rows.filter((r) => !r.reviewed) } : g))
+      .filter((g) => g.rows.length > 0)
+      .filter((g) => !q || g.name.toLowerCase().includes(q) || g.rows.some((r) => r.place.toLowerCase().includes(q)));
+  const sections = (role ? [role] : byRole ? present : [null]).map((src) => ({
+    source: src,
+    groups: narrow(src ? buildGroups(rows, src) : groups),
+  }));
+  const shown = sections.filter((sec) => sec.groups.length > 0);
   const names = useMemo(() => [...new Set(groups.map((g) => g.name))].sort((a, b) => a.localeCompare(b, 'ru')), [groups]);
 
   const value = (r: PlaceRow) => draft[r.key] ?? r.name;
@@ -262,12 +294,42 @@ export function StaffingPlaces({
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="muted">Должность:</span>
+        {[null, ...present].map((src) => {
+          const active = role === src;
+          const count = src ? rows.filter((r) => r.bySource[src]).length : rows.length;
+          return (
+            <button
+              key={src ?? 'all'}
+              type="button"
+              onClick={() => setRole(src)}
+              aria-pressed={active}
+              className={`rounded-md border px-2 py-1 ${active ? 'font-semibold' : ''}`}
+              style={{
+                borderColor: active ? 'var(--focus)' : 'var(--border)',
+                background: active ? 'color-mix(in srgb, var(--focus) 12%, var(--surface))' : 'var(--surface)',
+              }}
+            >
+              {src ? SOURCE_TITLE(src) : 'Все'} <span className="tabular-nums muted">{count}</span>
+            </button>
+          );
+        })}
+        {!role && (
+          <label className="ml-2 flex items-center gap-1">
+            <input type="checkbox" checked={byRole} onChange={(e) => setByRole(e.target.checked)} />
+            группировать по должностям
+          </label>
+        )}
+      </div>
+
       {editing && (
         <div className="flex flex-col gap-2">
           <p className="text-xs muted">
             Впишите единое название справа от написания или выберите из списка. Поле в строке группы переименовывает все её
             написания сразу. Пустое поле — оставить как написано. Свести «разог» к «разогреву» — вписать «разогрев».
-            Новое написание, которое и так названо верно, — «принять». ↺ — вернуть название по умолчанию.
+            Новое написание, которое и так названо верно, — «принять». ↺ — вернуть название по умолчанию. Словарь общий
+            для всех должностей: переименовали написание у повара — оно поменяется и у тех, кто в колонке «Ещё у».
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -323,15 +385,29 @@ export function StaffingPlaces({
               <th className="px-3 py-2 font-medium">Как написано</th>
               <th className="px-3 py-2 text-right font-medium">Раз</th>
               <th className="px-3 py-2 text-right font-medium">Лавок</th>
-              <th className="px-3 py-2 font-medium">Где</th>
+              <th className="px-3 py-2 font-medium">{shown.some((sec) => sec.source) ? 'Ещё у' : 'Где'}</th>
               <th className="px-3 py-2 font-medium">Единое название</th>
             </tr>
           </thead>
-          {shown.map((g) => {
+          {shown.map((sec) => [
+            sec.source && (role == null || shown.length > 1) ? (
+              <tbody key={`section-${sec.source}`}>
+                <tr className="border-t-2" style={{ borderColor: 'var(--border)' }}>
+                  <td colSpan={5} className="px-3 pt-4 pb-1.5 text-base font-semibold">
+                    {SOURCE_TITLE(sec.source)}
+                    <span className="ml-2 text-xs font-normal muted">
+                      {sec.groups.length} {plural(sec.groups.length, 'функционал', 'функционала', 'функционалов')}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            ) : null,
+            ...sec.groups.map((g) => {
+            const stat = (r: PlaceRow) => (sec.source ? r.bySource[sec.source]! : r);
             // Одно написание, которое и есть название, — строка группы лишняя.
             const header = g.rows.length > 1 || g.rows[0].name.toLowerCase() !== g.rows[0].key;
             return (
-              <tbody key={g.name} className="border-t" style={{ borderColor: 'var(--border)' }}>
+              <tbody key={`${sec.source ?? 'all'}-${g.name}`} className="border-t" style={{ borderColor: 'var(--border)' }}>
                 {header && (
                   <tr style={{ background: 'color-mix(in srgb, var(--focus) 6%, transparent)' }}>
                     <td className="px-3 py-1.5 font-semibold">
@@ -378,11 +454,16 @@ export function StaffingPlaces({
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">{r.uses}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums" title={r.shops.join(', ')}>
-                        {r.shops.length}
+                      <td className="px-3 py-1.5 text-right tabular-nums">{stat(r).uses}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums" title={stat(r).shops.join(', ')}>
+                        {stat(r).shops.length}
                       </td>
-                      <td className="px-3 py-1.5 text-xs muted">{r.sources.map(SOURCE_LABEL).join(', ')}</td>
+                      <td className="px-3 py-1.5 text-xs muted">
+                        {r.sources
+                          .filter((src) => src !== sec.source)
+                          .map(SOURCE_LABEL)
+                          .join(', ')}
+                      </td>
                       <td className="px-3 py-1.5">
                         {editing ? (
                           <span className="flex items-center gap-1">
@@ -438,7 +519,8 @@ export function StaffingPlaces({
                 })}
               </tbody>
             );
-          })}
+            }),
+          ])}
         </table>
         {shown.length === 0 && <p className="p-4 text-center text-sm muted">Ничего не нашлось</p>}
       </div>
