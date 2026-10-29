@@ -661,11 +661,13 @@ function layoutSection(norm: StaffNorm): Content {
     stack: [
       { text: 'Расстановка по дислокациям', style: 'h2' },
       {
-        text: `${norm.code} ${norm.name}: кто где стоит в каждом окне — как расписано в шаблоне. Кондитерка и кулинария — одно место.`,
+        text: `${norm.code} ${norm.name}: кто где стоит в каждом окне — как на вкладке «График пиков». Блок окна стоит ровно под своим временем; красный — окно расписано не на всех или не расписано вовсе.`,
         fontSize: 7.5,
         color: MUTED,
         margin: [0, 2, 0, 6],
       },
+      layoutChart(norm),
+      { text: 'То же списком', style: 'h2', margin: [0, 14, 0, 6] },
       ...(layout?.stations.length
         ? [{ text: [{ text: 'Рабочие места: ', bold: true }, postsLabel(layout.stations)], margin: [0, 0, 0, 3] } as Content]
         : []),
@@ -678,6 +680,108 @@ function layoutSection(norm: StaffNorm): Content {
       },
     ],
   };
+}
+
+/** Порядок должностей в расстановке: замы сверху, сборщик внизу — как на вкладке. */
+const LAYOUT_ORDER: readonly StaffRole[] = ['barDeputy', 'hallDeputy', ...TEMPLATE_ROLES, 'picker'];
+
+const OFF_RED = '#dc2626';
+
+/**
+ * Расстановка графиком, как таймлайн на вкладке: сверху шкала часов, строка —
+ * должность, окно — блок ровно под своим временем (колонка — полчаса, окно
+ * занимает свои колонки). В блоке — время, сколько людей и кто где стоит;
+ * расписано не на всех или не расписано — блок красный. Списком то же самое
+ * читалось плохо: «16:00–17:30» кассира стояло под «16:00–18:00» повара как
+ * будто это одно окно.
+ */
+function layoutChart(norm: StaffNorm): Content {
+  const rows = LAYOUT_ORDER.map((role) => {
+    const r = norm.roles[role];
+    const windows = r.slots
+      .map((slot, i) => ({ slot, posts: r.posts?.[i] ?? [], from: slot.from ?? slot.to - STEP }))
+      .filter(({ slot, posts }) => slot.count > 0 || posts.length > 0)
+      .sort((a, b) => a.from - b.from);
+    return { role, windows };
+  }).filter((row) => row.windows.length > 0);
+  if (rows.length === 0) return { text: '' };
+
+  const all = rows.flatMap((row) => row.windows);
+  const start = Math.floor(Math.min(...all.map((w) => w.from)) / STEP) * STEP;
+  const end = Math.ceil(Math.max(...all.map((w) => w.slot.to)) / STEP) * STEP;
+  const cols = Math.max(1, (end - start) / STEP);
+  const col = (m: number) => Math.min(cols, Math.max(0, Math.round((m - start) / STEP)));
+
+  // Шкала: подпись часа над его началом, на два получаса.
+  const scale: TableCell[] = [{ text: '' }];
+  for (let i = 0; i < cols; ) {
+    const t = start + i * STEP;
+    if (t % 60 === 0 && i + 1 < cols) {
+      scale.push({ text: `${t / 60}:00`, colSpan: 2, style: 'th' }, {});
+      i += 2;
+    } else {
+      scale.push({ text: '' });
+      i += 1;
+    }
+  }
+
+  const body: TableCell[][] = [scale];
+  for (const { role, windows } of rows) {
+    const cells: TableCell[] = [{ text: STAFF_ROLE_TITLE[role], bold: true, fontSize: 7.5, margin: [0, 2, 0, 0] }];
+    let at = 0;
+    for (const w of windows) {
+      const from = Math.max(at, col(w.from));
+      const to = Math.max(from + 1, col(w.slot.to));
+      for (; at < from; at++) cells.push({ text: '' });
+      const counted = postsHeadcount(w.posts, role);
+      const off = w.posts.length === 0 ? 'не расписано' : counted != null && counted !== w.slot.count ? offText(counted, w.slot.count) : null;
+      cells.push({
+        colSpan: to - from,
+        fillColor: off ? '#fef2f2' : tint(ROLE_COLOR[role], 0.14),
+        borderColor: [0, 1, 2, 3].map(() => (off ? OFF_RED : '#ffffff')) as [string, string, string, string],
+        stack: [
+          {
+            text: [
+              { text: slotShortLabel(w.slot), color: MUTED },
+              { text: `  ${num(w.slot.count)}`, bold: true, color: INK },
+            ],
+            fontSize: 6,
+          },
+          ...w.posts.map((p) => ({
+            text: p.count == null ? p.place : [{ text: `${p.count} `, bold: true }, p.place],
+            fontSize: 6.5,
+          })),
+          ...(off ? [{ text: off, color: OFF_RED, bold: true, fontSize: 6 }] : []),
+        ],
+      });
+      for (let k = 1; k < to - from; k++) cells.push({});
+      at = to;
+    }
+    for (; at < cols; at++) cells.push({ text: '' });
+    body.push(cells);
+  }
+
+  return {
+    table: { headerRows: 1, dontBreakRows: true, widths: [52, ...Array<string>(cols).fill('*')], body },
+    layout: {
+      // Сетка получасов — еле заметная: по ней видно, где начинается окно.
+      hLineWidth: (i: number) => (i === 1 ? 0.6 : 1.2),
+      vLineWidth: () => 1.2,
+      hLineColor: (i: number) => (i === 1 ? MUTED : '#ffffff'),
+      vLineColor: (i: number) => (i > 1 && (start + (i - 1) * STEP) % 60 === 0 ? LINE : '#ffffff'),
+      paddingTop: () => 2,
+      paddingBottom: () => 2,
+      paddingLeft: () => 2,
+      paddingRight: () => 2,
+    },
+  };
+}
+
+/** Цвет должности, разбавленный белым: заливка блока, под которой читается текст. */
+function tint(hex: string, alpha: number): string {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const mix = (c: number) => Math.round(255 + (c - 255) * alpha).toString(16).padStart(2, '0');
+  return `#${mix(r)}${mix(g)}${mix(b)}`;
 }
 
 /* -------------------------------- мелочи -------------------------------- */
