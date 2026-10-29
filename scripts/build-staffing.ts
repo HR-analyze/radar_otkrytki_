@@ -22,6 +22,7 @@ import { mergeStaffing } from '../src/lib/parsers/staffing-merge';
 import { compareShopNumber } from '../src/lib/shops';
 import { STAFFING_SEED_PATH } from '../src/lib/staffing-store';
 import { hasLayout, type StaffNorm } from '../src/lib/staffing';
+import { collectPlaces, defaultPlaceName } from '../src/lib/staffing-places';
 
 const sources = process.argv.slice(2);
 if (sources.length === 0) {
@@ -47,6 +48,13 @@ const previous: StaffNorm[] = fs.existsSync(STAFFING_SEED_PATH)
   ? (JSON.parse(fs.readFileSync(STAFFING_SEED_PATH, 'utf8')).norms ?? [])
   : [];
 const { norms, edits, conflicts } = mergeStaffing(books, previous);
+
+// Написания мест, которых не было в прежних нормах: на вкладке «Функционалы»
+// они придут с меткой «новое» — их надо разобрать (свести к функционалу или
+// принять как есть). Словарь с сайта сборке не виден, поэтому сравниваем с
+// прежней сборкой, а не со словарём.
+const known = new Set(collectPlaces(previous).map((p) => p.key));
+const fresh = collectPlaces(norms).filter((p) => !known.has(p.key));
 
 const seed = {
   $comment:
@@ -75,3 +83,11 @@ if (conflicts.length) console.log(`\nСпоры и пересечения (${con
 for (const c of conflicts) console.log(`  ⚠ ${c}`);
 if (warnings.length) console.log(`\nПредупреждения разбора (${warnings.length}):`);
 for (const w of [...new Set(warnings)]) console.log(`  ! ${w}`);
+if (fresh.length) {
+  console.log(`\nНовые написания мест (${fresh.length}) — разберите на вкладке «График пиков» → «Функционалы»:`);
+  for (const p of fresh) {
+    const name = defaultPlaceName(p.place);
+    const where = `${p.uses} × ${p.shops.slice(0, 5).join(', ')}${p.shops.length > 5 ? '…' : ''}`;
+    console.log(`  + «${p.place}»${name !== p.place ? ` → «${name}» по умолчанию` : ''} (${where})`);
+  }
+}

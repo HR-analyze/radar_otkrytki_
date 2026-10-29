@@ -7,8 +7,9 @@ import {
   TEMPLATE_ROLES,
   hasLayout,
   offText,
-  parsePosts,
+  peopleToPosts,
   postsHeadcount,
+  postsToPeople,
   postsLabel,
   slotAt,
   slotLabel,
@@ -18,6 +19,7 @@ import {
   type StaffSlot,
 } from '@/lib/staffing';
 import { formatClock, formatMoment } from '@/lib/time';
+import type { FunctionOption } from '@/lib/staffing-places';
 import { plural } from '@/lib/plural';
 
 /**
@@ -42,11 +44,14 @@ export function StaffingLayout({
   onPick,
   editable,
   unlocked,
+  functions,
 }: {
   norm: StaffNorm | null;
   norms: StaffNorm[];
   minutes: number;
   onPick: (code: string) => void;
+  /** Справочник функционалов — из него выбирают пост в правке. */
+  functions: FunctionOption[];
   /** Правка вообще возможна: пароль задан, хранилище есть. */
   editable: boolean;
   /** Пароль на правку уже введён. */
@@ -113,7 +118,7 @@ export function StaffingLayout({
       )}
 
       {editing && unlocked ? (
-        <EditForm norm={norm} onDone={() => setEditing(false)} />
+        <EditForm norm={norm} functions={functions} onDone={() => setEditing(false)} />
       ) : (
         <Timeline norm={norm} minutes={minutes} />
       )}
@@ -362,11 +367,13 @@ export function EditButton({ unlocked, onEdit }: { unlocked: boolean; onEdit: ()
 }
 
 /**
- * Форма правки: по каждой должности окна — число людей и посты, пост на
- * строку («2 прием», «1 кулинария, хлебка»). Сохраняется лавка целиком;
- * «Вернуть шаблон» стирает правку, и лавка снова идёт по шаблону.
+ * Форма правки: по каждой должности окна — число людей и функционал каждого
+ * из них, выбором из справочника (вкладка «Функционалы»). Вписать своё нельзя:
+ * свободным текстом каждый писал одно и то же по-своему, и привести это к
+ * одному виду было невозможно. Сохраняется лавка целиком; «Вернуть шаблон»
+ * стирает правку, и лавка снова идёт по шаблону.
  */
-function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
+function EditForm({ norm, functions, onDone }: { norm: StaffNorm; functions: FunctionOption[]; onDone: () => void }) {
   const router = useRouter();
   const roles = ORDER;
   const [counts, setCounts] = useState(() =>
@@ -381,26 +388,30 @@ function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
   );
   const setTime = (role: StaffRole, i: number, end: 0 | 1, value: string) =>
     setTimes((t) => ({ ...t, [role]: t[role].map((v, k) => (k === i ? (end === 0 ? [value, v[1]] : [v[0], value]) : v)) }));
-  const [initialTexts] = useState(() =>
-    Object.fromEntries(
-      roles.map((r) => [
-        r,
-        norm.roles[r].slots.map((_, i) =>
-          (norm.roles[r].posts?.[i] ?? []).map((p) => (p.count == null ? p.place : `${p.count} ${p.place}`)).join('\n'),
-        ),
-      ]),
-    ) as Record<StaffRole, string[]>,
+  // По человеку на строку: функционал каждого, '' — не выбран.
+  const [initialPeople] = useState(
+    () =>
+      Object.fromEntries(
+        roles.map((r) => [r, norm.roles[r].slots.map((s, i) => postsToPeople(norm.roles[r].posts?.[i] ?? [], s.count))]),
+      ) as Record<StaffRole, string[][]>,
   );
-  const [texts, setTexts] = useState(() =>
-    Object.fromEntries(
-      roles.map((r) => [
-        r,
-        norm.roles[r].slots.map((_, i) =>
-          (norm.roles[r].posts?.[i] ?? []).map((p) => (p.count == null ? p.place : `${p.count} ${p.place}`)).join('\n'),
-        ),
-      ]),
-    ) as Record<StaffRole, string[]>,
-  );
+  const [people, setPeople] = useState(initialPeople);
+  const setPerson = (role: StaffRole, i: number, k: number, value: string) =>
+    setPeople((p) => ({ ...p, [role]: p[role].map((w, j) => (j === i ? w.map((v, m) => (m === k ? value : v)) : w)) }));
+  // Число людей поменяли — строк столько же: новые пустые, лишние снизу уходят.
+  const setCount = (role: StaffRole, i: number, value: string) => {
+    setCounts((c) => ({ ...c, [role]: c[role].map((v, k) => (k === i ? value : v)) }));
+    const n = Math.min(50, Math.max(0, Math.floor(Number(value) || 0)));
+    setPeople((p) => ({
+      ...p,
+      [role]: p[role].map((w, j) => (j === i ? [...w.slice(0, n), ...Array<string>(Math.max(0, n - w.length)).fill('')] : w)),
+    }));
+  };
+  // Справочник для должности: её функционалы — первыми, остальные — ниже.
+  const options = (role: StaffRole) => ({
+    own: functions.filter((f) => f.roles.includes(role)),
+    other: functions.filter((f) => !f.roles.includes(role)),
+  });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -422,12 +433,9 @@ function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
                   counts: counts[r].map((c) => Number(c || 0)),
                   // «23:00» конца суток браузер отдаёт как есть; «00:00» в конце — это полночь.
                   times: times[r].map(([a, b]) => [a, b === '00:00' ? '24:00' : b]),
-                  // Пост на строку; «/» внутри строки тоже делит людей, как в шаблоне.
                   // Нетронутое окно — null: в нём остаётся книга или правило
                   // руководства, и новое правило его потом тоже подхватит.
-                  posts: texts[r].map((t, i) =>
-                    t === initialTexts[r][i] ? null : t.split('\n').flatMap((line) => parsePosts(line)),
-                  ),
+                  posts: people[r].map((w, i) => (w.join('\n') === initialPeople[r][i].join('\n') ? null : peopleToPosts(w))),
                 },
               ]),
             ),
@@ -449,8 +457,8 @@ function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
     <div className="flex flex-col gap-3">
       <p className="text-xs muted">
         Время окна — начало и конец; окна одной должности идут по порядку и не наезжают друг на друга. Число —
-        сколько человек должно быть в окне по норме (меняет и таблицу ниже). Посты — по одному на строку: «2
-        официант», «1 кулинария, хлебка».
+        сколько человек должно быть в окне по норме (меняет и таблицу ниже). Под числом — каждый человек и его
+        функционал из списка. Нужного функционала нет — его добавляют на вкладке «Функционалы».
       </p>
       {roles.map((role) => (
         <div key={role} className="grid gap-2 sm:grid-cols-[8rem_1fr] sm:items-start">
@@ -486,21 +494,49 @@ function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
                     min={0}
                     max={50}
                     value={counts[role][i]}
-                    onChange={(e) => setCounts((c) => ({ ...c, [role]: c[role].map((v, k) => (k === i ? e.target.value : v)) }))}
+                    onChange={(e) => setCount(role, i, e.target.value)}
                     className="h-7 w-14 rounded border px-1 text-right tabular-nums"
                     style={INPUT_STYLE}
                     aria-label={`${STAFF_ROLE_TITLE[role]} ${slotLabel(slot)}: человек`}
                   />
                 </span>
-                <textarea
-                  rows={3}
-                  value={texts[role][i]}
-                  onChange={(e) => setTexts((t) => ({ ...t, [role]: t[role].map((v, k) => (k === i ? e.target.value : v)) }))}
-                  placeholder="пост на строку"
-                  className="w-full rounded border px-1 py-0.5"
-                  style={INPUT_STYLE}
-                  aria-label={`${STAFF_ROLE_TITLE[role]} ${slotLabel(slot)}: посты`}
-                />
+                {people[role][i].map((value, k) => {
+                  const { own, other } = options(role);
+                  // Сверх нормы: расписано больше, чем людей в окне.
+                  const extra = k >= Number(counts[role][i] || 0);
+                  return (
+                    <select
+                      key={k}
+                      value={value}
+                      onChange={(e) => setPerson(role, i, k, e.target.value)}
+                      className="rounded"
+                      style={{ ...SELECT_STYLE, ...((!value || extra) && { borderColor: 'var(--red)' }) }}
+                      aria-label={`${STAFF_ROLE_TITLE[role]} ${slotLabel(slot)}: человек ${k + 1}`}
+                      title={extra ? 'Сверх нормы — выберите «убрать»' : value || undefined}
+                    >
+                      <option value="">{extra ? '— убрать —' : '— не выбрано —'}</option>
+                      {/* Значение не из справочника (справочник ещё не пришёл после входа) —
+                          показываем как есть, а не подменяем первым пунктом. */}
+                      {value && !functions.some((f) => f.name === value) && <option value={value}>{value}</option>}
+                      {own.length > 0 && (
+                        <optgroup label={STAFF_ROLE_TITLE[role]}>
+                          {own.map((f) => (
+                            <option key={f.name} value={f.name}>
+                              {f.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      <optgroup label={own.length > 0 ? 'Другие' : 'Функционалы'}>
+                        {other.map((f) => (
+                          <option key={f.name} value={f.name}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  );
+                })}
               </label>
             ))}
           </div>
@@ -535,3 +571,15 @@ function EditForm({ norm, onDone }: { norm: StaffNorm; onDone: () => void }) {
 const BUTTON = 'h-8 rounded-md border px-3 text-xs font-medium whitespace-nowrap hover:opacity-90 disabled:opacity-50';
 const BUTTON_STYLE = { borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' };
 const INPUT_STYLE = { borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' };
+// Глобальный select (globals.css) — под фильтры: крупный, с отступом под
+// стрелку. В карточке окна он съедал половину названия — здесь он компактный.
+// Фон — только цветом: сокращённый background стёр бы нарисованную стрелку.
+const SELECT_STYLE = {
+  borderColor: 'var(--border)',
+  backgroundColor: 'var(--surface)',
+  color: 'var(--text)',
+  padding: '0.3rem 1.3rem 0.3rem 0.4rem',
+  fontSize: '0.75rem',
+  lineHeight: '1rem',
+  backgroundPosition: 'right 0.65rem center, right 0.4rem center',
+};

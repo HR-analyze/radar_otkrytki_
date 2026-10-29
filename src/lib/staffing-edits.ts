@@ -1,7 +1,15 @@
 import { manualDbWritable, openManualDb } from './manual-db';
 import { STAFF_ROLES, normalizePlace, type StaffNorm, type StaffPost, type StaffRole } from './staffing';
 import { readStaffing, readStaffingBook, type StaffingSeed } from './staffing-store';
-import { applyPlaceAliases, placeAliasMap, placeKey, type PlaceAlias } from './staffing-places';
+import {
+  applyPlaceAliases,
+  defaultPlaceName,
+  placeAliasMap,
+  placeKey,
+  resolvePlace,
+  type FunctionOption,
+  type PlaceAlias,
+} from './staffing-places';
 
 /**
  * Правки «Графика пиков» с сайта: сколько человек в окне и кто где стоит.
@@ -225,29 +233,148 @@ export async function readPlaceAliasesSafe(): Promise<PlaceAlias[]> {
   }
 }
 
-/** Сохранить строки словаря; остальные строки не трогаются. */
-export async function savePlaceAliases(aliases: readonly PlaceAlias[], now: string): Promise<void> {
-  const rows = aliases.map((a) => [placeKey(a.place), a.name, now] as const);
+/** Запись журнала правок словаря: что было и что стало у написания. */
+export interface PlaceLogEntry {
+  id: number;
+  at: string;
+  /** Ключ написания (см. placeKey). */
+  place: string;
+  /** Название до правки; null — строки не было (словарь по умолчанию). */
+  oldName: string | null;
+  /** Название после; null — строку удалили. */
+  newName: string | null;
+  author: string;
+}
+
+/**
+ * Сохранить строки словаря (остальные не трогаются) и записать в журнал, что
+ * поменялось: кто, когда, что было. Одна строка словаря меняет всю сеть —
+ * без журнала сломанное название не из чего вернуть.
+ */
+export async function savePlaceAliases(aliases: readonly PlaceAlias[], now: string, author: string): Promise<void> {
+  await writePlaces(
+    aliases.map((a) => ({ place: placeKey(a.place), name: a.name })),
+    now,
+    author,
+  );
+}
+
+/** Удалить строку словаря: написание снова идёт по словарю по умолчанию. */
+export async function deletePlaceAlias(place: string, now: string, author: string): Promise<void> {
+  await writePlaces([{ place: placeKey(place), name: null }], now, author);
+}
+
+/**
+ * Принять написание как есть — не правка, журнал ею не засоряем: строка
+ * появилась, а название не поменялось.
+ */
+function logged(place: string, oldName: string | null, newName: string | null): boolean {
+  if (oldName === newName) return false;
+  return !(oldName == null && newName === defaultPlaceName(place));
+}
+
+async function writePlaces(rows: readonly { place: string; name: string | null }[], now: string, author: string): Promise<void> {
   if (process.env.RADAR_STORAGE === 'postgres') {
     const { pgTx } = await import('./postgres');
     await pgTx(async (c) => {
       for (const r of rows) {
-        await c.query(
-          'INSERT INTO radar_pg_staffing_places(place,name,updated_at) VALUES($1,$2,$3) ' +
-            'ON CONFLICT(place) DO UPDATE SET name=excluded.name,updated_at=excluded.updated_at',
-          [...r],
-        );
+        const old = await c.query('SELECT name FROM radar_pg_staffing_places WHERE place=$1', [r.place]);
+        const oldName = (old.rows[0] as { name: string } | undefined)?.name ?? null;
+        if (r.name == null) await c.query('DELETE FROM radar_pg_staffing_places WHERE place=$1', [r.place]);
+        else
+          await c.query(
+            'INSERT INTO radar_pg_staffing_places(place,name,updated_at) VALUES($1,$2,$3) ' +
+              'ON CONFLICT(place) DO UPDATE SET name=excluded.name,updated_at=excluded.updated_at',
+            [r.place, r.name, now],
+          );
+        if (logged(r.place, oldName, r.name)) {
+          await c.query(
+            'INSERT INTO radar_pg_staffing_places_log(at,place,old_name,new_name,author) VALUES($1,$2,$3,$4,$5)',
+            [now, r.place, oldName, r.name, author],
+          );
+        }
       }
     });
     return;
   }
   const db = await openManualDb();
   if (!db) throw new Error('Названия негде хранить: нет базы ручных данных');
+  const get = db.prepare(`SELECT name FROM staffing_places WHERE place = ?`);
+  const del = db.prepare(`DELETE FROM staffing_places WHERE place = ?`);
   const put = db.prepare(
     `INSERT INTO staffing_places(place, name, updated_at) VALUES (?, ?, ?)
      ON CONFLICT(place) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
   );
-  db.transaction(() => rows.forEach((r) => put.run(...r)))();
+  const log = db.prepare(`INSERT INTO staffing_places_log(at, place, old_name, new_name, author) VALUES (?, ?, ?, ?, ?)`);
+  db.transaction(() => {
+    for (const r of rows) {
+      const oldName = (get.get(r.place) as { name: string } | undefined)?.name ?? null;
+      if (r.name == null) del.run(r.place);
+      else put.run(r.place, r.name, now);
+      if (logged(r.place, oldName, r.name)) log.run(now, r.place, oldName, r.name, author);
+    }
+  })();
+}
+
+/** Последние правки словаря, новые сверху; без базы — пусто. */
+export async function readPlaceLog(limit = 50): Promise<PlaceLogEntry[]> {
+  type Row = { id: number | string; at: string; place: string; old_name: string | null; new_name: string | null; author: string };
+  try {
+    let rows: Row[];
+    if (process.env.RADAR_STORAGE === 'postgres') {
+      const { pgRows } = await import('./postgres');
+      rows = await pgRows<Row>(
+        'SELECT id, at, place, old_name, new_name, author FROM radar_pg_staffing_places_log ORDER BY at DESC, id DESC LIMIT $1',
+        [limit],
+      );
+    } else {
+      const db = await openManualDb();
+      if (!db) return [];
+      rows = db
+        .prepare(`SELECT id, at, place, old_name, new_name, author FROM staffing_places_log ORDER BY at DESC, id DESC LIMIT ?`)
+        .all(limit) as Row[];
+    }
+    return rows.map((r) => ({ id: Number(r.id), at: r.at, place: r.place, oldName: r.old_name, newName: r.new_name, author: r.author }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Посты правки лавки — только функционалы из справочника (см. functionCatalog).
+ * Форма даёт лишь выбор из списка, но запрос можно собрать и руками — проверяем
+ * и здесь. Написание, которое словарь сводит к функционалу («разог»), проходит
+ * и сохраняется уже единым названием.
+ */
+export function restrictToCatalog(
+  roles: StaffingEdit['roles'],
+  catalog: readonly FunctionOption[],
+  aliases: ReadonlyMap<string, string>,
+): { ok: true; roles: StaffingEdit['roles'] } | { ok: false; error: string } {
+  const known = new Map(catalog.map((f) => [f.name.toLowerCase(), f.name]));
+  const out: StaffingEdit['roles'] = {};
+  for (const role of STAFF_ROLES) {
+    const r = roles[role];
+    if (!r) continue;
+    const posts: (StaffPost[] | null)[] = [];
+    for (const w of r.posts) {
+      if (w == null) {
+        posts.push(null);
+        continue;
+      }
+      const clean: StaffPost[] = [];
+      for (const p of w) {
+        const name = known.get(resolvePlace(p.place, aliases).toLowerCase());
+        if (!name) return { ok: false, error: `«${p.place}» нет в справочнике — добавьте функционал на вкладке «Функционалы»` };
+        const same = clean.find((q) => q.place === name && q.count != null && p.count != null);
+        if (same) same.count! += p.count!;
+        else clean.push({ count: p.count, place: name });
+      }
+      posts.push(clean);
+    }
+    out[role] = { ...r, posts };
+  }
+  return { ok: true, roles: out };
 }
 
 export async function saveStaffingEdit(shopCode: string, roles: StaffingEdit['roles'], now: string): Promise<void> {

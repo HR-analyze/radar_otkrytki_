@@ -6,9 +6,15 @@ import {
   DEFAULT_PLACE_ALIASES,
   applyPlaceAliases,
   collectPlaces,
+  defaultPlaceName,
+  functionCatalog,
+  isReviewedPlace,
   parsePlaceAliases,
   placeAliasMap,
+  placeWindows,
+  previewAliasChange,
   resolvePlace,
+  unusedAliases,
 } from './staffing-places';
 
 const { norms } = readStaffing();
@@ -97,4 +103,69 @@ test('словарь из запроса: пустое название — ка
   assert.equal(parsePlaceAliases({ aliases: [] }).ok, false);
   assert.equal(parsePlaceAliases({ aliases: [{ place: '', name: 'х' }] }).ok, false);
   assert.equal(parsePlaceAliases({ aliases: [{ place: 'х', name: 'х'.repeat(81) }] }).ok, false);
+});
+
+test('новое написание — не правленное на сайте и не известная опечатка', () => {
+  const saved = new Set(['официант']);
+  assert.equal(isReviewedPlace('официант', saved), true, 'сохраняли на сайте');
+  assert.equal(isReviewedPlace('разог', saved), true, 'опечатка из словаря по умолчанию');
+  assert.equal(isReviewedPlace('разогр', saved), false, 'пришло из книги, никто не разбирал');
+  assert.equal(defaultPlaceName('Разог'), 'разогрев');
+  assert.equal(defaultPlaceName('касса'), 'касса');
+});
+
+test('справочник для правки лавки: единые названия, свои должности и добавленные на вкладке', () => {
+  const saved = [
+    { place: 'разогрев', name: 'разогрев блюд' },
+    { place: 'мойка витрин', name: 'мойка витрин' },
+  ];
+  const live = applyPlaceAliases(norms, placeAliasMap(saved));
+  const catalog = functionCatalog(live, saved);
+  const names = catalog.map((f) => f.name);
+  assert.ok(names.includes('разогрев блюд'));
+  assert.ok(!names.includes('разогрев') && !names.includes('разог'), 'старые написания в список не идут');
+  assert.deepEqual(catalog.find((f) => f.name === 'мойка витрин')?.roles, [], 'добавлен, пока нигде не стоит');
+  assert.ok(catalog.find((f) => f.name === 'разогрев блюд')!.roles.includes('cook'));
+  assert.equal(new Set(names.map((n) => n.toLowerCase())).size, names.length, 'без повторов');
+  assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b, 'ru')));
+});
+
+test('строки словаря без написаний: добавленный функционал и пропавшая опечатка, но не звено цепочки', () => {
+  const usages = [{ key: 'разог' }, { key: 'касса' }];
+  const unused = unusedAliases(
+    [
+      { place: 'разогрев', name: 'разогрев блюд' }, // «разог → разогрев → разогрев блюд» — в деле
+      { place: 'мойка витрин', name: 'мойка витрин' },
+      { place: 'разгрев', name: 'разогрев' },
+      { place: 'касса', name: 'касса' },
+    ],
+    usages,
+  );
+  assert.deepEqual(unused, [
+    { place: 'мойка витрин', name: 'мойка витрин', kind: 'added' },
+    { place: 'разгрев', name: 'разогрев', kind: 'gone' },
+  ]);
+});
+
+test('предпросмотр правки словаря: окна, лавки и слияния', () => {
+  const windows = [
+    { shop: 'М1', places: ['разог', 'разогрев'] },
+    { shop: 'М1', places: ['витрина', 'разогрев'] },
+    { shop: 'М2', places: ['касса'] },
+  ];
+  // По умолчанию «разог» уже «разогрев» — в первом окне он и так один.
+  assert.deepEqual(previewAliasChange(windows, [], [{ place: 'разогрев', name: 'разогрев блюд' }]), {
+    windows: 2,
+    shops: 1,
+    merged: 0,
+  });
+  assert.deepEqual(previewAliasChange(windows, [], [{ place: 'витрина', name: 'разогрев' }]), { windows: 1, shops: 1, merged: 1 });
+  assert.deepEqual(previewAliasChange(windows, [], [{ place: 'бар', name: 'кофе' }]), { windows: 0, shops: 0, merged: 0 });
+});
+
+test('окна для предпросмотра — все непустые окна сети с написаниями как в книгах', () => {
+  const windows = placeWindows(norms);
+  assert.ok(windows.length > 1000);
+  assert.ok(windows.every((w) => w.places.length > 0 && w.shop));
+  assert.ok(windows.some((w) => w.places.includes('разог')));
 });

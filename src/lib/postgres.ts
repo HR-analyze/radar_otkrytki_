@@ -49,6 +49,10 @@ CREATE TABLE IF NOT EXISTS radar_pg_staffing_edits (
   shop_code TEXT PRIMARY KEY, roles TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS radar_pg_staffing_places (
   place TEXT PRIMARY KEY, name TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS radar_pg_staffing_places_log (
+  id BIGSERIAL PRIMARY KEY, at TEXT NOT NULL, place TEXT NOT NULL,
+  old_name TEXT, new_name TEXT, author TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS radar_pg_staffing_places_log_at ON radar_pg_staffing_places_log(at DESC, id DESC);
 CREATE TABLE IF NOT EXISTS radar_pg_region_periods (
   id BIGSERIAL PRIMARY KEY, shop_code TEXT NOT NULL, manager TEXT NOT NULL,
   from_date TEXT NOT NULL, to_date TEXT, source TEXT NOT NULL, legacy_id BIGINT UNIQUE);

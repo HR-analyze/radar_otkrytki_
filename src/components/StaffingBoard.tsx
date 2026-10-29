@@ -26,6 +26,7 @@ import { formatClock, minutesNowMsk } from '@/lib/time';
 import { plural } from '@/lib/plural';
 import { Hint } from './Hint';
 import { StaffingLayout } from './StaffingLayout';
+import type { FunctionOption } from '@/lib/staffing-places';
 
 /**
  * График пиков: калькулятор «лавка + время → сколько людей на смене» и под
@@ -47,6 +48,7 @@ export function StaffingBoard({
   initialLive = false,
   editable = false,
   unlocked = false,
+  functions = [],
 }: {
   norms: StaffNorm[];
   /** null — «Все лавки». */
@@ -58,6 +60,8 @@ export function StaffingBoard({
   editable?: boolean;
   /** Пароль на правку уже введён. */
   unlocked?: boolean;
+  /** Справочник функционалов для правки расстановки. */
+  functions?: FunctionOption[];
 }) {
   const [code, setCode] = useState(initialCode);
   const [minutes, setMinutes] = useState(initialMinutes);
@@ -219,6 +223,7 @@ export function StaffingBoard({
         onPick={(c) => pick({ code: c })}
         editable={editable}
         unlocked={unlocked}
+        functions={functions}
       />
 
       {/* --- шаблон целиком --- */}

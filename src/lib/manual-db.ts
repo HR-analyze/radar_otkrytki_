@@ -229,6 +229,17 @@ function migrate(db: BetterSqlite3.Database): void {
       updated_at TEXT NOT NULL
     );
 
+    -- Журнал правок словаря функционалов: кто, когда, что было и что стало.
+    -- old_name NULL — строки не было, new_name NULL — строку удалили.
+    CREATE TABLE IF NOT EXISTS staffing_places_log (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      at       TEXT NOT NULL,
+      place    TEXT NOT NULL,
+      old_name TEXT,
+      new_name TEXT,
+      author   TEXT NOT NULL
+    );
+
     -- Ручные нарушения конкурса: одна запись = один постоянный штраф.
     CREATE TABLE IF NOT EXISTS contest_violations (
       id         TEXT PRIMARY KEY,

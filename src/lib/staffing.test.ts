@@ -15,6 +15,8 @@ import {
   sumRoleTotals,
   staffAt,
   staffAtAll,
+  peopleToPosts,
+  postsToPeople,
 } from './staffing';
 
 test('нормы выхода из репозитория: у каждой лавки все должности и окна по порядку', () => {
@@ -141,4 +143,25 @@ test('итоги должности: штат, часы и рубли, по се
   assert.equal(peak.count, 5);
   assert.equal(peak.slot.from, 450);
   assert.equal(rolePeak([findStaffNorm(norms, 'М1')!], 'barista'), null, 'в М1 бариста нет');
+});
+
+test('правка лавки по человеку: посты ↔ функционал каждого', () => {
+  assert.deepEqual(postsToPeople([{ count: 2, place: 'официант' }, { count: 1, place: 'касса' }], 4), [
+    'официант',
+    'официант',
+    'касса',
+    '',
+  ]);
+  // Пост без числа — все оставшиеся люди окна.
+  assert.deepEqual(postsToPeople([{ count: null, place: 'бар + касса' }], 2), ['бар + касса', 'бар + касса']);
+  assert.deepEqual(postsToPeople([{ count: null, place: 'бар + касса' }], 0), ['бар + касса']);
+  // Расписано больше нормы — строк столько, сколько расписано.
+  assert.equal(postsToPeople([{ count: 3, place: 'официант' }, { count: 1, place: 'касса' }], 3).length, 4);
+  assert.deepEqual(postsToPeople([], 2), ['', '']);
+
+  assert.deepEqual(peopleToPosts(['официант', 'касса', '', 'Официант']), [
+    { count: 2, place: 'официант' },
+    { count: 1, place: 'касса' },
+  ]);
+  assert.deepEqual(peopleToPosts(['', '']), []);
 });

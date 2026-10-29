@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
-import { readStaffingLive, canEditStaffing } from '@/lib/staffing-edits';
+import { readPlaceAliasesSafe, readStaffingLive, canEditStaffing } from '@/lib/staffing-edits';
+import { functionCatalog } from '@/lib/staffing-places';
 import { STAFFING_COOKIE, isStaffingUnlocked, staffingPassword } from '@/lib/auth';
 import { findStaffNorm, parseTimeOfDay } from '@/lib/staffing';
 import { minutesNowMsk } from '@/lib/time';
@@ -28,7 +29,7 @@ export default async function StaffingPage({
     return Array.isArray(v) ? v[0] : v;
   };
 
-  const { norms, source, builtAt } = await readStaffingLive();
+  const [{ norms, source, builtAt }, saved] = await Promise.all([readStaffingLive(), readPlaceAliasesSafe()]);
   // Править можно, если пароль на правку задан и хранилище есть; войти —
   // кнопкой на вкладке, тогда кука уже стоит.
   const editable = Boolean(staffingPassword()) && canEditStaffing();
@@ -63,6 +64,7 @@ export default async function StaffingPage({
         initialLive={fixed == null}
         editable={editable}
         unlocked={unlocked}
+        functions={unlocked ? functionCatalog(norms, saved) : []}
       />
     </div>
   );

@@ -155,6 +155,121 @@ export function collectPlaces(norms: readonly StaffNorm[]): PlaceUsage[] {
   }));
 }
 
+/** Название написания по словарю по умолчанию — без правок сайта. */
+export function defaultPlaceName(place: string): string {
+  return resolvePlace(place, placeAliasMap([]));
+}
+
+/**
+ * Написание разобрано: его строку сохраняли на сайте или оно — известная
+ * опечатка из словаря по умолчанию. Остальное — «новое»: так пришло из книги,
+ * и никто ещё не сказал, какой это функционал. Каждая новая книга приносит
+ * такие — их и надо пройти, а не все полсотни строк.
+ */
+export function isReviewedPlace(key: string, savedKeys: ReadonlySet<string>): boolean {
+  return savedKeys.has(key) || DEFAULT_PLACE_ALIASES.some((a) => placeKey(a.place) === key);
+}
+
+/** Функционал для выпадающего списка в правке лавки. */
+export interface FunctionOption {
+  name: string;
+  /** У каких должностей он уже стоит — их функционалы в списке идут первыми. */
+  roles: StaffRole[];
+}
+
+/**
+ * Справочник функционалов для правки лавки: единые названия из расстановки
+ * (уже после словаря) и всё, во что переименовали на вкладке «Функционалы»,
+ * включая добавленные там функционалы, которые пока нигде не стоят. Вписать
+ * своё в правке лавки нельзя — только выбрать отсюда, иначе разночтения
+ * поползли бы снова.
+ */
+export function functionCatalog(live: readonly StaffNorm[], saved: readonly PlaceAlias[]): FunctionOption[] {
+  const by = new Map<string, FunctionOption>();
+  const add = (name: string, role?: StaffRole) => {
+    const clean = normalizePlace(name);
+    if (!clean) return;
+    const o = by.get(clean.toLowerCase()) ?? { name: clean, roles: [] };
+    if (role && !o.roles.includes(role)) o.roles.push(role);
+    by.set(clean.toLowerCase(), o);
+  };
+  for (const n of live) for (const role of STAFF_ROLES) for (const w of n.roles[role].posts ?? []) for (const p of w) add(p.place, role);
+  const aliases = placeAliasMap(saved);
+  for (const a of saved) add(resolvePlace(a.name, aliases));
+  return [...by.values()]
+    .map((o) => ({ ...o, roles: STAFF_ROLES.filter((r) => o.roles.includes(r)) }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+}
+
+/** Строка словаря с сайта, которой нет среди написаний. */
+export interface UnusedAlias extends PlaceAlias {
+  /** 'added' — функционал, добавленный на вкладке; 'gone' — написание пропало из книг. */
+  kind: 'added' | 'gone';
+}
+
+/**
+ * Строки словаря, которые ни на что не влияют: написание пропало из книг
+ * (пересобрали — опечатку исправили) или функционал добавили, а в лавки
+ * ещё не поставили. Строка, через которую идёт цепочка («разог → разогрев →
+ * разогрев блюд»), — в деле, даже если самого «разогрева» в книгах нет.
+ */
+export function unusedAliases(saved: readonly PlaceAlias[], usages: readonly Pick<PlaceUsage, 'key'>[]): UnusedAlias[] {
+  const aliases = placeAliasMap(saved);
+  const reached = new Set<string>();
+  for (const u of usages) {
+    let key = u.key;
+    while (!reached.has(key)) {
+      reached.add(key);
+      const next = aliases.get(key);
+      if (next == null) break;
+      key = next.toLowerCase();
+    }
+  }
+  return saved
+    .filter((a) => !reached.has(placeKey(a.place)))
+    .map((a) => ({ ...a, kind: placeKey(a.place) === placeKey(a.name) ? 'added' : 'gone' }));
+}
+
+/** Окно для предпросмотра правки словаря: лавка и написания мест как в книгах. */
+export interface PlaceWindow {
+  shop: string;
+  places: string[];
+}
+
+export function placeWindows(norms: readonly StaffNorm[]): PlaceWindow[] {
+  return norms.flatMap((n) =>
+    STAFF_ROLES.flatMap((r) =>
+      (n.roles[r].posts ?? []).filter((w) => w.length > 0).map((w) => ({ shop: n.code, places: w.map((p) => p.place) })),
+    ),
+  );
+}
+
+/**
+ * Что сделает правка словаря: сколько окон и лавок поменяются и в скольких
+ * окнах места сольются в одно («1 разог · 1 разогрев» → «2 разогрев»). Одна
+ * строка словаря меняет всю сеть — масштаб надо видеть до «Сохранить».
+ */
+export function previewAliasChange(
+  windows: readonly PlaceWindow[],
+  saved: readonly PlaceAlias[],
+  changes: readonly PlaceAlias[],
+): { windows: number; shops: number; merged: number } {
+  const before = placeAliasMap(saved);
+  const after = placeAliasMap([...saved, ...changes]);
+  const shops = new Set<string>();
+  let changed = 0;
+  let merged = 0;
+  for (const w of windows) {
+    const a = w.places.map((p) => resolvePlace(p, before).toLowerCase());
+    const b = w.places.map((p) => resolvePlace(p, after).toLowerCase());
+    if (a.every((x, i) => x === b[i])) continue;
+    changed++;
+    shops.add(w.shop);
+    if (new Set(b).size < new Set(a).size) merged++;
+  }
+  return { windows: changed, shops: shops.size, merged };
+}
+
 /** Строк в словаре не больше — с запасом к сотне написаний по сети. */
 export const MAX_PLACE_ALIASES = 1000;
 

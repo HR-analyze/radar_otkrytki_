@@ -3,7 +3,16 @@ import { cookies } from 'next/headers';
 import { STAFFING_COOKIE, isStaffingUnlocked } from '@/lib/auth';
 import { findStaffNorm } from '@/lib/staffing';
 import { readStaffing } from '@/lib/staffing-store';
-import { canEditStaffing, parseStaffingEdit, resetStaffingEdit, saveStaffingEdit } from '@/lib/staffing-edits';
+import {
+  canEditStaffing,
+  parseStaffingEdit,
+  readPlaceAliasesSafe,
+  readStaffingLive,
+  resetStaffingEdit,
+  restrictToCatalog,
+  saveStaffingEdit,
+} from '@/lib/staffing-edits';
+import { functionCatalog, placeAliasMap } from '@/lib/staffing-places';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,7 +50,12 @@ export async function POST(req: Request) {
   const parsed = parseStaffingEdit(norm, body);
   if (!parsed.ok) return NextResponse.json({ ok: false, error: parsed.error }, { status: 400 });
 
-  await saveStaffingEdit(norm.code, parsed.roles, new Date().toISOString());
+  // Посты — только функционалы из справочника, как в выпадающем списке формы.
+  const [{ norms }, saved] = await Promise.all([readStaffingLive(), readPlaceAliasesSafe()]);
+  const checked = restrictToCatalog(parsed.roles, functionCatalog(norms, saved), placeAliasMap(saved));
+  if (!checked.ok) return NextResponse.json({ ok: false, error: checked.error }, { status: 400 });
+
+  await saveStaffingEdit(norm.code, checked.roles, new Date().toISOString());
   return NextResponse.json({ ok: true });
 }
 

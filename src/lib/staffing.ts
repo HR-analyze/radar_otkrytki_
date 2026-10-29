@@ -379,6 +379,33 @@ export function postsLabel(posts: readonly StaffPost[]): string {
   return posts.map((p) => (p.count == null ? p.place : `${p.count} ${p.place}`)).join(' · ');
 }
 
+/**
+ * Посты окна → по человеку на строку, как в правке лавки: «2 официант,
+ * 1 касса» при норме 4 — «официант, официант, касса, (не выбрано)». Пост без
+ * числа («бар + касса») — это все оставшиеся люди окна, но не меньше одного.
+ * Строк — сколько людей по норме, а если расписано больше — сколько расписано.
+ */
+export function postsToPeople(posts: readonly StaffPost[], count: number): string[] {
+  const numbered = posts.reduce((s, p) => s + (p.count ?? 0), 0);
+  const loose = posts.filter((p) => p.count == null).length;
+  const people = posts.flatMap((p) =>
+    Array<string>(p.count ?? (loose === 1 ? Math.max(1, count - numbered) : 1)).fill(p.place),
+  );
+  return [...people, ...Array<string>(Math.max(0, count - people.length)).fill('')];
+}
+
+/** Обратно: люди → посты окна; одинаковые складываются, «не выбрано» — не пост. */
+export function peopleToPosts(people: readonly string[]): StaffPost[] {
+  const posts: StaffPost[] = [];
+  for (const place of people) {
+    if (!place) continue;
+    const same = posts.find((p) => p.place.toLowerCase() === place.toLowerCase());
+    if (same) same.count! += 1;
+    else posts.push({ count: 1, place });
+  }
+  return posts;
+}
+
 /** Слова, по которым в чужой колонке видно другую должность: «1 повар разогрев». */
 const OTHER_ROLE: Record<TemplateRole, RegExp> = {
   cashier: /^(повар|бариста|уборщ|зд|зам|сборщ)/i,
