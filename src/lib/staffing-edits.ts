@@ -1,6 +1,7 @@
 import { manualDbWritable, openManualDb } from './manual-db';
 import { STAFF_ROLES, normalizePlace, splitLeadingCount, type StaffNorm, type StaffPost, type StaffRole } from './staffing';
 import { readStaffing, readStaffingBook, type StaffingSeed } from './staffing-store';
+import { withoutBarDeputy } from './staffing-rules';
 import {
   applyPlaceAliases,
   defaultPlaceName,
@@ -194,7 +195,8 @@ export async function readStaffingEdits(): Promise<StaffingEdit[]> {
 export async function readStaffingUnnamed(): Promise<StaffingSeed> {
   const seed = readStaffing();
   try {
-    return { ...seed, norms: applyStaffingEdits(seed.norms, await readStaffingEdits(), readStaffingBook().norms) };
+    const edited = applyStaffingEdits(seed.norms, await readStaffingEdits(), readStaffingBook().norms);
+    return { ...seed, norms: edited.map(withoutBarDeputy) };
   } catch {
     // База недоступна — показываем шаблон, а не падаем: правки вернутся,
     // когда вернётся база.

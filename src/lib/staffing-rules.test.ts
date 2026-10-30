@@ -58,3 +58,14 @@ test('правила: в окнах без правила — как в книг
   assert.deepEqual(m4.roles.cashier.posts![2], m4raw.roles.cashier.posts![2], '11–16 — из книги');
   assert.deepEqual(m4.roles.cashier.slots, m4raw.roles.cashier.slots);
 });
+
+test('правила: без кофемашины нет зама по бару, с ней и «не указано» — есть', () => {
+  const norms = readStaffing().norms;
+  const m1 = findStaffNorm(norms, 'М1')!;
+  assert.equal(m1.coffeeMachine, false);
+  assert.deepEqual(m1.roles.barDeputy.slots.map((s) => s.count), [0]);
+  assert.deepEqual(m1.roles.barDeputy.posts, [[]]);
+  assert.equal(findStaffNorm(norms, 'М2')!.roles.barDeputy.slots[0].count, 1);
+  const unknown = { ...structuredClone(raw.find((x) => x.code === 'М1')!), coffeeMachine: null };
+  assert.equal(applyStaffingRules([unknown])[0].roles.barDeputy.slots[0].count, 1);
+});

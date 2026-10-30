@@ -18,7 +18,8 @@ import type { StaffNorm, StaffPost, StaffRole, StaffSlot } from './staffing';
  *                         больше — лишние на разогрев;
  *   уборщики  7–8         подготовка зала: один — уборка зала + посуда; двое —
  *                         1 зал, 1 посуда; трое — 1 зал, 2 посуда;
- *   сборщик               если есть — сборка заказов и доставка.
+ *   сборщик               если есть — сборка заказов и доставка;
+ *   ЗД по бару            нет кофемашины — нет бара и зама по бару (30.10.2026).
  *
  * Окно правила узнаём по точному началу и концу: сдвинет новый шаблон окно —
  * правило к нему не приложится, и останется расстановка из книги.
@@ -81,5 +82,20 @@ export function applyStaffingRules(norms: readonly StaffNorm[]): StaffNorm[] {
     }
     if (picker && picker.count > 0) roles.picker = { ...roles.picker, posts: [PICKER_POSTS(picker.count)] };
     return { ...n, roles };
-  });
+  }).map(withoutBarDeputy);
+}
+
+/**
+ * Нет кофемашины — нет бара, и зам по бару там не нужен: норма 0, постов нет.
+ * Кофемашина «не указано» (null) зама не убирает. Вызывается и после правок
+ * сайта (staffing-edits.ts): до 30.10.2026 форма сохраняла зама по бару
+ * каждой лавке, и старая правка вернула бы его.
+ */
+export function withoutBarDeputy(n: StaffNorm): StaffNorm {
+  if (n.coffeeMachine !== false) return n;
+  const r = n.roles.barDeputy;
+  return {
+    ...n,
+    roles: { ...n.roles, barDeputy: { ...r, slots: r.slots.map((s) => ({ ...s, count: 0 })), posts: r.slots.map(() => []) } },
+  };
 }
