@@ -90,3 +90,36 @@ test('правка не замораживает правила: нетрону�
   const parsed = parseStaffingEdit(ruledM50, { roles: { cook: { counts, posts: fresh } } });
   assert.ok(parsed.ok && parsed.roles.cook!.posts[0] === null, 'null из формы доезжает до базы как null');
 });
+
+test('старая правка «2-подготовка витрин» без числа читается как 2 человека', () => {
+  const m1 = findStaffNorm(norms, 'М1')!;
+  const counts = m1.roles.cook.slots.map((s) => s.count);
+  const [edited] = applyStaffingEdits(
+    [m1],
+    [
+      {
+        shopCode: 'М1',
+        updatedAt: '2026-10-28T13:08:29.447Z',
+        roles: {
+          cook: {
+            counts,
+            posts: m1.roles.cook.slots.map((_, i) =>
+              i === 0
+                ? [
+                    { count: null, place: '2-подготовка витрин' },
+                    { count: null, place: '1 - посуда' },
+                    { count: null, place: '11*-16*' },
+                  ]
+                : null,
+            ),
+          },
+        },
+      },
+    ],
+  );
+  assert.deepEqual(edited.roles.cook.posts![0], [
+    { count: 2, place: 'подготовка витрин' },
+    { count: 1, place: 'посуда' },
+    { count: null, place: '11*-16*' },
+  ]);
+});

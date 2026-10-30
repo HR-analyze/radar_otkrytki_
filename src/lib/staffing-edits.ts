@@ -1,5 +1,5 @@
 import { manualDbWritable, openManualDb } from './manual-db';
-import { STAFF_ROLES, normalizePlace, type StaffNorm, type StaffPost, type StaffRole } from './staffing';
+import { STAFF_ROLES, normalizePlace, splitLeadingCount, type StaffNorm, type StaffPost, type StaffRole } from './staffing';
 import { readStaffing, readStaffingBook, type StaffingSeed } from './staffing-store';
 import {
   applyPlaceAliases,
@@ -87,7 +87,7 @@ export function applyStaffingEdits(
         posts: base.slots.map((_, i) => {
           const edited = e.posts[i];
           if (edited == null) return base.posts?.[i] ?? [];
-          const clean = edited.map((p) => ({ ...p, place: normalizePlace(p.place) }));
+          const clean = edited.map((p) => splitLeadingCount({ ...p, place: normalizePlace(p.place) }));
           const fromBook = bookByCode.get(n.code)?.roles[role].posts?.[i] ?? [];
           return sameDislocation(clean, fromBook) ? (base.posts?.[i] ?? []) : clean;
         }),
