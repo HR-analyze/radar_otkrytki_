@@ -477,7 +477,7 @@ test('конкурс считается по утреннему замеру, и
 
   const [history] = await q.shopHistory('М8', day, day);
   assert.equal(history.fill, 0.75, 'в карточке лавки итог — среднее замеров');
-  assert.deepEqual(history.fillSlots, { morning: 1, afternoon: 0.5 });
+  assert.deepEqual(history.fillSlots, { morning: 1, afternoon: 0.5, evening: null });
   assert.equal(
     history.criteria.find((c) => c.criterion === 'showcase')?.status,
     'red',
@@ -571,4 +571,116 @@ test('закрытая лавка уходит из списков, но не и
   // История лавки открывается как прежде — карточка закрытой лавки рабочая.
   const history = await q.shopHistory('М15', ALL.from, ALL.to);
   assert.ok(history.length > 0, 'дни М15 пропали из карточки — закрытие стёрло историю');
+});
+
+test('КПИ: итог дня линейных — среднее заполненных замеров', async () => {
+  const { saveShowcaseEdits } = await import('./showcase-store');
+  const day = '2026-08-30';
+  await saveShowcaseEdits([
+    // Утром полная витрина, в 16:00 — половина: итог дня 75%.
+    { date: day, shopCode: 'М17', fill: 1, afternoonFill: 0.5 },
+    // Мерили только в 16:00 — итог равен ему, а не его половине.
+    { date: day, shopCode: 'М18', fill: null, afternoonFill: 0.9 },
+  ]);
+
+  const { shops } = await q.kpi({ from: day, to: day });
+  const m17 = shops.find((r) => r.shop.code === 'М17')?.days[day];
+  assert.deepEqual(
+    m17 && { percent: m17.percent, measures: m17.measures, status: m17.status },
+    { percent: 75, measures: { morning: 100, afternoon: 50, evening: null }, status: 'red' },
+  );
+  const m18 = shops.find((r) => r.shop.code === 'М18')?.days[day];
+  assert.equal(m18?.percent, 90);
+  assert.equal(m18?.measures.morning, null, 'утром не мерили — так и подписано');
+
+  // С 26.10 в итог входит и 18:30: 100, 50 и 90 → 80%.
+  const evening = '2026-10-26';
+  await saveShowcaseEdits([{ date: evening, shopCode: 'М17', fill: 1, afternoonFill: 0.5, eveningFill: 0.9 }]);
+  const late = (await q.kpi({ from: evening, to: evening })).shops.find((r) => r.shop.code === 'М17')?.days[evening];
+  assert.equal(late?.percent, 80);
+  assert.equal(late?.measures.evening, 90);
+});
+
+test('КПИ: среднее лавки — по её дням с замером', async () => {
+  const { shops } = await q.kpi({ from: ALL.from, to: ALL.to });
+  assert.ok(shops.length > 0, 'за весь период витрины кто-то заполнял');
+
+  for (const r of shops) {
+    const days = Object.values(r.days);
+    assert.equal(r.measured, days.length, `${r.shop.code}: знаменатель разошёлся с днями`);
+    const mean = Math.round((days.reduce((a, d) => a + d.percent, 0) / days.length) * 10) / 10;
+    assert.equal(r.avg, mean, `${r.shop.code}: среднее разошлось с днями`);
+  }
+});
+
+test('КПИ: ни один лавко-день не теряется и не задваивается между блоками', async () => {
+  const { shops, leaders, regions, network } = await q.kpi({ from: ALL.from, to: ALL.to });
+  const sum = (list: readonly { measured: number }[]) => list.reduce((a, r) => a + r.measured, 0);
+
+  assert.equal(network.measured, sum(shops), 'сеть разошлась с лавками');
+  assert.equal(sum(leaders), network.measured, 'директора и ТД разошлись с сетью');
+  assert.equal(sum(regions), network.measured, 'РМ разошлись с сетью');
+
+  const inLeaders = leaders.flatMap((l) => l.shops.map((r) => r.shop.code)).sort();
+  assert.deepEqual(inLeaders, shops.map((r) => r.shop.code).sort(), 'лавка у двух руководителей или ни у кого');
+});
+
+test('КПИ: одна строка на руководителя — ТД с двумя лавками, директор со своими', async () => {
+  const { readShopDirectors } = await import('./shop-directors-store');
+  const table = new Map(readShopDirectors().shops.map((r) => [r.code, r]));
+  const { leaders } = await q.kpi({ from: ALL.from, to: ALL.to });
+
+  const territorial = leaders.filter((l) => l.kind === 'territorial');
+  assert.ok(territorial.some((l) => l.shops.length > 1), 'ни у одного ТД нет двух лавок — таблица «Лавки» не доехала');
+  for (const l of territorial) {
+    for (const r of l.shops) {
+      const row = table.get(r.shop.code);
+      const expected = row ? row.territorial : r.shop.director;
+      assert.equal(expected, l.name, `${r.shop.code} попала к чужому ТД`);
+    }
+  }
+
+  // Директор с двумя лавками — одна строка, а не две «Директор лавки».
+  const abramova = leaders.find((l) => l.kind === 'director' && l.name === 'Абрамова Дарья');
+  assert.deepEqual(abramova?.shops.map((r) => r.shop.code).sort(), ['М23', 'М47']);
+  const named = leaders.filter((l) => l.kind === 'director' && l.name);
+  assert.ok(named.length > 20, `директоров с именем всего ${named.length}`);
+
+  const order = leaders.map((l) => l.avg ?? -1);
+  assert.deepEqual(order, [...order].sort((a, b) => b - a), 'руководители не по убыванию среднего');
+});
+
+test('КПИ: фильтр «Руководитель» оставляет только его лавки во всех блоках', async () => {
+  const all = await q.kpi({ from: ALL.from, to: ALL.to });
+  assert.ok(all.leaderOptions.territorial.includes('Макарова Дарья'), 'ТД нет в вариантах фильтра');
+  assert.ok(all.leaderOptions.directors.includes('Абрамова Дарья'), 'директора нет в вариантах фильтра');
+
+  const td = await q.kpi({ from: ALL.from, to: ALL.to, leader: 'td:Макарова Дарья' });
+  assert.deepEqual(td.shops.map((r) => r.shop.code).sort(), ['М38', 'М54']);
+  assert.equal(td.leaders.length, 1);
+  assert.equal(td.network.measured, td.leaders[0].measured, 'сеть под фильтром — лавки руководителя');
+  assert.equal(
+    td.regions.reduce((a, r) => a + r.measured, 0),
+    td.network.measured,
+    'РМ под фильтром посчитали чужие лавки',
+  );
+
+  const dir = await q.kpi({ from: ALL.from, to: ALL.to, leader: 'dir:Абрамова Дарья' });
+  assert.deepEqual(dir.shops.map((r) => r.shop.code).sort(), ['М23', 'М47']);
+
+  // Выбранный РМ сужает варианты фильтра до руководителей своих лавок.
+  const rm = all.regions[0].region;
+  const scoped = await q.kpi({ from: ALL.from, to: ALL.to, region: rm });
+  const count = (o: typeof all.leaderOptions) => o.territorial.length + o.directors.length;
+  assert.ok(count(scoped.leaderOptions) < count(all.leaderOptions), 'РМ не сузил список руководителей');
+});
+
+test('КПИ уважает фильтр по РМ', async () => {
+  const { regions } = await q.kpi({ from: ALL.from, to: ALL.to });
+  assert.ok(regions.length > 1, 'РМ в разрезе меньше двух — сравнивать нечего');
+
+  const rm = regions[0].region;
+  const scoped = await q.kpi({ from: ALL.from, to: ALL.to, region: rm });
+  assert.deepEqual(scoped.regions.map((r) => r.region), [rm], 'в разрез затесался чужой РМ');
+  assert.equal(scoped.network.measured, regions[0].measured, 'под фильтром сеть = выбранный РМ');
 });

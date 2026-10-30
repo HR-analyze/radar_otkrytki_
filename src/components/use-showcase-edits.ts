@@ -38,8 +38,8 @@ const SAVED_BADGE_MS = 2500;
 const UNDO_DEPTH = 50;
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
-/** percent — утренний замер, afternoonPercent — замер в 16:00. */
-export type EditField = 'percent' | 'afternoonPercent' | 'note';
+/** percent — утренний замер, afternoonPercent — в 16:00, eveningPercent — в 18:30. */
+export type EditField = 'percent' | 'afternoonPercent' | 'eveningPercent' | 'note';
 
 /** Строка, как её вернул сервер после сохранения: по ней красят ячейку. */
 export interface SavedRow {
@@ -47,7 +47,8 @@ export interface SavedRow {
   shopCode: string;
   percent: number | null;
   afternoonPercent: number | null;
-  /** Статус итога дня — среднего двух замеров. */
+  eveningPercent: number | null;
+  /** Статус итога дня — среднего заполненных замеров. */
   status: Status;
   note: string;
 }
@@ -91,6 +92,14 @@ export interface ShowcaseEdits {
   /** Забыть черновики и отмену: под редактором сменился набор данных. */
   reset: () => void;
   setError: (message: string | null) => void;
+  /** Нет ни очереди, ни запроса в пути: можно перечитать данные с сервера. */
+  isIdle: () => boolean;
+  /**
+   * Забыть черновики, которые уже доехали до сервера, — кроме строки под
+   * курсором. Иначе давно сохранённое «95» навсегда перекрывало бы цифру,
+   * которую потом поставил другой человек (см. useShowcaseLive).
+   */
+  settle: (keep?: { date: string; shopCode: string } | null) => void;
 }
 
 export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseEdits {
@@ -102,12 +111,14 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
   const [undo, setUndo] = useState<UndoStep[]>([]);
   const [queued, setQueued] = useState(0);
 
-  // Копим правки по полям: оба замера и комментарий одной строки правят
+  // Копим правки по полям: замеры и комментарий одной строки правят
   // независимо, и отправить нужно ровно то, что человек трогал.
   const pending = useRef<Map<string, Partial<Record<EditField, string>>>>(new Map());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Состояние сохранения для обработчиков, живущих вне рендера (см. beforeunload). */
   const saveRef = useRef<SaveState>('idle');
+  /** Сколько пачек сейчас в пути: пока они летят, перечитывать день рано. */
+  const inFlight = useRef(0);
   /**
    * Свежая отправка для reset(). Сама отправка пересоздаётся при смене кода
    * доступа, и если бы reset зависел от неё напрямую, то каждая буква,
@@ -159,6 +170,7 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
       setQueued(0);
 
       setSave('saving');
+      inFlight.current++;
       try {
         const res = await fetch('/api/showcase', {
           method: 'POST',
@@ -178,6 +190,9 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
                 ...(fields.percent !== undefined ? { percent: fields.percent || null } : {}),
                 ...(fields.afternoonPercent !== undefined
                   ? { afternoonPercent: fields.afternoonPercent || null }
+                  : {}),
+                ...(fields.eveningPercent !== undefined
+                  ? { eveningPercent: fields.eveningPercent || null }
                   : {}),
                 ...(fields.note !== undefined ? { note: fields.note } : {}),
               };
@@ -203,6 +218,8 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
         setQueued(pending.current.size);
         setSave('error');
         setError(e instanceof Error ? e.message : 'Не удалось сохранить');
+      } finally {
+        inFlight.current--;
       }
     },
     [router, token],
@@ -361,7 +378,28 @@ export function useShowcaseEdits(onSaved: (rows: SavedRow[]) => void): ShowcaseE
     setError(null);
   }, []);
 
+  const isIdle = useCallback(
+    () => pending.current.size === 0 && inFlight.current === 0,
+    [],
+  );
+
+  const settle = useCallback<ShowcaseEdits['settle']>((keep) => {
+    const row = keep ? rowKey(keep.date, keep.shopCode) : null;
+    setDrafts((d) => {
+      const next: Record<string, string> = {};
+      for (const [key, value] of Object.entries(d)) {
+        const [date, shopCode] = key.split('|');
+        if (rowKey(date, shopCode) === row || pending.current.has(rowKey(date, shopCode))) {
+          next[key] = value;
+        }
+      }
+      return Object.keys(next).length === Object.keys(d).length ? d : next;
+    });
+  }, []);
+
   return {
+    isIdle,
+    settle,
     token,
     setToken,
     save,

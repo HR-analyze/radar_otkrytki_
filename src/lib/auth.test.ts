@@ -66,6 +66,16 @@ test('крон-роуты и страница входа паролем не з�
   }
 });
 
+test('фото витрины смотрят все, а список и загрузка — под паролем', () => {
+  // Файл фото показывает открытая карточка лавки.
+  assert.equal(isPublic('/api/showcase/photos/42'), true);
+  // Загрузка и список — без id; мусор после id — не файл фото.
+  for (const p of ['/api/showcase/photos', '/api/showcase/photos/', '/api/showcase/photos/42/x', '/api/showcase/photos/abc']) {
+    assert.equal(isPublic(p), false, `${p} не должен открываться без пароля`);
+    assert.equal(isManaged(p), true, `${p} должен быть под паролем`);
+  }
+});
+
 test('пароль спрашивается на вкладках, где данные правят', () => {
   const managed = [
     '/showcase',
@@ -76,7 +86,12 @@ test('пароль спрашивается на вкладках, где дан
     // правка нормы перекрашивает статусы лавки за все дни.
     '/settings',
     '/api/norms',
+    // «Конкурс» закрыт с 13.10.2026 целиком — и страница, и PDF, и нарушения.
+    '/contest',
+    '/api/contest/report',
     '/api/contest/violations',
+    // «КПИ» заменил «Конкурс» в шапке и закрыт так же: там рейтинг ТД и РМ.
+    '/kpi',
   ];
   for (const p of managed) {
     assert.equal(isManaged(p), true, `${p} должен быть под паролем`);
@@ -84,7 +99,8 @@ test('пароль спрашивается на вкладках, где дан
 
   // Сам радар открыт: цифры смотрит вся команда.
   // «/showcases» — проверка, что закрывается путь, а не любая строка с ним внутри.
-  for (const p of ['/', '/radar', '/contest', '/shop/М1', '/api/upload', '/showcases']) {
+  // «График пиков» открыт нарочно, хотя там рубли, — см. MANAGED в auth.ts.
+  for (const p of ['/', '/radar', '/staffing', '/shop/М1', '/api/upload', '/showcases', '/contests', '/kpis']) {
     assert.equal(isManaged(p), false, `${p} под паролем быть не должен`);
   }
 });

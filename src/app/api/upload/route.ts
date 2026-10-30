@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { loadConfig } from '@/lib/config';
 import { invalidateSnapshot } from '@/lib/snapshot';
 import { canEditShowcase, saveShowcaseEdits } from '@/lib/showcase-store';
-import { checkUploadToken, saveUploads, uploadCapability } from '@/lib/upload-store';
+import { checkUploadToken, saveUploads, uploadCapability, type SaveResult } from '@/lib/upload-store';
 import { appendUploadLog } from '@/lib/upload-log';
 import { plural } from '@/lib/plural';
 import { inspectUpload, MAX_UPLOAD_BYTES, type UploadInspection } from '@/lib/uploads';
@@ -88,12 +88,29 @@ export async function POST(req: Request) {
   }
 
   try {
-    const saved = await saveUploads(accepted, capability);
+    // Книга витрин из Google-таблицы в fixtures/ не кладётся: её значения
+    // уходят только в базу (см. inspectShowcaseBook), и коммит ради неё
+    // перезапускал бы деплой. Пачка из одной такой книги видна сразу.
+    const files = accepted.filter((a) => a.inspection.kind !== 'showcase');
+    const saved: SaveResult =
+      files.length > 0
+        ? await saveUploads(files, capability)
+        : { mode: capability.mode as SaveResult['mode'], visible: 'now', notes: [] };
 
-    // Наполнение витрин из книги «Витрины» — в базу ручных данных. Книгу ведут
-    // в Excel и заливают целиком, поэтому её проценты применяются как обычная
-    // пачка правок: значения из пустых ячеек не приходят и ничего не затирают.
-    const showcaseNotes = await importShowcase(accepted.map((a) => a.inspection));
+    // Наполнение витрин из книги «Витрины» и из Google-таблицы — в базу ручных
+    // данных. Книгу ведут руками и заливают целиком, поэтому её проценты
+    // применяются как обычная пачка правок: значения из пустых ячеек не
+    // приходят и ничего не затирают.
+    const showcase = await importShowcase(accepted.map((a) => a.inspection));
+
+    // Книга витрин сама по себе нигде не сохраняется: не легли значения в
+    // базу — значит, не загрузилось ничего, и «✅» был бы неправдой.
+    if (files.length === 0 && !showcase.saved) {
+      return NextResponse.json(
+        { ok: false, mode: capability.mode, files: results, error: showcase.notes.join(' ') },
+        { status: 502 },
+      );
+    }
 
     // Журнал для вкладки «История»: что и когда загрузили.
     const at = new Date().toISOString();
@@ -114,7 +131,7 @@ export async function POST(req: Request) {
       ok: true,
       mode: saved.mode,
       visible: saved.visible,
-      notes: [...saved.notes, ...showcaseNotes],
+      notes: [...saved.notes, ...showcase.notes, ...(await normsOverrideNote(accepted.map((a) => a.inspection)))],
       commitUrl: saved.commitUrl,
       files: results,
     });
@@ -141,16 +158,20 @@ export async function POST(req: Request) {
  * единственным источником правды, а деплой к ней не притрагивается.
  *
  * Сбой импорта не роняет загрузку: файлы уже сохранены и разобраны, а человеку
- * важнее увидеть причину, чем получить 502 на всю пачку.
+ * важнее увидеть причину, чем получить 502 на всю пачку. Исключение — пачка из
+ * одних книг витрин: им сохраняться больше негде, и её роут возвращает ошибкой.
  */
-async function importShowcase(files: readonly UploadInspection[]): Promise<string[]> {
+async function importShowcase(
+  files: readonly UploadInspection[],
+): Promise<{ notes: string[]; saved: boolean }> {
   const edits = files.flatMap((f) => f.showcase);
-  if (edits.length === 0) return [];
+  if (edits.length === 0) return { notes: [], saved: false };
 
   if (!canEditShowcase()) {
-    return [
-      'Наполнение витрин из книги не сохранено: на этом хостинге нет диска под базу ручных данных.',
-    ];
+    return {
+      notes: ['Наполнение витрин из книги не сохранено: на этом хостинге нет диска под базу ручных данных.'],
+      saved: false,
+    };
   }
 
   try {
@@ -158,16 +179,46 @@ async function importShowcase(files: readonly UploadInspection[]): Promise<strin
     // Снимок держит витрины в кеше — без сброса правки были бы видны не сразу.
     invalidateSnapshot();
 
-    return changed === 0
-      ? ['Наполнение витрин из книги совпало с тем, что уже в радаре — менять нечего.']
-      : [
-          `Наполнение витрин: обновлено ${changed} ` +
-            `${plural(changed, 'значение', 'значения', 'значений')} из книги.`,
-        ];
+    return {
+      notes:
+        changed === 0
+          ? ['Наполнение витрин из книги совпало с тем, что уже в радаре — менять нечего.']
+          : [
+              `Наполнение витрин: обновлено ${changed} ` +
+                `${plural(changed, 'значение', 'значения', 'значений')} из книги.`,
+            ],
+      saved: true,
+    };
   } catch (e) {
-    return [
-      `Наполнение витрин из книги сохранить не вышло: ${e instanceof Error ? e.message : String(e)}`,
-    ];
+    return {
+      notes: [`Наполнение витрин из книги сохранить не вышло: ${e instanceof Error ? e.message : String(e)}`],
+      saved: false,
+    };
+  }
+}
+
+/**
+ * Правка с вкладки «Пороги» главнее справочника: у таких лавок новая таблица
+ * не подействует. Называем их поимённо — иначе загрузку справочника легко
+ * принять за неработающую.
+ */
+async function normsOverrideNote(files: readonly UploadInspection[]): Promise<string[]> {
+  if (!files.some((f) => f.kind === 'norms')) return [];
+  try {
+    const { readNorms } = await import('@/lib/shop-norms-store');
+    const manual = Object.values((await readNorms()).byCode)
+      .filter((n) => n.source === 'manual')
+      .map((n) => n.code)
+      .sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }));
+    return manual.length === 0
+      ? []
+      : [
+          `У ${manual.length} ${plural(manual.length, 'лавки', 'лавок', 'лавок')} нормы правили руками на вкладке «Пороги» — ` +
+            `для них остаётся ручная правка, а не справочник: ${manual.join(', ')}. ` +
+            'Чтобы лавка поехала по справочнику, сбросьте её правку на «Порогах».',
+        ];
+  } catch {
+    return [];
   }
 }
 

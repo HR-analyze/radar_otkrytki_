@@ -1,7 +1,7 @@
 {
-  "$comment": "Нормативы открытия по лавкам. Собирается из справочника «Лавки»: npm run norms:build. Правки с сайта сюда не попадают — они живут в data/manual.db (см. shop-norms-store.ts).",
-  "source": "normy-lavok.csv",
-  "builtAt": "2026-09-16",
+  "$comment": "Нормативы открытия по лавкам. Собирается из справочника «Лавки»: npm run norms:build или загрузкой справочника кнопкой на дашборде. Правки с сайта сюда не попадают — они живут в базе ручных данных (см. shop-norms-store.ts).",
+  "source": "normy-lavok.xlsx",
+  "builtAt": "2026-10-13",
   "norms": [
     {
       "code": "М1",
@@ -13,7 +13,7 @@
       "departureAt": "03:50",
       "rawDriver": "6.30",
       "rawCook": "3 с 6.20",
-      "rawDeparture": "3:50",
+      "rawDeparture": "03:50",
       "source": "reference",
       "warnings": []
     },
@@ -27,7 +27,7 @@
       "departureAt": "04:30",
       "rawDriver": "6.30",
       "rawCook": "3 с 6.20",
-      "rawDeparture": "4:30",
+      "rawDeparture": "04:30",
       "source": "reference",
       "warnings": []
     },
@@ -41,7 +41,7 @@
       "departureAt": "05:10",
       "rawDriver": "6.40",
       "rawCook": "3 с 6:30",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
       "warnings": []
     },
@@ -55,7 +55,7 @@
       "departureAt": "03:50",
       "rawDriver": "5.45",
       "rawCook": "3 с 5:45",
-      "rawDeparture": "3:50",
+      "rawDeparture": "03:50",
       "source": "reference",
       "warnings": []
     },
@@ -69,7 +69,7 @@
       "departureAt": "05:40",
       "rawDriver": "6.30",
       "rawCook": "3 с 6.30",
-      "rawDeparture": "5:40",
+      "rawDeparture": "05:40",
       "source": "reference",
       "warnings": []
     },
@@ -83,7 +83,7 @@
       "departureAt": "03:50",
       "rawDriver": "6.30",
       "rawCook": "3 с 6:30",
-      "rawDeparture": "3:50",
+      "rawDeparture": "03:50",
       "source": "reference",
       "warnings": []
     },
@@ -95,9 +95,9 @@
         "06:10"
       ],
       "departureAt": "03:50",
-      "rawDriver": "6:40",
+      "rawDriver": "06:40",
       "rawCook": "3 с 6:10",
-      "rawDeparture": "3:50",
+      "rawDeparture": "03:50",
       "source": "reference",
       "warnings": []
     },
@@ -109,9 +109,9 @@
         "05:50"
       ],
       "departureAt": "04:30",
-      "rawDriver": "5:50",
+      "rawDriver": "05:50",
       "rawCook": "1 с 5.50",
-      "rawDeparture": "4:30",
+      "rawDeparture": "04:30",
       "source": "reference",
       "warnings": []
     },
@@ -125,7 +125,7 @@
       "departureAt": "05:20",
       "rawDriver": "6.30",
       "rawCook": "2 с 6.20",
-      "rawDeparture": "5:20",
+      "rawDeparture": "05:20",
       "source": "reference",
       "warnings": []
     },
@@ -139,7 +139,7 @@
       "departureAt": "05:20",
       "rawDriver": "6.00",
       "rawCook": "1 с 6.00",
-      "rawDeparture": "5:20",
+      "rawDeparture": "05:20",
       "source": "reference",
       "warnings": []
     },
@@ -152,9 +152,9 @@
         "06:30"
       ],
       "departureAt": "05:20",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "1 с 6.00/2 6:30",
-      "rawDeparture": "5:20",
+      "rawDeparture": "05:20",
       "source": "reference",
       "warnings": []
     },
@@ -166,9 +166,9 @@
         "06:30"
       ],
       "departureAt": "04:50",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "2 с 6.30",
-      "rawDeparture": "4:50",
+      "rawDeparture": "04:50",
       "source": "reference",
       "warnings": []
     },
@@ -182,7 +182,19 @@
       "departureAt": "05:00",
       "rawDriver": "6.20",
       "rawCook": "1 с 6.20",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
+      "source": "reference",
+      "warnings": []
+    },
+    {
+      "code": "М15",
+      "name": "Сущевка",
+      "driverAt": null,
+      "cookAt": [],
+      "departureAt": null,
+      "rawDriver": null,
+      "rawCook": null,
+      "rawDeparture": null,
       "source": "reference",
       "warnings": []
     },
@@ -196,7 +208,7 @@
       "departureAt": "05:00",
       "rawDriver": "6.55",
       "rawCook": "2 с 6:15",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -210,7 +222,7 @@
       "departureAt": "03:40",
       "rawDriver": "6.20",
       "rawCook": "4 с 6.20",
-      "rawDeparture": "3:40",
+      "rawDeparture": "03:40",
       "source": "reference",
       "warnings": []
     },
@@ -222,9 +234,9 @@
         "05:50"
       ],
       "departureAt": "05:20",
-      "rawDriver": "5:50",
+      "rawDriver": "05:50",
       "rawCook": "2 с 5:50",
-      "rawDeparture": "5:20",
+      "rawDeparture": "05:20",
       "source": "reference",
       "warnings": []
     },
@@ -238,7 +250,7 @@
       "departureAt": "05:10",
       "rawDriver": "6.30",
       "rawCook": "3 с 6.15",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
       "warnings": []
     },
@@ -250,9 +262,9 @@
         "05:40"
       ],
       "departureAt": "04:50",
-      "rawDriver": "5:40",
+      "rawDriver": "05:40",
       "rawCook": "3 с 5:40",
-      "rawDeparture": "4:50",
+      "rawDeparture": "04:50",
       "source": "reference",
       "warnings": []
     },
@@ -266,7 +278,7 @@
       "departureAt": "05:20",
       "rawDriver": "6.30",
       "rawCook": "2 с 6.20",
-      "rawDeparture": "5:20",
+      "rawDeparture": "05:20",
       "source": "reference",
       "warnings": []
     },
@@ -278,9 +290,9 @@
         "06:20"
       ],
       "departureAt": "03:40",
-      "rawDriver": "4:15",
+      "rawDriver": "04:15",
       "rawCook": "4 с 6.20",
-      "rawDeparture": "3:40",
+      "rawDeparture": "03:40",
       "source": "reference",
       "warnings": []
     },
@@ -294,7 +306,7 @@
       "departureAt": "05:00",
       "rawDriver": "6.30",
       "rawCook": "2 с 6.30",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -306,9 +318,9 @@
         "06:00"
       ],
       "departureAt": "04:30",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "3 с 6:00",
-      "rawDeparture": "4:30",
+      "rawDeparture": "04:30",
       "source": "reference",
       "warnings": []
     },
@@ -320,9 +332,9 @@
         "06:20"
       ],
       "departureAt": "03:50",
-      "rawDriver": "5:20",
+      "rawDriver": "05:20",
       "rawCook": "4 с 6.20",
-      "rawDeparture": "3:50",
+      "rawDeparture": "03:50",
       "source": "reference",
       "warnings": []
     },
@@ -334,9 +346,9 @@
         "06:15"
       ],
       "departureAt": "04:50",
-      "rawDriver": "6:30",
+      "rawDriver": "06:30",
       "rawCook": "1 с 6:15",
-      "rawDeparture": "4:50",
+      "rawDeparture": "04:50",
       "source": "reference",
       "warnings": []
     },
@@ -348,9 +360,9 @@
         "06:30"
       ],
       "departureAt": "05:00",
-      "rawDriver": "6:30",
+      "rawDriver": "06:30",
       "rawCook": "2 с 6.30",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -362,11 +374,13 @@
         "06:30"
       ],
       "departureAt": "04:30",
-      "rawDriver": "5.10",
+      "rawDriver": "05:10",
       "rawCook": "4 с 6.30",
-      "rawDeparture": "4:30",
+      "rawDeparture": "04:30",
       "source": "reference",
-      "warnings": []
+      "warnings": [
+        "приезд водителя «05:10» восстановлен из даты: в справочнике ячейка сохранена как дата, а не как текст — стоит поправить формат"
+      ]
     },
     {
       "code": "М29",
@@ -376,9 +390,9 @@
         "06:20"
       ],
       "departureAt": "05:20",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "1 с 06:20",
-      "rawDeparture": "5:20",
+      "rawDeparture": "05:20",
       "source": "reference",
       "warnings": []
     },
@@ -390,9 +404,9 @@
         "06:00"
       ],
       "departureAt": "04:50",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "3 с 6:00",
-      "rawDeparture": "4:50",
+      "rawDeparture": "04:50",
       "source": "reference",
       "warnings": []
     },
@@ -405,9 +419,9 @@
         "06:20"
       ],
       "departureAt": "05:00",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "1 с 6.00 2 с 6:20",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -419,9 +433,9 @@
         "06:00"
       ],
       "departureAt": "05:00",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "1 с 6.0",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -433,9 +447,9 @@
         "06:20"
       ],
       "departureAt": "05:10",
-      "rawDriver": "6:20",
+      "rawDriver": "06:20",
       "rawCook": "1 с 6:20:00",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
       "warnings": []
     },
@@ -447,9 +461,9 @@
         "06:20"
       ],
       "departureAt": "05:10",
-      "rawDriver": "6:40",
+      "rawDriver": "06:40",
       "rawCook": "2 с 6.20",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
       "warnings": []
     },
@@ -462,9 +476,9 @@
         "06:00"
       ],
       "departureAt": "04:20",
-      "rawDriver": "5:30",
+      "rawDriver": "05:30",
       "rawCook": "2 с 5:30 1 с 6:00",
-      "rawDeparture": "4:20",
+      "rawDeparture": "04:20",
       "source": "reference",
       "warnings": []
     },
@@ -476,9 +490,9 @@
         "06:00"
       ],
       "departureAt": "05:00",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "2 с 6.00",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -492,7 +506,7 @@
       "departureAt": "05:20",
       "rawDriver": "6.40",
       "rawCook": "4 с 6.30",
-      "rawDeparture": "5:20",
+      "rawDeparture": "05:20",
       "source": "reference",
       "warnings": []
     },
@@ -504,9 +518,9 @@
         "06:00"
       ],
       "departureAt": "05:15",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "2 с 6.0",
-      "rawDeparture": "5:15",
+      "rawDeparture": "05:15",
       "source": "reference",
       "warnings": []
     },
@@ -518,9 +532,9 @@
         "06:30"
       ],
       "departureAt": "05:00",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "2 с 6.30",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -534,7 +548,7 @@
       "departureAt": "05:40",
       "rawDriver": "6.30",
       "rawCook": "2 с 6.30",
-      "rawDeparture": "5:40",
+      "rawDeparture": "05:40",
       "source": "reference",
       "warnings": []
     },
@@ -546,9 +560,9 @@
         "05:20"
       ],
       "departureAt": "04:00",
-      "rawDriver": "5:20",
+      "rawDriver": "05:20",
       "rawCook": "1 с 5.20",
-      "rawDeparture": "4:00",
+      "rawDeparture": "04:00",
       "source": "reference",
       "warnings": []
     },
@@ -560,9 +574,9 @@
         "05:30"
       ],
       "departureAt": "04:50",
-      "rawDriver": "6:20",
+      "rawDriver": "06:20",
       "rawCook": "2 с 5.30",
-      "rawDeparture": "4:50",
+      "rawDeparture": "04:50",
       "source": "reference",
       "warnings": []
     },
@@ -576,7 +590,7 @@
       "departureAt": "04:30",
       "rawDriver": "5.50",
       "rawCook": "повар в 5.45",
-      "rawDeparture": "4:30",
+      "rawDeparture": "04:30",
       "source": "reference",
       "warnings": []
     },
@@ -588,9 +602,9 @@
         "05:40"
       ],
       "departureAt": "04:20",
-      "rawDriver": "5:40",
+      "rawDriver": "05:40",
       "rawCook": "3 с 5:40",
-      "rawDeparture": "4:20",
+      "rawDeparture": "04:20",
       "source": "reference",
       "warnings": []
     },
@@ -604,7 +618,7 @@
       "departureAt": "03:50",
       "rawDriver": "6.00",
       "rawCook": "2 с 6:20",
-      "rawDeparture": "3:50",
+      "rawDeparture": "03:50",
       "source": "reference",
       "warnings": []
     },
@@ -616,9 +630,9 @@
         "05:30"
       ],
       "departureAt": "04:45",
-      "rawDriver": "5:30",
+      "rawDriver": "05:30",
       "rawCook": "4 с 5.30",
-      "rawDeparture": "4:45",
+      "rawDeparture": "04:45",
       "source": "reference",
       "warnings": []
     },
@@ -631,9 +645,9 @@
         "06:30"
       ],
       "departureAt": "05:00",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "2 в 6:00/1 в 6:30",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -647,7 +661,7 @@
       "departureAt": "05:00",
       "rawDriver": "6.40",
       "rawCook": "3 с 6:30",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -661,7 +675,7 @@
       "departureAt": "04:50",
       "rawDriver": "5.40",
       "rawCook": "4 с 5.40",
-      "rawDeparture": "4:50",
+      "rawDeparture": "04:50",
       "source": "reference",
       "warnings": []
     },
@@ -675,7 +689,7 @@
       "departureAt": "03:50",
       "rawDriver": "5.00",
       "rawCook": "4 с 6.00",
-      "rawDeparture": "3:50",
+      "rawDeparture": "03:50",
       "source": "reference",
       "warnings": []
     },
@@ -688,9 +702,9 @@
         "06:30"
       ],
       "departureAt": "04:50",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "2 С 6:00:00, 2 С 6:30",
-      "rawDeparture": "4:50",
+      "rawDeparture": "04:50",
       "source": "reference",
       "warnings": []
     },
@@ -704,7 +718,7 @@
       "departureAt": "05:20",
       "rawDriver": "6.00",
       "rawCook": "2 с 6.00",
-      "rawDeparture": "5:20",
+      "rawDeparture": "05:20",
       "source": "reference",
       "warnings": []
     },
@@ -717,9 +731,9 @@
         "06:30"
       ],
       "departureAt": "04:30",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "1 в 6:00/2 в 6:30",
-      "rawDeparture": "4:30",
+      "rawDeparture": "04:30",
       "source": "reference",
       "warnings": []
     },
@@ -731,9 +745,9 @@
         "05:50"
       ],
       "departureAt": "05:10",
-      "rawDriver": "5:50",
+      "rawDriver": "05:50",
       "rawCook": "2 с 5:50",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
       "warnings": []
     },
@@ -745,9 +759,9 @@
         "06:00"
       ],
       "departureAt": "04:50",
-      "rawDriver": "6:40",
+      "rawDriver": "06:40",
       "rawCook": "2 с 6.00",
-      "rawDeparture": "4:50",
+      "rawDeparture": "04:50",
       "source": "reference",
       "warnings": []
     },
@@ -759,9 +773,9 @@
         "06:00"
       ],
       "departureAt": "05:10",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "2 с 6.00",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
       "warnings": []
     },
@@ -773,9 +787,9 @@
         "06:10"
       ],
       "departureAt": "05:15",
-      "rawDriver": "6:40",
+      "rawDriver": "06:40",
       "rawCook": "2 с 6.10",
-      "rawDeparture": "5:15",
+      "rawDeparture": "05:15",
       "source": "reference",
       "warnings": []
     },
@@ -788,9 +802,9 @@
         "06:10"
       ],
       "departureAt": "05:10",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "1 с 5.55 2 с 6:10",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
       "warnings": []
     },
@@ -804,7 +818,7 @@
       "departureAt": "03:50",
       "rawDriver": "6.30",
       "rawCook": "3 с 6:30",
-      "rawDeparture": "3:50",
+      "rawDeparture": "03:50",
       "source": "reference",
       "warnings": []
     },
@@ -816,9 +830,9 @@
         "06:30"
       ],
       "departureAt": "05:00",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "2 с 6.30",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -830,9 +844,9 @@
         "06:15"
       ],
       "departureAt": "05:10",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "2 с 6.15",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
       "warnings": []
     },
@@ -844,9 +858,9 @@
         "06:00"
       ],
       "departureAt": "03:50",
-      "rawDriver": "5:00",
+      "rawDriver": "05:00",
       "rawCook": "2 с 6.00",
-      "rawDeparture": "3:50",
+      "rawDeparture": "03:50",
       "source": "reference",
       "warnings": []
     },
@@ -858,9 +872,9 @@
         "06:30"
       ],
       "departureAt": "04:30",
-      "rawDriver": "6:30",
+      "rawDriver": "06:30",
       "rawCook": "3 с 6:30",
-      "rawDeparture": "4:30",
+      "rawDeparture": "04:30",
       "source": "reference",
       "warnings": []
     },
@@ -874,7 +888,7 @@
       "departureAt": "04:00",
       "rawDriver": "6.00",
       "rawCook": "3 с 5.40",
-      "rawDeparture": "4:00",
+      "rawDeparture": "04:00",
       "source": "reference",
       "warnings": []
     },
@@ -888,7 +902,7 @@
       "departureAt": "04:50",
       "rawDriver": "6.30",
       "rawCook": "3 с 6:30",
-      "rawDeparture": "4:50",
+      "rawDeparture": "04:50",
       "source": "reference",
       "warnings": []
     },
@@ -902,7 +916,7 @@
       "departureAt": "04:30",
       "rawDriver": "6.00",
       "rawCook": "3 с 6:00",
-      "rawDeparture": "4:30",
+      "rawDeparture": "04:30",
       "source": "reference",
       "warnings": []
     },
@@ -915,9 +929,9 @@
         "06:30"
       ],
       "departureAt": "04:30",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "1 с 6:00/2 с 6:30",
-      "rawDeparture": "4:30",
+      "rawDeparture": "04:30",
       "source": "reference",
       "warnings": []
     },
@@ -930,9 +944,9 @@
         "06:10"
       ],
       "departureAt": "05:20",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "1 с 6.00 2 с 6:10",
-      "rawDeparture": "5:20",
+      "rawDeparture": "05:20",
       "source": "reference",
       "warnings": []
     },
@@ -946,7 +960,7 @@
       "departureAt": "04:30",
       "rawDriver": "5.50",
       "rawCook": "1 с 5.50",
-      "rawDeparture": "4:30",
+      "rawDeparture": "04:30",
       "source": "reference",
       "warnings": []
     },
@@ -958,11 +972,13 @@
         "06:10"
       ],
       "departureAt": "05:10",
-      "rawDriver": "6.10",
+      "rawDriver": "06:10",
       "rawCook": "повар 6.10",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
-      "warnings": []
+      "warnings": [
+        "приезд водителя «06:10» восстановлен из даты: в справочнике ячейка сохранена как дата, а не как текст — стоит поправить формат"
+      ]
     },
     {
       "code": "М71",
@@ -972,9 +988,9 @@
         "07:00"
       ],
       "departureAt": "05:20",
-      "rawDriver": "8:00",
+      "rawDriver": "08:00",
       "rawCook": "2 с 7:00, приход в 8",
-      "rawDeparture": "5:20",
+      "rawDeparture": "05:20",
       "source": "reference",
       "warnings": []
     },
@@ -988,7 +1004,7 @@
       "departureAt": "06:00",
       "rawDriver": "8.00",
       "rawCook": "2 с 8",
-      "rawDeparture": "6:00",
+      "rawDeparture": "06:00",
       "source": "reference",
       "warnings": []
     },
@@ -1000,9 +1016,9 @@
         "06:00"
       ],
       "departureAt": "05:10",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "1 в 6:00",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
       "warnings": []
     },
@@ -1017,7 +1033,7 @@
       "departureAt": "05:10",
       "rawDriver": "6.40",
       "rawCook": "1 в 6:00/2в 6:30",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
       "warnings": []
     },
@@ -1029,9 +1045,9 @@
         "06:10"
       ],
       "departureAt": "05:00",
-      "rawDriver": "6:15",
+      "rawDriver": "06:15",
       "rawCook": "3 с 6:10",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -1043,9 +1059,9 @@
         "06:00"
       ],
       "departureAt": "04:40",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "2 с 6",
-      "rawDeparture": "4:40",
+      "rawDeparture": "04:40",
       "source": "reference",
       "warnings": []
     },
@@ -1057,9 +1073,9 @@
         "06:00"
       ],
       "departureAt": "05:00",
-      "rawDriver": "6:40",
+      "rawDriver": "06:40",
       "rawCook": "3 с 6.00",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -1071,9 +1087,9 @@
         "06:30"
       ],
       "departureAt": "04:40",
-      "rawDriver": "6:40",
+      "rawDriver": "06:40",
       "rawCook": "3 с 6:30",
-      "rawDeparture": "4:40",
+      "rawDeparture": "04:40",
       "source": "reference",
       "warnings": []
     },
@@ -1085,9 +1101,9 @@
         "06:20"
       ],
       "departureAt": "05:10",
-      "rawDriver": "6:20",
+      "rawDriver": "06:20",
       "rawCook": "3 с 6.20",
-      "rawDeparture": "5:10",
+      "rawDeparture": "05:10",
       "source": "reference",
       "warnings": []
     },
@@ -1101,7 +1117,7 @@
       "departureAt": "05:00",
       "rawDriver": "6.00",
       "rawCook": "3 с 6.00",
-      "rawDeparture": "5:00",
+      "rawDeparture": "05:00",
       "source": "reference",
       "warnings": []
     },
@@ -1113,9 +1129,9 @@
         "06:00"
       ],
       "departureAt": "04:40",
-      "rawDriver": "6:00",
+      "rawDriver": "06:00",
       "rawCook": "3 с 6.00",
-      "rawDeparture": "4:40",
+      "rawDeparture": "04:40",
       "source": "reference",
       "warnings": []
     },
@@ -1127,9 +1143,9 @@
         "06:10"
       ],
       "departureAt": "04:40",
-      "rawDriver": "6:10",
+      "rawDriver": "06:10",
       "rawCook": "2 с 6.10",
-      "rawDeparture": "4:40",
+      "rawDeparture": "04:40",
       "source": "reference",
       "warnings": []
     },
@@ -1143,7 +1159,7 @@
       "departureAt": "04:30",
       "rawDriver": "6.45",
       "rawCook": "2 с 6.00",
-      "rawDeparture": "4:30",
+      "rawDeparture": "04:30",
       "source": "reference",
       "warnings": []
     }

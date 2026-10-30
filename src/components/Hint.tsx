@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
 /**
  * Подсказка, которая работает и пальцем.
@@ -18,11 +18,18 @@ export function Hint({
   text,
   children,
   className = '',
+  below = false,
 }: {
   text: string;
   /** К чему подсказка. Не передано — рисуем значок «?». */
   children?: React.ReactNode;
   className?: string;
+  /**
+   * Открыть вниз и влево от правого края — для шапки таблицы, прилипшей к
+   * верху рамки: вверх подсказка легла бы на соседние колонки шапки. Места
+   * нет — откроется в другую сторону.
+   */
+  below?: boolean;
 }) {
   /**
    * Два независимых повода показать подсказку, а не один переключатель.
@@ -39,7 +46,48 @@ export function Hint({
   const [pinned, setPinned] = useState(false);
   const open = hovered || pinned;
   const rootRef = useRef<HTMLSpanElement>(null);
+  const tipRef = useRef<HTMLSpanElement>(null);
+  /** Где рисовать подсказку, px от края окна; null — ещё не померили. */
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const id = useId();
+
+  /**
+   * Подсказка висит position: fixed, а не absolute от значка.
+   *
+   * С absolute её обрезала рамка со скроллом: в шапке таблицы с одной лавкой
+   * рамка ниже подсказки, и вместо текста появлялись полосы прокрутки. Fixed
+   * рамка не обрезает, зато место считаем сами: от значка, с прижатием к краям
+   * окна и разворотом вверх-вниз, если не влезает. Считаем до отрисовки
+   * (useLayoutEffect) и заново на каждый скролл — подсказка едет за значком.
+   */
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const anchor = rootRef.current?.getBoundingClientRect();
+      const tip = tipRef.current?.getBoundingClientRect();
+      if (!anchor || !tip) return;
+      const gap = 6;
+      const edge = 8;
+      const fitsAbove = anchor.top - gap - tip.height >= edge;
+      const fitsBelow = anchor.bottom + gap + tip.height <= window.innerHeight - edge;
+      const down = below ? fitsBelow || !fitsAbove : !fitsAbove && fitsBelow;
+      const left = below ? anchor.right - tip.width : anchor.left;
+      setPos({
+        top: down ? anchor.bottom + gap : anchor.top - gap - tip.height,
+        left: Math.max(edge, Math.min(left, document.documentElement.clientWidth - edge - tip.width)),
+      });
+    };
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      // Следующий раз мерить с нуля: у края окна fixed-блок сжимается, и
+      // ширина, снятая на старом месте, была бы не та.
+      setPos(null);
+    };
+  }, [open, below]);
 
   useEffect(() => {
     if (!open) return;
@@ -98,10 +146,18 @@ export function Hint({
         <span
           id={id}
           role="tooltip"
-          /* Ширина фиксированная: подсказки здесь в две-три строки, и по
-             содержимому они растягивались бы то в нитку, то во весь экран. */
-          className="surface absolute bottom-full left-0 z-50 mb-1.5 w-64 max-w-[min(16rem,calc(100vw-2rem))] p-2 text-xs font-normal shadow-lg"
-          style={{ color: 'var(--text)' }}
+          ref={tipRef}
+          /* Ширина по тексту без переносов (w-max), но не шире 16rem: длинное
+             пояснение переносится в две-три строки, а не тянется в нитку или
+             во весь экран, а короткое («Итого по штату») не сидит в пустой
+             плашке на 16rem. whitespace-normal — нарочно: в шапке таблицы
+             ячейка с nowrap, и без него текст уходил в одну строку далеко за
+             плашку, прямо поверх цифр. */
+          className="surface fixed top-0 left-0 z-50 w-max max-w-[min(16rem,calc(100vw-2rem))] p-2 text-left text-xs font-normal whitespace-normal shadow-lg"
+          style={{
+            color: 'var(--text)',
+            ...(pos ? { top: pos.top, left: pos.left } : { visibility: 'hidden' }),
+          }}
         >
           {text}
         </span>

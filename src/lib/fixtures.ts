@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as XLSX from 'xlsx';
 import { looksLikeDeparture } from './parsers/departure';
+import { isShowcaseBook } from './parsers/showcase-sheets';
 
 /**
  * Чтение папки с выгрузками.
@@ -23,7 +24,23 @@ const ROSTER_SHEET = 'Лавки БК';
 export const SUPPORTED = /\.(xls|xlsx)$/i;
 
 /** Что за файл нам дали. Кнопка загрузки опознаёт файл этими же правилами. */
-export type FixtureKind = 'legacy' | 'delivery' | 'roster' | 'departure' | 'attendance';
+/**
+ * 'showcase' — книга витрин из Google-таблицы (листы «Витрины 0800/1600»).
+ * Её значения идут прямо в базу ручных данных, в fixtures/ она не кладётся и
+ * снимком не читается.
+ *
+ * 'norms' — справочник нормативов лавок (лист «Лавки»: приезд водителя,
+ * тайминг поваров, выезд с РЦ). Лежит в fixtures/ как normy-lavok.xlsx рядом
+ * с разобранным shop-norms.json; снимок читает только второй.
+ */
+export type FixtureKind =
+  | 'legacy'
+  | 'delivery'
+  | 'roster'
+  | 'departure'
+  | 'attendance'
+  | 'showcase'
+  | 'norms';
 
 /** Сколько строк читать для опознания: заголовок плюс запас на «шапку». */
 const PEEK_ROWS = 30;
@@ -44,11 +61,27 @@ export function detectFixtureKind(
 ): FixtureKind {
   // Имена листов в реальных файлах бывают с хвостовым пробелом («Лавки БК »).
   const names = sheetNames.map((n) => n.trim());
+  // Раньше «Все данные»: Google-таблица витрин — копия легаси-книги, и этот
+  // лист в ней тоже есть. Опознай её как легаси — она заменила бы vitriny.xlsx,
+  // а новые листы с витринами никто бы не прочитал.
+  if (isShowcaseBook(names)) return 'showcase';
   if (names.includes(LEGACY_SHEET)) return 'legacy';
   if (names.includes(DELIVERY_SHEET)) return 'delivery';
   if (names.includes(ROSTER_SHEET)) return 'roster';
+  if (grid && looksLikeNorms(grid)) return 'norms';
   if (grid && looksLikeDeparture(grid)) return 'departure';
   return 'attendance';
+}
+
+/**
+ * Справочник нормативов: лист «Лавки» назван так же, как бывает назван лист
+ * любой выгрузки, — узнаём по шапке. В первой строке рядом стоят «время
+ * приезда водителя» и «количество поваров» — в выгрузках 1С такой шапки нет.
+ * Шапка — именно первая строка: так её читает parseShopNorms.
+ */
+function looksLikeNorms(grid: readonly unknown[][]): boolean {
+  const head = (grid[0] ?? []).map((c) => String(c ?? '').toLowerCase());
+  return head.some((c) => c.includes('водител')) && head.some((c) => c.includes('повар'));
 }
 
 /** Первые строки первого листа — для опознания по содержимому. */
@@ -161,6 +194,13 @@ export function readFixtures(dir: string): FixtureSet {
         continue;
       }
       roster = { name, buffer };
+    } else if (kind === 'norms') {
+      // Справочник лежит здесь как исходник shop-norms.json: снимок берёт
+      // нормы из разобранного JSON (см. shop-norms-store.ts), не отсюда.
+      continue;
+    } else if (kind === 'showcase') {
+      warnings.push(`${name}: книга витрин в fixtures/ не нужна — её загружают кнопкой, значения уходят в базу`);
+      continue;
     } else if (kind === 'departure') {
       // Выгрузки по РЦ накапливаются, как и отметки: их кладут по одной на
       // день. Раньше бралась только первая, и файл за новый день молча не

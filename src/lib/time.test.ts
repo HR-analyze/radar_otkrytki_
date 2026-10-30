@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { excelDay, formatClock, formatDay, formatMoment, todayIso } from './time';
+import { excelDay, formatClock, formatDay, formatMoment, minutesNowMsk, todayIso } from './time';
 
 /**
  * Время на сайте — московское.
@@ -43,4 +43,11 @@ test('дата из ячейки Excel не съезжает на соседни
 
   assert.equal(excelDay(midnight), '2026-08-19');
   assert.equal(excelDay(almost), '2026-08-19', 'иначе 19 августа превращается в 18-е');
+});
+
+test('время суток — московское, а не зоны сервера', () => {
+  // 11:05 UTC — это 14:05 в Москве.
+  assert.equal(minutesNowMsk(new Date('2026-10-26T11:05:00Z')), 14 * 60 + 5);
+  // После 21:00 UTC в Москве уже следующие сутки, и часы идут с нуля.
+  assert.equal(minutesNowMsk(new Date('2026-10-26T21:30:00Z')), 30);
 });

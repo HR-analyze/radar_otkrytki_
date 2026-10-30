@@ -20,7 +20,7 @@ export default async function LoginPage({
       <LoginForm
         next={next}
         title={MANAGED_TITLE}
-        hint="Здесь правят данные, поэтому нужен пароль. Остальной радар открыт."
+        hint="Эти вкладки — под паролем: здесь правят данные и смотрят рейтинг конкурса. Остальной радар открыт."
       />
     </div>
   );

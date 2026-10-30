@@ -279,7 +279,7 @@ export interface AttendanceRow {
 export interface ShowcaseRow {
   date: string;
   shopCode: string;
-  /** Итог дня, доля 0–1: среднее утреннего замера и замера в 16:00 (см. dayFill). */
+  /** Итог дня, доля 0–1: среднее заполненных замеров — утро, 16:00, 18:30 (см. dayFill). */
   fill: number;
   /** Статус итога. */
   status: Status;
@@ -290,15 +290,18 @@ export interface ShowcaseRow {
   morning?: number | null;
   /** Замер в 16:00; null или нет поля — не мерили. */
   afternoon?: number | null;
+  /** Замер в 18:30 (с 26.10.2026); null или нет поля — не мерили. */
+  evening?: number | null;
 }
 
 /**
- * Один из двух замеров витрины: утренний (на 08:00) или в 16:00. Там, где
- * замер не выбран, витрина — итог дня, среднее двух (см. ShowcaseRow.fill).
+ * Один из замеров витрины: утренний (на 08:00), в 16:00 или в 18:30 (с
+ * 26.10.2026, см. EVENING_FROM). Там, где замер не выбран, витрина — итог дня,
+ * среднее заполненных замеров (см. ShowcaseRow.fill).
  */
-export type FillSlot = 'morning' | 'afternoon';
+export type FillSlot = 'morning' | 'afternoon' | 'evening';
 
-export const FILL_SLOTS: readonly FillSlot[] = ['morning', 'afternoon'];
+export const FILL_SLOTS: readonly FillSlot[] = ['morning', 'afternoon', 'evening'];
 
 /** Статус критерия у лавки за день. */
 export interface CriterionStatusRow {
@@ -323,6 +326,12 @@ export interface Shop {
   code: string;
   name: string;
   region: string | null;
+  /**
+   * Территориальный директор из справочника лавок. У ТД обычно две лавки, и
+   * своего директора у них нет; пусто — лавку ведёт её собственный директор.
+   * Поля нет у снимков, собранных до вкладки «КПИ», и в режиме SQLite.
+   */
+  director?: string | null;
 }
 
 /**
