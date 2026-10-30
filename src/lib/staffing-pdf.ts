@@ -761,8 +761,15 @@ function layoutChart(norm: StaffNorm): Content {
     body.push(cells);
   }
 
+  // Ширины — числом, а не '*': звёздные колонки pdfmake растягивает под самое
+  // длинное слово («2-подготовка» в получасовой колонке), и таблица уезжала за
+  // край листа. Числом — колонка своей ширины, слово переносится или чуть
+  // выходит за блок, но лист держит. Ширина таблицы = колонки + поля клеток
+  // (по 2 + 2) + линии (1,2 между колонками и по краям).
+  const label = 52;
+  const colW = (CONTENT_WIDTH - label - 4 * (cols + 1) - 1.2 * (cols + 2)) / cols;
   return {
-    table: { headerRows: 1, dontBreakRows: true, widths: [52, ...Array<string>(cols).fill('*')], body },
+    table: { headerRows: 1, dontBreakRows: true, widths: [label, ...Array<number>(cols).fill(colW)], body },
     layout: {
       // Сетка получасов — еле заметная: по ней видно, где начинается окно.
       hLineWidth: (i: number) => (i === 1 ? 0.6 : 1.2),
