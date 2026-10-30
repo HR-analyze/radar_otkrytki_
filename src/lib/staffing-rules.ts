@@ -19,6 +19,8 @@ import type { StaffNorm, StaffPost, StaffRole, StaffSlot } from './staffing';
  *   уборщики  7–8         подготовка зала: один — уборка зала + посуда; двое —
  *                         1 зал, 1 посуда; трое — 1 зал, 2 посуда;
  *   сборщик               если есть — сборка заказов и доставка;
+ *   су-шеф    6:30–23     если есть по ШР — контроль витрин + доготовка
+ *                         (30.10.2026; название — как в словаре функционалов);
  *   ЗД по бару            нет кофемашины — нет бара и зама по бару (30.10.2026).
  *
  * Окно правила узнаём по точному началу и концу: сдвинет новый шаблон окно —
@@ -66,6 +68,9 @@ function waiters(n: number, { picker, slot }: { picker: StaffSlot | null; slot: 
 /** Сборщик, если он есть: на нём сборка заказов и вся доставка, пока он на смене. */
 const PICKER_POSTS = (n: number): StaffPost[] => [post(n, 'сборка заказов + доставка')];
 
+/** Су-шеф, если он есть: весь день на контроле витрин и доготовке. */
+const SOUS_CHEF_POSTS = (n: number): StaffPost[] => [post(n, 'контроль витрин + доготовка')];
+
 /** Нормы с расстановкой по правилам в тех окнах, где правило есть. */
 export function applyStaffingRules(norms: readonly StaffNorm[]): StaffNorm[] {
   return norms.map((n) => {
@@ -81,6 +86,8 @@ export function applyStaffingRules(norms: readonly StaffNorm[]): StaffNorm[] {
       roles[role] = { ...r, posts };
     }
     if (picker && picker.count > 0) roles.picker = { ...roles.picker, posts: [PICKER_POSTS(picker.count)] };
+    const chef = n.roles.sousChef?.slots[0];
+    if (chef && chef.count > 0) roles.sousChef = { ...roles.sousChef, posts: [SOUS_CHEF_POSTS(chef.count)] };
     return { ...n, roles };
   }).map(withoutBarDeputy);
 }

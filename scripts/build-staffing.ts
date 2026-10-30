@@ -8,6 +8,10 @@
  *
  *   npm run staffing:build -- шаблон.xlsx
  *   npm run staffing:build -- книга-1.xlsx книга-2.xlsx …   (порядок важен)
+ *   npm run staffing:build -- --final финал.xlsx книга-1.xlsx …
+ *
+ * --final — финальная книга: числа норм только из неё, без голосования;
+ * расстановку, если её там нет, дают остальные книги.
  *
  * Книг может быть несколько — от разных людей, каждый расписал свои лавки.
  * Как они сливаются, см. parsers/staffing-merge.ts: правка одной книги
@@ -21,10 +25,18 @@ import { parseStaffing } from '../src/lib/parsers/staffing';
 import { mergeStaffing } from '../src/lib/parsers/staffing-merge';
 import { compareShopNumber } from '../src/lib/shops';
 import { STAFFING_SEED_PATH } from '../src/lib/staffing-store';
-import { hasLayout, type StaffNorm } from '../src/lib/staffing';
+import { hasLayout, withAllRoles, type StaffNorm } from '../src/lib/staffing';
 import { collectPlaces, defaultPlaceName } from '../src/lib/staffing-places';
 
-const sources = process.argv.slice(2);
+const args = process.argv.slice(2);
+const finalAt = args.indexOf('--final');
+const finalFile = finalAt >= 0 ? args[finalAt + 1] : undefined;
+if (finalAt >= 0 && !finalFile) {
+  console.error('После --final укажите финальную книгу');
+  process.exit(1);
+}
+// Финальная — последней: при равенстве в расстановке побеждает книга позже.
+const sources = [...args.filter((_, i) => i !== finalAt && i !== finalAt + 1), ...(finalFile ? [finalFile] : [])];
 if (sources.length === 0) {
   console.error('Укажите книгу: npm run staffing:build -- путь/к/шаблону.xlsx [ещё книги…]');
   process.exit(1);
@@ -44,10 +56,10 @@ const books = sources.map((file) => {
 
 // Прежние нормы — только чтобы лавка, которой нет ни в одной книге, не
 // пропала молча (см. mergeStaffing).
-const previous: StaffNorm[] = fs.existsSync(STAFFING_SEED_PATH)
-  ? (JSON.parse(fs.readFileSync(STAFFING_SEED_PATH, 'utf8')).norms ?? [])
-  : [];
-const { norms, edits, conflicts } = mergeStaffing(books, previous);
+const previous: StaffNorm[] = withAllRoles(
+  fs.existsSync(STAFFING_SEED_PATH) ? (JSON.parse(fs.readFileSync(STAFFING_SEED_PATH, 'utf8')).norms ?? []) : [],
+);
+const { norms, edits, conflicts } = mergeStaffing(books, previous, finalFile && path.basename(finalFile));
 
 // Написания мест, которых не было в прежних нормах: на вкладке «Функционалы»
 // они придут с меткой «новое» — их надо разобрать (свести к функционалу или

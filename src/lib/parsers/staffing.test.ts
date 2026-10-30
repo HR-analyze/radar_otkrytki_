@@ -14,15 +14,15 @@ const HEADER = [
 
 /**
  * «ШР по лавкам» как в жизни: сверху ставки и графики, строка заголовков — с
- * «Регион», дальше лавки. Сборщики — первая колонка «Сборщик заказа», вторая
- * такая же — уже рубли ФОТ, её брать нельзя.
+ * «Регион», дальше лавки. Су-шефы и сборщики — первые колонки «су-шеф» и
+ * «Сборщик заказа», вторые такие же — уже рубли ФОТ, их брать нельзя.
  */
 const SHR = [
-  [null, null, null, 'Тер. Директор ШР', 'кассир', 'Сборщик заказа'],
-  [null, null, null, 120000, 310, 280],
-  ['Регион', 'ТО ПЛАН октябрь', 'ШР общая', 'Тер. Директор ШР', 'кассир', 'Сборщик заказа', 'Сборщик заказа'],
-  ['М01 Милютинский', 12812500, 13.7, 1, 5.8, 1, 50400],
-  ['М73 Зиларт', 13530000, 12, 1, 5.8, 0, 0],
+  [null, null, null, 'Тер. Директор ШР', 'кассир', 'су-шеф', 'Сборщик заказа'],
+  [null, null, null, 120000, 310, 350, 280],
+  ['Регион', 'ТО ПЛАН октябрь', 'ШР общая', 'Тер. Директор ШР', 'кассир', 'су-шеф', 'Сборщик заказа', 'су-шеф', 'Сборщик заказа'],
+  ['М01 Милютинский', 12812500, 13.7, 1, 5.8, 0.5, 1, 99700, 50400],
+  ['М73 Зиларт', 13530000, 12, 1, 5.8, 1, 0, 199400, 0],
 ];
 
 /** Шаблон как в жизни: лавки, потом служебная строка с длиной окон в часах. */
@@ -79,7 +79,16 @@ test('калькулятор: 14:00 в М1 — окно 11–16 у каждой 
 
   assert.deepEqual(
     at.map((a) => [a.role, a.count]),
-    [['cashier', 3], ['cook', 3], ['barista', 0], ['cleaner', 2], ['barDeputy', 1], ['hallDeputy', 1], ['picker', 1]],
+    [
+      ['cashier', 3],
+      ['cook', 3],
+      ['barista', 0],
+      ['cleaner', 2],
+      ['barDeputy', 1],
+      ['hallDeputy', 1],
+      ['sousChef', 0.5],
+      ['picker', 1],
+    ],
   );
   assert.equal(slotLabel(at[0].slot!), '11:00–16:00');
   assert.equal(slotShortLabel(m1.roles.cashier.slots[0]), '6:30–7:30');
@@ -122,9 +131,14 @@ test('замы — по одному всегда (бар 6:30–18:00, зал 6
   assert.deepEqual(m1.roles.picker.slots, [{ from: 420, to: 960, count: 1 }]);
   assert.equal(m73.roles.picker.slots[0].count, 0);
   assert.ok(!JSON.stringify(norms).includes('50400'), 'ФОТ сборщика утёк в нормы');
+  // Су-шеф — по ШР, весь день; 0,5 — как в ШР, половиной.
+  assert.deepEqual(m1.roles.sousChef.slots, [{ from: 390, to: 1380, count: 0.5 }]);
+  assert.deepEqual(m73.roles.sousChef.slots, [{ from: 390, to: 1380, count: 1 }]);
+  assert.ok(!/99700|199400/.test(JSON.stringify(norms)), 'ФОТ су-шефа утёк в нормы');
 
   const bare = parseStaffing(book([M1, DURATIONS], { shr: null }));
   assert.equal(bare.norms[0].roles.picker.slots[0].count, 0);
+  assert.equal(bare.norms[0].roles.sousChef.slots[0].count, 0);
   assert.ok(bare.warnings.some((w) => w.includes('ШР по лавкам')));
 });
 

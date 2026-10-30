@@ -258,7 +258,8 @@ export function StaffingBoard({
             часы × {rateLabel}. Подсвечены окна, в которые попадает {formatClock(minutes)}. Клик по строке оставит в
             таблице одну эту лавку, вернуть всю сеть — «Все лавки» в фильтре. FTE — итого по штату, ч/мес и ч/день —
             человеко-часы: за день по окнам, за месяц — день × {MONTH_DAYS}. Замы — по одному в лавке,
-            по бару 6:30–18:00, по залу 6:30–23:00, сборщик — по ШР, 7:00–16:00; под числом у них заработок за день.
+            по бару 6:30–18:00, по залу 6:30–23:00; су-шеф — по ШР, 6:30–23:00; сборщик — по ШР, 7:00–16:00; под
+            числом у них заработок за день.
           </p>
         </div>
         <div className="surface radar-scroll staffing-scroll">
@@ -284,7 +285,7 @@ export function StaffingBoard({
                   className="px-2 pt-2 text-center text-xs font-semibold whitespace-nowrap"
                   style={{ borderLeft: '1px solid var(--border)' }}
                 >
-                  Замы и сборщик
+                  Замы, су-шеф, сборщик
                 </th>
               </tr>
               <tr>
@@ -467,6 +468,7 @@ export function StaffingBoard({
 const EXTRA_HEAD: Record<(typeof EXTRA_ROLES)[number], [string, string]> = {
   barDeputy: ['ЗД', 'бар'],
   hallDeputy: ['ЗД', 'зал'],
+  sousChef: ['Су-', 'шеф'],
   picker: ['Сбор-', 'щик'],
 };
 

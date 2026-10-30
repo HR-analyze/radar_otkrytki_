@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  LAYOUT_ROLES,
   STAFF_ROLE_TITLE,
   TEMPLATE_ROLES,
   hasLayout,
@@ -130,7 +131,7 @@ export function StaffingLayout({
  * Порядок строк: замы сверху — они на смене весь день и держат кассу, —
  * дальше должности шаблона, сборщик внизу.
  */
-const ORDER: readonly StaffRole[] = ['barDeputy', 'hallDeputy', ...TEMPLATE_ROLES, 'picker'];
+const ORDER = LAYOUT_ROLES;
 
 const STEP = 30;
 
@@ -401,7 +402,7 @@ function EditForm({ norm, functions, onDone }: { norm: StaffNorm; functions: Fun
   // Число людей поменяли — строк столько же: новые пустые, лишние снизу уходят.
   const setCount = (role: StaffRole, i: number, value: string) => {
     setCounts((c) => ({ ...c, [role]: c[role].map((v, k) => (k === i ? value : v)) }));
-    const n = Math.min(50, Math.max(0, Math.floor(Number(value) || 0)));
+    const n = Math.min(50, Math.max(0, Math.ceil(Number(value) || 0)));
     setPeople((p) => ({
       ...p,
       [role]: p[role].map((w, j) => (j === i ? [...w.slice(0, n), ...Array<string>(Math.max(0, n - w.length)).fill('')] : w)),
@@ -430,7 +431,14 @@ function EditForm({ norm, functions, onDone }: { norm: StaffNorm; functions: Fun
               roles.map((r) => [
                 r,
                 {
-                  counts: counts[r].map((c) => Number(c || 0)),
+                  // Нетронутое число — null: остаётся шаблонное, и новая книга
+                  // его потом поменяет (а не застрянет старое из правки).
+                  // Сравниваем с шаблоном, а не с тем, что показано: правленое
+                  // раньше число, которое не трогали, остаётся правкой.
+                  counts: counts[r].map((c, i) => {
+                    const slot = norm.roles[r].slots[i];
+                    return Number(c || 0) === (slot.template ?? slot.count) ? null : Number(c || 0);
+                  }),
                   // «23:00» конца суток браузер отдаёт как есть; «00:00» в конце — это полночь.
                   times: times[r].map(([a, b]) => [a, b === '00:00' ? '24:00' : b]),
                   // Нетронутое окно — null: в нём остаётся книга или правило

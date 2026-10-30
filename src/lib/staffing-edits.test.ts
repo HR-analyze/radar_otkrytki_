@@ -32,12 +32,22 @@ test('правка из запроса: проверка чисел и мест,
   for (const bad of [
     { cashier: { counts: [1, 2], posts: [] } },
     { cashier: { counts: [2, 5, 5, 5, 5, -1], posts: [] } },
-    { cashier: { counts: [2, 5, 5, 5, 5, 1.5], posts: [] } },
+    { cashier: { counts: [2, 5, 5, 5, 5, 1.3], posts: [] } },
     { cashier: { counts: [2, 5, 5, 5, 5, 3], posts: [[{ count: 1, place: 'х'.repeat(81) }]] } },
   ]) {
     assert.equal(parseStaffingEdit(m50, { roles: bad }).ok, false, JSON.stringify(bad).slice(0, 60));
   }
   assert.equal(parseStaffingEdit(m50, {}).ok, false);
+  // Нетронутое число — null: окно идёт по шаблону, и новая книга его меняет.
+  const kept = parseStaffingEdit(m50, { roles: { cashier: { counts: [null, 7, null, null, null, null], posts: [] } } });
+  assert.ok(kept.ok);
+  const [applied] = applyStaffingEdits([m50], [{ shopCode: 'М50', roles: kept.ok ? kept.roles : {}, updatedAt: 'x' }]);
+  assert.deepEqual(
+    applied.roles.cashier.slots.map((s) => s.count),
+    m50.roles.cashier.slots.map((s, i) => (i === 1 ? 7 : s.count)),
+  );
+  // Половина — можно: су-шеф по ШР бывает 0,5.
+  assert.ok(parseStaffingEdit(m50, { roles: { sousChef: { counts: [0.5], posts: [] } } }).ok);
 });
 
 test('правка времени окон: окно сдвигается, наезды и перевёрнутые окна — ошибка', () => {

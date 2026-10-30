@@ -1,5 +1,5 @@
 import seed from '../../fixtures/staffing-norms.json';
-import type { StaffNorm } from './staffing';
+import { withAllRoles, type StaffNorm } from './staffing';
 import { applyStaffingRules } from './staffing-rules';
 
 /**
@@ -25,12 +25,13 @@ export const STAFFING_SEED_PATH = 'fixtures/staffing-norms.json';
  * staffing-rules.ts). Правила — в коде, а не в JSON: поменялось правило — не
  * нужно пересобирать книги, а в JSON остаётся то, что вписали ТД.
  */
+const book: StaffingSeed = { ...(seed as unknown as StaffingSeed), norms: withAllRoles((seed as unknown as StaffingSeed).norms) };
+
 /** Нормы как в книгах, без правил руководства — для разбора старых правок. */
 export function readStaffingBook(): StaffingSeed {
-  return seed as StaffingSeed;
+  return book;
 }
 
 export function readStaffing(): StaffingSeed {
-  const raw = seed as StaffingSeed;
-  return { ...raw, norms: applyStaffingRules(raw.norms) };
+  return { ...book, norms: applyStaffingRules(book.norms) };
 }

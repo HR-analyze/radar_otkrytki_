@@ -13,7 +13,7 @@ import { formatClock } from './time';
  */
 
 export type TemplateRole = 'cashier' | 'cook' | 'barista' | 'cleaner';
-export type ExtraRole = 'barDeputy' | 'hallDeputy' | 'picker';
+export type ExtraRole = 'barDeputy' | 'hallDeputy' | 'sousChef' | 'picker';
 export type StaffRole = TemplateRole | ExtraRole;
 
 /** Должности из шаблона: у каждой свои окна. Порядок — как в шаблоне. */
@@ -25,9 +25,26 @@ export const TEMPLATE_ROLES: readonly TemplateRole[] = ['cashier', 'cook', 'bari
  *   зам по бару — по одному в лавке с кофемашиной, 6:30–18:00 (без неё —
  *                 никого, см. staffing-rules.ts);
  *   зам по залу — всегда по одному в каждой лавке, 6:30–23:00 (до закрытия);
+ *   су-шеф                 — где он есть в «ШР по лавкам», 6:30–23:00; бывает
+ *                            и 0,5 (М35, М68 в ШР 30.10.2026) — так и считаем;
  *   сборщик заказов        — где он есть в «ШР по лавкам», 7:00–16:00.
  */
-export const EXTRA_ROLES: readonly ExtraRole[] = ['barDeputy', 'hallDeputy', 'picker'];
+export const EXTRA_ROLES: readonly ExtraRole[] = ['barDeputy', 'hallDeputy', 'sousChef', 'picker'];
+
+/**
+ * Порядок должностей в расстановке — на вкладке, в правке и в PDF: замы
+ * сверху, су-шеф под поварами (он на кухне), сборщик внизу.
+ */
+export const LAYOUT_ROLES: readonly StaffRole[] = [
+  'barDeputy',
+  'hallDeputy',
+  'cashier',
+  'cook',
+  'sousChef',
+  'barista',
+  'cleaner',
+  'picker',
+];
 
 export const STAFF_ROLES: readonly StaffRole[] = [...TEMPLATE_ROLES, ...EXTRA_ROLES];
 
@@ -39,6 +56,7 @@ export function isExtraRole(role: StaffRole): role is ExtraRole {
 export const EXTRA_ROLE_SLOT: Record<ExtraRole, StaffSlot> = {
   barDeputy: { from: 6 * 60 + 30, to: 18 * 60, count: 1 },
   hallDeputy: { from: 6 * 60 + 30, to: 23 * 60, count: 1 },
+  sousChef: { from: 6 * 60 + 30, to: 23 * 60, count: 0 },
   picker: { from: 7 * 60, to: 16 * 60, count: 0 },
 };
 
@@ -49,6 +67,7 @@ export const STAFF_ROLE_TITLE: Record<StaffRole, string> = {
   cleaner: 'Уборщик',
   barDeputy: 'ЗД по бару',
   hallDeputy: 'ЗД по залу',
+  sousChef: 'Су-шеф',
   picker: 'Сборщик заказов',
 };
 
@@ -60,6 +79,7 @@ export const STAFF_ROLE_SHORT: Record<StaffRole, string> = {
   cleaner: 'Уборщик',
   barDeputy: 'ЗД бар',
   hallDeputy: 'ЗД зал',
+  sousChef: 'Су-шеф',
   picker: 'Сборщик',
 };
 
@@ -71,6 +91,7 @@ export const STAFF_ROLE_FORMS: Record<StaffRole, [string, string, string]> = {
   cleaner: ['уборщик', 'уборщика', 'уборщиков'],
   barDeputy: ['зам по бару', 'зама по бару', 'замов по бару'],
   hallDeputy: ['зам по залу', 'зама по залу', 'замов по залу'],
+  sousChef: ['су-шеф', 'су-шефа', 'су-шефов'],
   picker: ['сборщик', 'сборщика', 'сборщиков'],
 };
 
@@ -84,6 +105,11 @@ export interface StaffSlot {
   /** Конец окна, минуты от полуночи, не включительно: в 11:00 уже окно «11–16». */
   to: number;
   count: number;
+  /**
+   * Число по шаблону, если правка с сайта его поменяла (см. applyStaffingEdits).
+   * Форма правки сравнивает с ним: совпало — окно не правили, null в правку.
+   */
+  template?: number;
 }
 
 export interface StaffRoleNorm {
@@ -93,10 +119,10 @@ export interface StaffRoleNorm {
   fte: number | null;
   /**
    * Человеко-часы за месяц — колонка «ЧЕЛ-КО часы» как есть; null — в шаблоне
-   * пусто. На сайте не показывается, вместо неё `monthlyHours`: во всех лавках
-   * это число равно сумме «норма окна × норма того же окна у М1» × 31, то есть
-   * вместо длины окон шаблон берёт строку М1. Отсюда и 0 у бариста: в М1
-   * кофемашины нет.
+   * пусто. На сайте не показывается, вместо неё `monthlyHours`. В финальной
+   * книге 30.10.2026 это и есть день × 31, округлённый до часа; в прежних
+   * книгах вместо длины окон бралась строка М1 («норма окна × норма того же
+   * окна у М1» × 31), и с днём колонка не сходилась.
    */
   hours: number | null;
   /**
@@ -190,15 +216,18 @@ export function dailyHours(slots: readonly StaffSlot[]): number | null {
     if (s.from == null) return null;
     minutes += s.count * (s.to - s.from);
   }
-  return Math.round(minutes / 6) / 10;
+  // До сотых: «0,5 су-шефа» на 16,5 часа — 8,25 ч, до десятых было бы 8,3, и
+  // рубли за день разошлись бы с суммой окон.
+  return Math.round(minutes / 0.6) / 100;
 }
 
 /** Дней в месяце для человеко-часов — как в шаблоне, он умножает на 31. */
 export const MONTH_DAYS = 31;
 
 /**
- * Человеко-часы за месяц: день × 31. Колонку шаблона не берём — она посчитана
- * не от длины окон (см. StaffRoleNorm.hours), и с днём не сходилась бы.
+ * Человеко-часы за месяц: день × 31. Колонку шаблона не берём: она округлена
+ * до часа (1224,5 → 1225), а в прежних книгах была посчитана не от длины окон
+ * (см. StaffRoleNorm.hours).
  */
 export function monthlyHours(slots: readonly StaffSlot[]): number | null {
   const day = dailyHours(slots);
@@ -207,16 +236,19 @@ export function monthlyHours(slots: readonly StaffSlot[]): number | null {
 
 /**
  * Ставка в час, ₽, по должности: у четырёх должностей шаблона — 310 ₽, у
- * замов — 350 ₽, у сборщика — 280 ₽. Поменяется у кого-то — правится строка.
+ * замов и су-шефа — 350 ₽, у сборщика — 280 ₽. Поменяется у кого-то —
+ * правится строка.
  */
 export const STAFF_HOURLY_RATE: Record<StaffRole, number> = {
   cashier: 310,
   cook: 310,
   barista: 310,
   cleaner: 310,
-  // Замы — 350 ₽/ч по постановке; сборщик — 280 ₽/ч, как в «ШР по лавкам».
+  // Замы — 350 ₽/ч по постановке; су-шеф — 350 ₽/ч и сборщик — 280 ₽/ч,
+  // как в шапке «ШР по лавкам».
   barDeputy: 350,
   hallDeputy: 350,
+  sousChef: 350,
   picker: 280,
 };
 
@@ -400,12 +432,14 @@ export function splitLeadingCount(post: StaffPost): StaffPost {
  * Строк — сколько людей по норме, а если расписано больше — сколько расписано.
  */
 export function postsToPeople(posts: readonly StaffPost[], count: number): string[] {
+  // «0,5 су-шефа» — всё равно один человек в списке.
+  const whole = (n: number) => Math.ceil(n);
   const numbered = posts.reduce((s, p) => s + (p.count ?? 0), 0);
   const loose = posts.filter((p) => p.count == null).length;
   const people = posts.flatMap((p) =>
-    Array<string>(p.count ?? (loose === 1 ? Math.max(1, count - numbered) : 1)).fill(p.place),
+    Array<string>(p.count != null ? whole(p.count) : loose === 1 ? Math.max(1, whole(count - numbered)) : 1).fill(p.place),
   );
-  return [...people, ...Array<string>(Math.max(0, count - people.length)).fill('')];
+  return [...people, ...Array<string>(Math.max(0, whole(count) - people.length)).fill('')];
 }
 
 /** Обратно: люди → посты окна; одинаковые складываются, «не выбрано» — не пост. */
@@ -452,5 +486,29 @@ export function hasLayout(norm: StaffNorm): boolean {
     (norm.layout?.stations.length ?? 0) > 0 ||
     (norm.layout?.remarks.length ?? 0) > 0 ||
     [...TEMPLATE_ROLES, 'picker' as const].some((r) => norm.roles[r].posts?.some((p) => p.length > 0))
+  );
+}
+
+/**
+ * Должности, которых в норме нет, — с пустым окном. Новая должность (су-шеф,
+ * 30.10.2026) появляется в коде раньше, чем у каждой лавки в JSON: лавка,
+ * оставленная из прежних норм (её нет в новых книгах), собрана ещё без неё.
+ */
+export function withAllRoles(norms: readonly StaffNorm[]): StaffNorm[] {
+  return norms.map((n) =>
+    EXTRA_ROLES.every((r) => n.roles[r])
+      ? n
+      : {
+          ...n,
+          roles: {
+            ...n.roles,
+            ...Object.fromEntries(
+              EXTRA_ROLES.filter((r) => !n.roles[r]).map((r) => [
+                r,
+                { slots: [{ ...EXTRA_ROLE_SLOT[r] }], fte: null, hours: null },
+              ]),
+            ),
+          },
+        },
   );
 }

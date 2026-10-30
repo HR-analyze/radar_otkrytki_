@@ -13,6 +13,7 @@ import {
   MONTH_DAYS,
   STAFF_HOURLY_RATE,
   EXTRA_ROLES,
+  LAYOUT_ROLES,
   STAFF_ROLES,
   TEMPLATE_ROLES,
   hasLayout,
@@ -257,6 +258,7 @@ const ROLE_COLOR: Record<StaffRole, string> = {
   cleaner: '#14b8a6',
   barDeputy: '#e11d48',
   hallDeputy: '#0ea5e9',
+  sousChef: '#ea580c',
   picker: '#84cc16',
 };
 
@@ -580,17 +582,27 @@ function extrasSection(shown: StaffNorm[], breakBefore: boolean): Content {
     ];
   });
 
-  const pickers = shown.filter((n) => n.roles.picker.slots[0].count > 0).map((n) => n.code);
+  const where = (role: 'picker' | 'sousChef') =>
+    shown
+      .filter((n) => n.roles[role].slots[0].count > 0)
+      .map((n) => (n.roles[role].slots[0].count === 1 ? n.code : `${n.code} (${num(n.roles[role].slots[0].count)})`));
+  const pickers = where('picker');
+  const chefs = where('sousChef');
+  const whereLine = (title: string, list: string[]): Content => ({
+    text: [{ text: `${title} есть в ${list.length} ${plural(list.length, 'лавке', 'лавках', 'лавках')}: `, bold: true }, list.join(', ') || '—'],
+    fontSize: 7,
+    color: MUTED,
+    margin: [0, 6, 0, 0],
+  });
   return {
     pageBreak: breakBefore ? 'before' : undefined,
     margin: [0, breakBefore ? 0 : 16, 0, 0],
     stack: [
-      { text: 'Замы и сборщик заказов', style: 'h2' },
+      { text: 'Замы, су-шеф и сборщик заказов', style: 'h2' },
       {
         text:
           'Замы — по одному в лавке: по бару 6:30–18:00 (только где есть кофемашина), по залу 6:30–23:00. ' +
-          'Сборщик — там, где он есть ' +
-          'в «ШР по лавкам», 7:00–16:00.',
+          'Су-шеф (6:30–23:00) и сборщик (7:00–16:00) — там, где они есть в «ШР по лавкам».',
         fontSize: 7.5,
         color: MUTED,
         margin: [0, 2, 0, 6],
@@ -599,19 +611,7 @@ function extrasSection(shown: StaffNorm[], breakBefore: boolean): Content {
         table: { headerRows: 1, widths: [90, 70, 50, ...(many ? [50] : []), 50, '*', '*', '*'], body: [head, ...body] },
         layout: gridLayout(1, 0, false),
       },
-      ...(many
-        ? [
-            {
-              text: [
-                { text: `Сборщик заказов есть в ${pickers.length} ${plural(pickers.length, 'лавке', 'лавках', 'лавках')}: `, bold: true },
-                pickers.join(', ') || '—',
-              ],
-              fontSize: 7,
-              color: MUTED,
-              margin: [0, 6, 0, 0],
-            } as Content,
-          ]
-        : []),
+      ...(many ? [whereLine('Су-шеф', chefs), whereLine('Сборщик заказов', pickers)] : []),
     ],
   };
 }
@@ -632,7 +632,7 @@ function layoutSection(norm: StaffNorm): Content {
   ];
   const body: TableCell[][] = [];
   // Замы сверху, сборщик внизу — как на вкладке.
-  for (const role of ['barDeputy', 'hallDeputy', ...TEMPLATE_ROLES, 'picker'] as const) {
+  for (const role of LAYOUT_ROLES) {
     const r = norm.roles[role];
     const rows = r.slots
       .map((slot, i) => ({ slot, posts: r.posts?.[i] ?? [] }))
@@ -683,9 +683,6 @@ function layoutSection(norm: StaffNorm): Content {
   };
 }
 
-/** Порядок должностей в расстановке: замы сверху, сборщик внизу — как на вкладке. */
-const LAYOUT_ORDER: readonly StaffRole[] = ['barDeputy', 'hallDeputy', ...TEMPLATE_ROLES, 'picker'];
-
 const OFF_RED = '#dc2626';
 
 /**
@@ -697,7 +694,7 @@ const OFF_RED = '#dc2626';
  * будто это одно окно.
  */
 function layoutChart(norm: StaffNorm): Content {
-  const rows = LAYOUT_ORDER.map((role) => {
+  const rows = LAYOUT_ROLES.map((role) => {
     const r = norm.roles[role];
     const windows = r.slots
       .map((slot, i) => ({ slot, posts: r.posts?.[i] ?? [], from: slot.from ?? slot.to - STEP }))

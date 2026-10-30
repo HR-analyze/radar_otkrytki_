@@ -6,6 +6,7 @@ import {
   type StaffNorm,
   type StaffPost,
   type StaffRoleNorm,
+  withAllRoles,
 } from '../staffing';
 
 /**
@@ -25,6 +26,11 @@ import {
  * берём из книги, указанной позже, и сообщаем, если тексты разные. Берём
  * должность целиком из одной книги, а не окно за окном: иначе у кассиров
  * утро было бы расписано одним человеком, а вечер — другим.
+ *
+ * Финальная книга (`final`, 30.10.2026) не голосует, а решает: числа, FTE,
+ * часы и название лавки — только из неё, отличия от остальных книг идут в
+ * отчёт правками. Расстановки в ней может не быть — тогда расстановка из
+ * остальных книг, а сходится ли она с нормой, считаем по финальной норме.
  */
 
 export interface StaffingBook {
@@ -77,7 +83,12 @@ function decide<T>(votes: Vote<T>[]): { value: T; edit?: { from: T; book: string
 
 const fmt = (v: unknown): string => (v == null ? 'пусто' : String(v));
 
-export function mergeStaffing(books: StaffingBook[], base: readonly StaffNorm[] = []): StaffingMergeResult {
+export function mergeStaffing(
+  books: StaffingBook[],
+  base: readonly StaffNorm[] = [],
+  /** Имя финальной книги из books: её числа главнее голосования. */
+  final?: string,
+): StaffingMergeResult {
   const edits: string[] = [];
   const conflicts: string[] = [];
 
@@ -89,14 +100,23 @@ export function mergeStaffing(books: StaffingBook[], base: readonly StaffNorm[] 
       const n = b.norms.find((x) => x.code === code);
       return n ? [{ book: b.name, norm: n }] : [];
     });
+    const finalCopy = final ? copies.find((c) => c.book === final) : undefined;
     const pick = <T>(label: string, get: (n: StaffNorm) => T): T => {
+      if (finalCopy) {
+        const value = get(finalCopy.norm);
+        const others = copies.filter((c) => c !== finalCopy);
+        const was = others.length ? decide(others.map((c) => ({ book: c.book, value: get(c.norm) }))).value : value;
+        if (JSON.stringify(was) !== JSON.stringify(value)) edits.push(`${code} ${label}: ${fmt(was)} → ${fmt(value)} (${final})`);
+        return value;
+      }
       const d = decide(copies.map((c) => ({ book: c.book, value: get(c.norm) })));
       if (d.edit) edits.push(`${code} ${label}: ${fmt(d.edit.from)} → ${fmt(d.value)} (${d.edit.book})`);
       if (d.conflict) conflicts.push(`${code} ${label}: ${d.conflict}`);
       return d.value;
     };
 
-    const first = copies[0].norm;
+    // Окна — по финальной книге, если лавка в ней есть.
+    const first = (finalCopy ?? copies[0]).norm;
     const roles = Object.fromEntries(
       STAFF_ROLES.map((role) => {
         const title = STAFF_ROLE_TITLE[role];
@@ -146,7 +166,7 @@ export function mergeStaffing(books: StaffingBook[], base: readonly StaffNorm[] 
 
   // Лавка, которой нет ни в одной книге, не пропадает молча: берём её из
   // прежних норм и сообщаем.
-  for (const n of base) {
+  for (const n of withAllRoles(base)) {
     if (codes.includes(n.code)) continue;
     norms.push(n);
     conflicts.push(`${n.code}: нет ни в одной книге — оставлена из прежних норм`);

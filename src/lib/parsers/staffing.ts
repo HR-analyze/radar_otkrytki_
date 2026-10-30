@@ -119,7 +119,7 @@ export function parseStaffing(buffer: Buffer, sheetName = STAFFING_SHEET): Staff
     if (!roles.has(ROLE_BY_TITLE[title])) warnings.push(`Нет колонок должности «${title}» — у всех лавок по ней 0`);
   }
 
-  const pickers = readPickers(wb, warnings);
+  const shr = readShr(wb, warnings);
 
   /*
    * Фильтр. ТД расписывают свои лавки в общей книге, включив автофильтр:
@@ -165,13 +165,14 @@ export function parseStaffing(buffer: Buffer, sheetName = STAFFING_SHEET): Staff
       TEMPLATE_ROLES.map((role): [StaffRole, StaffRoleNorm] => [role, { slots: [], fte: null, hours: null }]),
     ) as Record<StaffRole, StaffRoleNorm>;
     for (const role of EXTRA_ROLES) {
-      const count = role === 'picker' ? (pickers?.get(shop.code) ?? 0) : EXTRA_ROLE_SLOT[role].count;
+      const count =
+        role === 'picker' || role === 'sousChef' ? (shr[role]?.get(shop.code) ?? 0) : EXTRA_ROLE_SLOT[role].count;
       byRole[role] = {
         slots: [{ ...EXTRA_ROLE_SLOT[role], count }],
         fte: null,
         hours: null,
         // Замы стоят на кассе — так по постановке, что бы ни было вписано в книге.
-        ...(role !== 'picker' && { posts: [[{ count: 1, place: DEPUTY_POST }]] }),
+        ...((role === 'barDeputy' || role === 'hallDeputy') && { posts: [[{ count: 1, place: DEPUTY_POST }]] }),
       };
     }
 
@@ -251,32 +252,42 @@ const DEPUTY_RE = /^(зд|з\/д|зам)(?![а-я])/i;
 export const DEPUTY_POST = 'касса';
 
 /**
- * Сколько сборщиков в лавке — колонка «Сборщик заказа» листа «ШР по лавкам».
- * Строка заголовков — та, что начинается с «Регион»; колонка — первая с
- * «сборщик» (дальше в листе те же должности повторяются в рублях ФОТ).
- * Нет листа — null: сборщиков тогда не ставим, о чём предупреждаем.
+ * Сколько сборщиков и су-шефов у каждой лавки — из листа «ШР по лавкам»,
+ * колонки «Сборщик заказа» и «су-шеф» (первые с таким заголовком: правее
+ * лежит фонд оплаты труда с теми же заголовками — его не читаем).
+ *
+ * Сборщик — целым числом. Су-шеф бывает 0,5 (М35, М68 в ШР 30.10.2026) —
+ * берём как есть, с точностью до половины: «0,5 су-шефа» считается в
+ * человеко-часах и деньгах как половина.
  */
-function readPickers(wb: XLSX.WorkBook, warnings: string[]): Map<string, number> | null {
+function readShr(wb: XLSX.WorkBook, warnings: string[]): Partial<Record<'picker' | 'sousChef', Map<string, number>>> {
   const name = wb.SheetNames.find((n) => n.trim().toLowerCase() === SHR_SHEET.toLowerCase());
   if (!name) {
-    warnings.push(`Нет листа «${SHR_SHEET}» — сборщиков заказов не ставим`);
-    return null;
+    warnings.push(`Нет листа «${SHR_SHEET}» — сборщиков заказов и су-шефов не ставим`);
+    return {};
   }
   const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: null, raw: false });
   const head = rows.findIndex((r) => String(r?.[0] ?? '').trim().toLowerCase() === 'регион');
-  const col = head < 0 ? -1 : rows[head].findIndex((v) => /сборщик/i.test(String(v ?? '')));
-  if (col < 0) {
-    warnings.push(`В листе «${name}» нет колонки «Сборщик заказа» — сборщиков заказов не ставим`);
-    return null;
-  }
-  const out = new Map<string, number>();
-  for (const row of rows.slice(head + 1)) {
-    const shop = parseShop(row?.[0]);
-    const n = toNumber(row?.[col]);
-    if (!shop || n == null) continue;
-    if (!Number.isInteger(n)) warnings.push(`«${name}»: у ${shop.code} сборщиков ${n} — округлили до ${Math.round(n)}`);
-    out.set(shop.code, Math.round(n));
-  }
+  const find = (re: RegExp) => (head < 0 ? -1 : rows[head].findIndex((v) => re.test(String(v ?? ''))));
+  const read = (col: number, title: string, step: number): Map<string, number> => {
+    const out = new Map<string, number>();
+    for (const row of rows.slice(head + 1)) {
+      const shop = parseShop(row?.[0]);
+      const n = toNumber(row?.[col]);
+      if (!shop || n == null) continue;
+      const rounded = Math.round(n / step) * step;
+      if (rounded !== n) warnings.push(`«${name}»: у ${shop.code} ${title} ${n} — округлили до ${rounded}`);
+      out.set(shop.code, rounded);
+    }
+    return out;
+  };
+  const out: Partial<Record<'picker' | 'sousChef', Map<string, number>>> = {};
+  const picker = find(/сборщик/i);
+  if (picker < 0) warnings.push(`В листе «${name}» нет колонки «Сборщик заказа» — сборщиков заказов не ставим`);
+  else out.picker = read(picker, 'сборщиков', 1);
+  const chef = find(/су-?\s*шеф/i);
+  if (chef < 0) warnings.push(`В листе «${name}» нет колонки «су-шеф» — су-шефов не ставим`);
+  else out.sousChef = read(chef, 'су-шефов', 0.5);
   return out;
 }
 

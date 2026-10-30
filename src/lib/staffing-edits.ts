@@ -27,7 +27,13 @@ import {
 
 /** Правка одной должности: число людей в каждом окне и посты окна. */
 export interface StaffRoleEdit {
-  counts: number[];
+  /**
+   * Сколько людей в окне; null — окно не трогали, число как в шаблоне. До
+   * 30.10.2026 форма слала числа всех окон, и правка одного поста замораживала
+   * у лавки старые нормы: финальная книга поменяла кассиров М50 с 5 на 6, а
+   * сайт показывал 5 из правки, где их никто не менял.
+   */
+  counts: (number | null)[];
   /**
    * Посты окна; null — окно не трогали, в нём остаётся расстановка из книги
    * или по правилам руководства (staffing-rules.ts).
@@ -81,7 +87,8 @@ export function applyStaffingEdits(
         ...base,
         slots: base.slots.map((s, i) => {
           const t = e.times?.length === base.slots.length ? e.times[i] : null;
-          return { ...s, ...(t && { from: t[0], to: t[1] }), count: e.counts[i] };
+          const count = e.counts[i] ?? s.count;
+          return { ...s, ...(t && { from: t[0], to: t[1] }), count, ...(count !== s.count && { template: s.count }) };
         }),
         // Через normalizePlace и на чтении: правило мест могло поменяться после
         // того, как правку сохранили («прием» → «официант»).
@@ -120,9 +127,11 @@ export function parseStaffingEdit(
     if (!Array.isArray(r.counts) || r.counts.length !== slots.length) {
       return { ok: false, error: `${role}: окон должно быть ${slots.length}` };
     }
-    const counts = r.counts.map(Number);
-    if (counts.some((c) => !Number.isInteger(c) || c < 0 || c > 50)) {
-      return { ok: false, error: `${role}: людей в окне — целое число от 0 до 50` };
+    // null — число не трогали, остаётся шаблонное.
+    const counts = r.counts.map((c) => (c == null ? null : Number(c)));
+    // С точностью до половины: су-шеф по ШР бывает 0,5 (М35, М68).
+    if (counts.some((c) => c != null && (!Number.isInteger(c * 2) || c < 0 || c > 50))) {
+      return { ok: false, error: `${role}: людей в окне — от 0 до 50, целое или с половиной` };
     }
     const postsRaw = Array.isArray(r.posts) ? r.posts : [];
     const posts: (StaffPost[] | null)[] = [];
