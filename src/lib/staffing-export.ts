@@ -3,26 +3,39 @@ import type { StaffingSeed } from './staffing-store';
 
 /**
  * Что выгружать из «Графика пиков» в Excel и PDF — то же, что в таблице на
- * вкладке: без `shop` вся сеть, с `shop` одна лавка. Лавку ищем тем же
+ * вкладке: без `shop` вся сеть (или лавки выбранного РМ), с `shop` одна лавка. Лавку ищем тем же
  * findStaffNorm, что и страница, иначе ссылка «Скачать» однажды выгрузила бы
  * не то, что на экране.
  */
 export interface StaffingSelection {
-  /** Выбранная лавка; null — вся сеть. */
+  /** Выбранная лавка; null — вся сеть или все лавки РМ. */
   shop: StaffNorm | null;
+  /** Выбранный РМ; null — без фильтра по РМ. */
+  region: string | null;
   /** Лавки в выгрузке, в порядке шаблона. */
   shown: StaffNorm[];
 }
 
+/**
+ * `region` — фильтр по РМ: `name` и коды его лавок из справочника. Лавка
+ * важнее РМ, как и на вкладке: выбрали лавку — выгружается она одна.
+ */
 export function selectStaffing(
   seed: Pick<StaffingSeed, 'norms'>,
   shopQuery: string | null | undefined,
+  region?: { name: string; codes: ReadonlySet<string> } | null,
 ): StaffingSelection | { error: string } {
   if (seed.norms.length === 0) return { error: 'Шаблон норм выхода ещё не загружен — выгружать нечего.' };
   const query = String(shopQuery ?? '').trim();
-  if (!query) return { shop: null, shown: seed.norms };
-  const shop = findStaffNorm(seed.norms, query);
-  return shop ? { shop, shown: [shop] } : { error: `Лавки «${query}» в шаблоне нет.` };
+  if (query) {
+    const shop = findStaffNorm(seed.norms, query);
+    return shop ? { shop, region: null, shown: [shop] } : { error: `Лавки «${query}» в шаблоне нет.` };
+  }
+  if (!region) return { shop: null, region: null, shown: seed.norms };
+  const shown = seed.norms.filter((n) => region.codes.has(n.code));
+  return shown.length > 0
+    ? { shop: null, region: region.name, shown }
+    : { error: `У РМ «${region.name}» нет лавок в шаблоне.` };
 }
 
 /**
@@ -30,8 +43,14 @@ export function selectStaffing(
  * лежат в почте и мессенджерах, где кириллица в имени ломается.
  * «grafik-pikov-2026-10-28.pdf», с лавкой — «grafik-pikov-M50-2026-10-28.pdf».
  */
-export function staffingFilename(ext: 'xlsx' | 'pdf', shop: StaffNorm | null, date: string): string {
-  return ['grafik-pikov', shop ? latin(shop.code) : null, date].filter(Boolean).join('-') + `.${ext}`;
+export function staffingFilename(
+  ext: 'xlsx' | 'pdf',
+  shop: StaffNorm | null,
+  date: string,
+  region: string | null = null,
+): string {
+  const scope = shop ? latin(shop.code) : region ? region.trim().split(/\s+/).map(latin).filter(Boolean).join('-') || null : null;
+  return ['grafik-pikov', scope, date].filter(Boolean).join('-') + `.${ext}`;
 }
 
 const LATIN: Record<string, string> = {
