@@ -44,6 +44,8 @@ import type { FunctionOption } from '@/lib/staffing-places';
 export function StaffingBoard({
   norms,
   initialCode,
+  regionOf = {},
+  initialRegion = null,
   initialMinutes,
   initialLive = false,
   editable = false,
@@ -53,6 +55,10 @@ export function StaffingBoard({
   norms: StaffNorm[];
   /** null — «Все лавки». */
   initialCode: string | null;
+  /** Код лавки → РМ по справочнику радара; в шаблоне норм РМ нет. */
+  regionOf?: Record<string, string>;
+  /** РМ из адреса; null — все РМ. */
+  initialRegion?: string | null;
   initialMinutes: number;
   /** Время не задано в адресе — идём за текущим временем по Москве. */
   initialLive?: boolean;
@@ -64,6 +70,15 @@ export function StaffingBoard({
   functions?: FunctionOption[];
 }) {
   const [code, setCode] = useState(initialCode);
+  const regions = useMemo(
+    () => [...new Set(norms.map((n) => regionOf[n.code]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru')),
+    [norms, regionOf],
+  );
+  // РМ из адреса, которого нет в справочнике (ушёл, опечатка), не держим:
+  // иначе пустой экран без объяснений.
+  const [region, setRegion] = useState(initialRegion && regions.includes(initialRegion) ? initialRegion : null);
+  /** Лавки в охвате: вся сеть или лавки выбранного РМ. */
+  const scope = useMemo(() => (region ? norms.filter((n) => regionOf[n.code] === region) : norms), [norms, region, regionOf]);
   const [minutes, setMinutes] = useState(initialMinutes);
   /**
    * «Сейчас»: время идёт за часами по Москве и обновляется раз в минуту, а в
@@ -80,10 +95,10 @@ export function StaffingBoard({
     return () => window.clearInterval(timer);
   }, [live]);
   const norm = code == null ? null : (norms.find((n) => n.code === code) ?? null);
-  const shown = norm ? [norm] : norms;
+  const shown = norm ? [norm] : scope;
   // Окна в шаблоне одни на все лавки — шапке таблицы годится любая.
   const head = norm ?? norms[0];
-  const at = useMemo(() => (norm ? staffAt(norm, minutes) : staffAtAll(norms, minutes)), [norm, norms, minutes]);
+  const at = useMemo(() => (norm ? staffAt(norm, minutes) : staffAtAll(scope, minutes)), [norm, scope, minutes]);
   const total = at.reduce((a, r) => a + r.count, 0);
   const rates = [...new Set(STAFF_ROLES.map((r) => STAFF_HOURLY_RATE[r]))];
   const rateLabel =
@@ -91,14 +106,18 @@ export function StaffingBoard({
       ? `${rates[0]} ₽/ч`
       : `ставку должности (${rates.map((rate) => `${rate} ₽/ч — ${STAFF_ROLES.filter((r) => STAFF_HOURLY_RATE[r] === rate).map((r) => STAFF_ROLE_SHORT[r].toLowerCase()).join(', ')}`).join('; ')})`;
 
-  const pick = (next: { code?: string | null; minutes?: number; live?: boolean }) => {
-    const c = next.code !== undefined ? next.code : code;
+  const pick = (next: { code?: string | null; region?: string | null; minutes?: number; live?: boolean }) => {
+    const r = next.region !== undefined ? next.region : region;
+    // Лавка чужого РМ после смены РМ снимается — как в фильтрах витрины.
+    let c = next.code !== undefined ? next.code : code;
+    if (next.region !== undefined && c && r && regionOf[c] !== r) c = null;
+    if (next.region !== undefined) setRegion(r);
+    if (c !== code) setCode(c);
     const m = next.minutes ?? minutes;
     const l = next.live ?? (next.minutes != null ? false : live);
-    if (next.code !== undefined) setCode(next.code);
     if (next.minutes != null) setMinutes(next.minutes);
     setLive(l);
-    const q = new URLSearchParams({ ...(c && { shop: c }), ...(!l && { time: formatClock(m) }) });
+    const q = new URLSearchParams({ ...(r && { region: r }), ...(c && { shop: c }), ...(!l && { time: formatClock(m) }) });
     window.history.replaceState(null, '', q.size ? `?${q}` : window.location.pathname);
   };
 
@@ -106,7 +125,25 @@ export function StaffingBoard({
     <div className="flex flex-col gap-5">
       {/* --- калькулятор --- */}
       <section className="surface flex flex-col gap-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,18rem)_auto_1fr] sm:items-end">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,14rem)_minmax(0,18rem)_auto_1fr] sm:items-end">
+          <label className="flex flex-col gap-1.5 text-xs muted">
+            РМ
+            <select
+              value={region ?? ''}
+              onChange={(e) => pick({ region: e.target.value || null })}
+              disabled={regions.length === 0}
+              title={regions.length === 0 ? 'Справочник РМ не загружен' : undefined}
+              className="h-10 rounded-lg border px-2 text-sm"
+              style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+            >
+              <option value="">Все РМ</option>
+              {regions.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="flex flex-col gap-1.5 text-xs muted">
             Лавка
             <select
@@ -115,8 +152,8 @@ export function StaffingBoard({
               className="h-10 rounded-lg border px-2 text-sm"
               style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
-              <option value="">Все лавки</option>
-              {norms.map((n) => (
+              <option value="">{region ? `Все лавки РМ` : 'Все лавки'}</option>
+              {scope.map((n) => (
                 <option key={n.code} value={n.code}>
                   {n.code} {n.name}
                 </option>
@@ -159,7 +196,7 @@ export function StaffingBoard({
                 {norm.coffeeMachine == null ? 'кофемашина — не указано' : norm.coffeeMachine ? 'с кофемашиной' : 'без кофемашины'}
               </>
             ) : (
-              `${norms.length} ${plural(norms.length, 'лавка', 'лавки', 'лавок')} в шаблоне`
+              `${scope.length} ${plural(scope.length, 'лавка', 'лавки', 'лавок')} ${region ? `у РМ ${region}` : 'в шаблоне'}`
             )}
           </p>
         </div>
@@ -176,7 +213,7 @@ export function StaffingBoard({
               </>
             ) : (
               <>
-                во <span className="font-semibold">всех лавках</span>
+                во <span className="font-semibold">{region ? `всех лавках РМ ${region}` : 'всех лавках'}</span>
               </>
             )}{' '}
             на смене должно быть{' '}
@@ -218,7 +255,7 @@ export function StaffingBoard({
 
       <StaffingLayout
         norm={norm}
-        norms={norms}
+        norms={scope}
         minutes={minutes}
         onPick={(c) => pick({ code: c })}
         editable={editable}
@@ -238,7 +275,7 @@ export function StaffingBoard({
               {(['xlsx', 'pdf'] as const).map((ext) => (
                 <a
                   key={ext}
-                  href={`/api/staffing/${ext}${norm ? `?${new URLSearchParams({ shop: norm.code })}` : ''}`}
+                  href={`/api/staffing/${ext}${norm ? `?${new URLSearchParams({ shop: norm.code })}` : region ? `?${new URLSearchParams({ region })}` : ''}`}
                   className="rounded-lg border px-3 py-1.5 text-xs font-medium whitespace-nowrap hover:opacity-90"
                   style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
                   title={
@@ -248,7 +285,7 @@ export function StaffingBoard({
                   }
                 >
                   ⬇ {ext === 'xlsx' ? 'Excel' : 'PDF'}
-                  <span className="muted"> · {norm ? norm.code : 'все лавки'}</span>
+                  <span className="muted"> · {norm ? norm.code : region ? `РМ ${region}` : 'все лавки'}</span>
                 </a>
               ))}
             </div>
@@ -256,7 +293,7 @@ export function StaffingBoard({
           <p className="mt-0.5 text-xs muted">
             Сколько человек должно быть на смене в каждом окне, а под ними — сколько они заработают, ₽: человек ×
             часы × {rateLabel}. Подсвечены окна, в которые попадает {formatClock(minutes)}. Клик по строке оставит в
-            таблице одну эту лавку, вернуть всю сеть — «Все лавки» в фильтре. FTE — итого по штату, ч/мес и ч/день —
+            таблице одну эту лавку, вернуть всю сеть (или все лавки РМ) — «Все лавки» в фильтре. FTE — итого по штату, ч/мес и ч/день —
             человеко-часы: за день по окнам, за месяц — день × {MONTH_DAYS}. Замы — по одному в лавке,
             по бару 6:30–18:00, по залу 6:30–23:00; су-шеф — по ШР, 6:30–23:00; сборщик — по ШР, 7:00–16:00; под
             числом у них заработок за день.

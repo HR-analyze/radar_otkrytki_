@@ -29,3 +29,20 @@ test('имя файла латиницей, с лавкой и датой', () =
   assert.equal(staffingFilename('pdf', null, '2026-10-28'), 'grafik-pikov-2026-10-28.pdf');
   assert.equal(staffingFilename('xlsx', m50, '2026-10-28'), 'grafik-pikov-M50-2026-10-28.xlsx');
 });
+
+test('выгрузка «Графика пиков» по РМ: только его лавки, лавка важнее РМ', () => {
+  const seed = readStaffing();
+  const codes = new Set(['М1', 'М50']);
+  const byRegion = selectStaffing(seed, null, { name: 'Иванов', codes });
+  assert.ok(!('error' in byRegion));
+  assert.equal(byRegion.region, 'Иванов');
+  assert.deepEqual(byRegion.shown.map((n) => n.code).sort(), ['М1', 'М50']);
+
+  const shop = selectStaffing(seed, 'М9', { name: 'Иванов', codes });
+  assert.ok(!('error' in shop));
+  assert.deepEqual(shop.shown.map((n) => n.code), ['М9']);
+
+  assert.match((selectStaffing(seed, null, { name: 'Никто', codes: new Set() }) as { error: string }).error, /Никто/);
+  assert.equal(staffingFilename('pdf', null, '2026-10-28', 'Иванов'), 'grafik-pikov-Ivanov-2026-10-28.pdf');
+  assert.equal(staffingFilename('xlsx', null, '2026-10-28', 'Карабак Денис'), 'grafik-pikov-Karabak-Denis-2026-10-28.xlsx');
+});

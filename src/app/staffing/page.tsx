@@ -4,6 +4,7 @@ import { functionCatalog } from '@/lib/staffing-places';
 import { STAFFING_COOKIE, isStaffingUnlocked, staffingPassword } from '@/lib/auth';
 import { findStaffNorm, parseTimeOfDay } from '@/lib/staffing';
 import { minutesNowMsk } from '@/lib/time';
+import { staffingRegionMap } from '@/lib/staffing-regions';
 import { StaffingBoard } from '@/components/StaffingBoard';
 import { StaffingTabs } from '@/components/StaffingTabs';
 
@@ -16,7 +17,8 @@ export const dynamic = 'force-dynamic';
  *
  * Страница читает из адреса лавку и время (`?shop=М1&time=14:00`); без них
  * открывается на всех лавках и текущем времени по Москве. Лавка понимает и
- * поиск со сводки и радара — его шапка переносит сюда.
+ * поиск со сводки и радара — его шапка переносит сюда. `?region=` — фильтр
+ * по РМ: РМ лавки берётся из справочника радара (в шаблоне его нет).
  */
 export default async function StaffingPage({
   searchParams,
@@ -29,7 +31,11 @@ export default async function StaffingPage({
     return Array.isArray(v) ? v[0] : v;
   };
 
-  const [{ norms, source, builtAt }, saved] = await Promise.all([readStaffingLive(), readPlaceAliasesSafe()]);
+  const [{ norms, source, builtAt }, saved, regionOf] = await Promise.all([
+    readStaffingLive(),
+    readPlaceAliasesSafe(),
+    staffingRegionMap(),
+  ]);
   // Править можно, если пароль на правку задан и хранилище есть; войти —
   // кнопкой на вкладке, тогда кука уже стоит.
   const editable = Boolean(staffingPassword()) && canEditStaffing();
@@ -53,13 +59,15 @@ export default async function StaffingPage({
       <div className="-mt-2">
         <h1 className="text-2xl font-semibold tracking-tight">График пиков</h1>
         <p className="mt-1 text-sm muted">
-          Сколько человек каждой должности должно быть на смене. Выберите лавку и время — радар покажет норму
+          Сколько человек каждой должности должно быть на смене. Выберите РМ, лавку и время — радар покажет норму
           на этот момент. Источник — {source}, собран {builtAt.split('-').reverse().join('.')}.
         </p>
       </div>
       <StaffingBoard
         norms={norms}
         initialCode={shop?.code ?? null}
+        regionOf={regionOf}
+        initialRegion={one('region') || null}
         initialMinutes={minutes}
         initialLive={fixed == null}
         editable={editable}
