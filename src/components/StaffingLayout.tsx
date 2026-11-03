@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   BREAK_RULES,
+  breakWindows,
   LAYOUT_ROLES,
   STAFF_ROLE_TITLE,
   TEMPLATE_ROLES,
@@ -164,6 +165,10 @@ function visibleRoles(norm: StaffNorm): StaffRole[] {
 
 /* -------------------------------- таймлайн -------------------------------- */
 
+/** Полоса перерыва: янтарная, полупрозрачная — блоки окон читаются сквозь неё. */
+const BREAK_BG = 'rgba(245, 158, 11, 0.12)';
+const BREAK_TEXT = '#f59e0b';
+
 function Timeline({ norm, minutes }: { norm: StaffNorm; minutes: number }) {
   const roles = visibleRoles(norm);
   const slots = roles.flatMap((r) => norm.roles[r].slots);
@@ -174,6 +179,7 @@ function Timeline({ norm, minutes }: { norm: StaffNorm; minutes: number }) {
   const steps = (end - start) / STEP;
   const col = (m: number) => 2 + (m - start) / STEP;
   const hours = Array.from({ length: Math.floor(end / 60) - Math.ceil(start / 60) + 1 }, (_, i) => Math.ceil(start / 60) + i);
+  const breaks = breakWindows(start, end);
   const now = minutes >= start && minutes <= end ? (minutes - start) / (end - start) : null;
 
   return (
@@ -194,8 +200,35 @@ function Timeline({ norm, minutes }: { norm: StaffNorm; minutes: number }) {
           </div>
         ))}
 
+        {/* перерывы: строка с подписью и полоса через все должности */}
+        {breaks.length > 0 && (
+          <div className="pr-2 text-[11px] font-semibold" style={{ gridRow: 2, gridColumn: 1, color: BREAK_TEXT }}>
+            Перерывы
+          </div>
+        )}
+        {breaks.map((b) => (
+          <div
+            key={`label-${b.from}`}
+            className="mx-0.5 truncate whitespace-nowrap rounded px-1 py-0.5 text-[11px] font-semibold tabular-nums"
+            title={`Перерывы по ${b.length} мин, 1 человек с подразделения (кухня / касса / бар / клининг)`}
+            style={{ gridRow: 2, gridColumn: `${col(b.from)} / ${col(b.to)}`, color: BREAK_TEXT, border: `1px dashed ${BREAK_TEXT}` }}
+          >
+            ☕ {b.length} мин{b.to - b.from >= 90 && ' · 1 с подр.'}
+          </div>
+        ))}
+
         {roles.map((role, row) => (
-          <RoleRow key={role} norm={norm} role={role} row={row + 2} col={col} minutes={minutes} />
+          <RoleRow key={role} norm={norm} role={role} row={row + 3} col={col} minutes={minutes} />
+        ))}
+
+        {/* полоса поверх блоков: полупрозрачная, клики проходят насквозь */}
+        {breaks.map((b) => (
+          <div
+            key={`band-${b.from}`}
+            aria-hidden
+            className="pointer-events-none rounded-md"
+            style={{ gridRow: `2 / span ${roles.length + 1}`, gridColumn: `${col(b.from)} / ${col(b.to)}`, background: BREAK_BG }}
+          />
         ))}
 
         {now != null && (

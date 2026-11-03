@@ -11,6 +11,7 @@ import {
 } from './pdf-common';
 import {
   BREAK_RULES,
+  breakWindows,
   MONTH_DAYS,
   STAFF_HOURLY_RATE,
   EXTRA_ROLES,
@@ -692,6 +693,7 @@ function layoutSection(norm: StaffNorm): Content {
 }
 
 const OFF_RED = '#dc2626';
+const BREAK_INK = '#92400e';
 
 /**
  * Расстановка графиком, как таймлайн на вкладке: сверху шкала часов, строка —
@@ -732,6 +734,28 @@ function layoutChart(norm: StaffNorm): Content {
   }
 
   const body: TableCell[][] = [scale];
+  // Перерывы — своей строкой под шкалой, янтарным блоком под своим временем.
+  const breaks = breakWindows(start, end);
+  if (breaks.length > 0) {
+    const cells: TableCell[] = [{ text: 'Перерывы', bold: true, fontSize: 7.5, color: BREAK_INK, margin: [0, 2, 0, 0] }];
+    let at = 0;
+    for (const b of breaks) {
+      const from = Math.max(at, col(b.from));
+      const to = Math.max(from + 1, col(b.to));
+      for (; at < from; at++) cells.push({ text: '' });
+      cells.push({
+        colSpan: to - from,
+        fillColor: '#fef3c7',
+        text: [{ text: `по ${b.length} мин`, bold: true }, to - from >= 3 ? ' · 1 с подразделения' : ''],
+        fontSize: 6,
+        color: BREAK_INK,
+      });
+      for (let k = 1; k < to - from; k++) cells.push({});
+      at = to;
+    }
+    for (; at < cols; at++) cells.push({ text: '' });
+    body.push(cells);
+  }
   for (const { role, windows } of rows) {
     const cells: TableCell[] = [{ text: STAFF_ROLE_TITLE[role], bold: true, fontSize: 7.5, margin: [0, 2, 0, 0] }];
     let at = 0;
