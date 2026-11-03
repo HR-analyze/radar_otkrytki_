@@ -10,6 +10,7 @@ import {
   tile,
 } from './pdf-common';
 import {
+  BREAK_RULES,
   MONTH_DAYS,
   STAFF_HOURLY_RATE,
   EXTRA_ROLES,
@@ -667,6 +668,13 @@ function layoutSection(norm: StaffNorm): Content {
         color: MUTED,
         margin: [0, 2, 0, 6],
       },
+      {
+        stack: [
+          { text: 'Перерывы', bold: true, fontSize: 8.5, margin: [0, 0, 0, 2] },
+          ...BREAK_RULES.map((r) => ({ text: [{ text: `${r.time} — `, bold: true }, r.text], fontSize: 8 })),
+        ],
+        margin: [0, 0, 0, 8],
+      } as Content,
       layoutChart(norm),
       { text: 'То же списком', style: 'h2', margin: [0, 14, 0, 6] },
       ...(layout?.stations.length

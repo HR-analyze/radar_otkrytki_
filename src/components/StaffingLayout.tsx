@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  BREAK_RULES,
   LAYOUT_ROLES,
   STAFF_ROLE_TITLE,
   TEMPLATE_ROLES,
@@ -69,6 +70,7 @@ export function StaffingLayout({
           Кто где стоит в каждом окне. Расписана у {laid.length} из {norms.length}{' '}
           {plural(norms.length, 'лавки', 'лавок', 'лавок')} — выберите лавку:
         </p>
+        <BreakRules />
         <div className="flex flex-wrap gap-1.5">
           {laid.map((n) => (
             <button
@@ -101,6 +103,8 @@ export function StaffingLayout({
         {editable && !editing && <EditButton unlocked={unlocked} onEdit={() => setEditing(true)} />}
       </div>
 
+      <BreakRules />
+
       {norm.layout && (norm.layout.stations.length > 0 || norm.layout.remarks.length > 0) && (
         <div className="flex flex-col gap-0.5 text-xs">
           {norm.layout.stations.length > 0 && (
@@ -124,6 +128,22 @@ export function StaffingLayout({
         <Timeline norm={norm} minutes={minutes} />
       )}
     </section>
+  );
+}
+
+/** Правила перерывов — одни на всю сеть. */
+function BreakRules() {
+  return (
+    <div className="rounded-md border px-3 py-2 text-xs" style={{ borderColor: 'var(--border)' }}>
+      <p className="font-semibold">Перерывы</p>
+      <ul className="mt-1 flex flex-col gap-0.5">
+        {BREAK_RULES.map((r) => (
+          <li key={r.time}>
+            <span className="tabular-nums font-medium">{r.time}</span> — {r.text}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
