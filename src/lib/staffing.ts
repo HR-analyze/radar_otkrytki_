@@ -354,15 +354,30 @@ export function findStaffNorm(norms: readonly StaffNorm[], query: string | undef
 /* ------------------------------ дислокации ------------------------------ */
 
 /**
- * Правила перерывов — общие для всех лавок, показываются над расстановкой
- * (вкладка и PDF). «С подразделения» — кухня, касса, бар, клининг: из
- * каждого одновременно уходит не больше одного человека.
+ * Правила перерывов — общие для всех лавок, показываются над расстановкой и
+ * полосами прямо на таймлайне (вкладка и PDF). «С подразделения» — кухня,
+ * касса, бар, клининг: из каждого одновременно уходит не больше одного
+ * человека. from/to — минуты от полуночи, to: null — до закрытия.
  */
-export const BREAK_RULES: readonly { time: string; text: string }[] = [
-  { time: '11:00–12:00', text: 'перерывы по 15 минут, 1 человек с подразделения (кухня / касса / бар / клининг)' },
-  { time: '15:00–17:00', text: 'перерывы по 30 минут, 1 человек с подразделения (кухня / касса / бар / клининг)' },
-  { time: 'с 20:30 до закрытия', text: 'перерывы по 15 минут' },
+export type BreakRule = { from: number; to: number | null; length: number; time: string; text: string };
+
+const PER_DEPT = '1 человек с подразделения (кухня / касса / бар / клининг)';
+
+export const BREAK_RULES: readonly BreakRule[] = [
+  { from: 11 * 60, to: 12 * 60, length: 15, time: '11:00–12:00', text: `перерывы по 15 минут, ${PER_DEPT}` },
+  { from: 15 * 60, to: 17 * 60, length: 30, time: '15:00–17:00', text: `перерывы по 30 минут, ${PER_DEPT}` },
+  { from: 20 * 60 + 30, to: null, length: 15, time: 'с 20:30 до закрытия', text: `перерывы по 15 минут, ${PER_DEPT}` },
 ];
+
+/**
+ * Окна перерывов на шкале графика [start, end): «до закрытия» — до конца
+ * шкалы, что вне шкалы — обрезано или выброшено.
+ */
+export function breakWindows(start: number, end: number): { from: number; to: number; length: number }[] {
+  return BREAK_RULES.map((r) => ({ from: Math.max(start, r.from), to: Math.min(end, r.to ?? end), length: r.length })).filter(
+    (w) => w.to > w.from,
+  );
+}
 
 /**
  * Пост из клетки шаблона: «1 касса/2 прием» → [1 касса, 2 прием].
