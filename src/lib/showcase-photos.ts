@@ -4,7 +4,7 @@ import { MAX_PHOTOS } from './showcase-photo-limits';
 export { MAX_PHOTOS, MAX_PHOTO_BYTES } from './showcase-photo-limits';
 
 /**
- * Фото витрины: к лавке за день можно приложить от 1 до 10 снимков (лимит —
+ * Фото витрины: к лавке за день можно приложить от 1 до 12 снимков (лимит —
  * в showcase-photo-limits.ts).
  *
  * Процент наполнения — это чья-то оценка «на глаз», и спор «да там было

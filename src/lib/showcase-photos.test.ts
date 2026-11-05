@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 /**
- * Фото витрины: от 1 до 10 на лавку за день. База — временная SQLite;
+ * Фото витрины: от 1 до 12 на лавку за день. База — временная SQLite;
  * переменные окружения выставляются до первого импорта модулей.
  */
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'radar-photos-'));
@@ -31,25 +31,25 @@ test('формат определяется по байтам, а не по ра
   assert.equal(photos.sniffImage(Buffer.alloc(0)), null);
 });
 
-test('к лавке за день — не больше десяти фото', async () => {
-  assert.equal(photos.MAX_PHOTOS, 10);
+test('к лавке за день — не больше двенадцати фото', async () => {
+  assert.equal(photos.MAX_PHOTOS, 12);
   const jpeg = { mime: 'image/jpeg' as const, data: JPEG };
   const many = (n: number) => Array.from({ length: n }, () => jpeg);
 
   const three = await photos.addPhotos('2026-10-14', 'М12', many(3));
   assert.equal(three.length, 3);
 
-  // Три есть, просят ещё восемь — отказ целиком, а не «семь из восьми молча».
+  // Три есть, просят ещё десять — отказ целиком, а не «девять из десяти молча».
   await assert.rejects(
-    photos.addPhotos('2026-10-14', 'М12', many(8)),
-    (e: unknown) => e instanceof photos.PhotoLimitError && /ещё 7 из 10/.test(e.message),
+    photos.addPhotos('2026-10-14', 'М12', many(10)),
+    (e: unknown) => e instanceof photos.PhotoLimitError && /ещё 9 из 12/.test(e.message),
   );
   assert.equal((await photos.listPhotos('2026-10-14', 'М12')).length, 3);
 
-  assert.equal((await photos.addPhotos('2026-10-14', 'М12', many(7))).length, 10);
+  assert.equal((await photos.addPhotos('2026-10-14', 'М12', many(9))).length, 12);
   await assert.rejects(
     photos.addPhotos('2026-10-14', 'М12', [jpeg]),
-    (e: unknown) => e instanceof photos.PhotoLimitError && /уже 10 фото/.test(e.message),
+    (e: unknown) => e instanceof photos.PhotoLimitError && /уже 12 фото/.test(e.message),
   );
 
   // Лимит — на лавку за день, а не на лавку вообще и не на день вообще.
@@ -59,12 +59,12 @@ test('к лавке за день — не больше десяти фото', 
 
 test('счётчики — в обоих разрезах редактора', async () => {
   assert.deepEqual(await photos.photoCounts({ date: '2026-10-14' }), {
-    '2026-10-14|М12': 10,
+    '2026-10-14|М12': 12,
     '2026-10-14|М13': 1,
   });
   assert.deepEqual(
     await photos.photoCounts({ shopCode: 'М12', from: '2026-10-01', to: '2026-10-31' }),
-    { '2026-10-14|М12': 10, '2026-10-15|М12': 1 },
+    { '2026-10-14|М12': 12, '2026-10-15|М12': 1 },
   );
 });
 
@@ -81,9 +81,9 @@ test('фото читается с байтами и удаляется, осв�
   assert.equal(await photos.readPhoto(first.id), null);
   assert.equal(await photos.deletePhoto(first.id), null);
 
-  // Было десять — после удаления можно снова добавить одно.
+  // Было двенадцать — после удаления можно снова добавить одно.
   const png = { mime: 'image/png' as const, data: PNG };
-  assert.equal((await photos.addPhotos('2026-10-14', 'М12', [png])).length, 10);
+  assert.equal((await photos.addPhotos('2026-10-14', 'М12', [png])).length, 12);
 });
 
 test('мусорный id — просто «нет такого фото», а не ошибка базы', async () => {
@@ -95,7 +95,7 @@ test('мусорный id — просто «нет такого фото», а 
 test('карточка лавки получает фото по дням периода', async () => {
   const byDate = await photos.photosByDate('М12', '2026-10-01', '2026-10-31');
   assert.deepEqual(Object.keys(byDate), ['2026-10-14', '2026-10-15']);
-  assert.equal(byDate['2026-10-14'].length, 10);
+  assert.equal(byDate['2026-10-14'].length, 12);
   // Старые — первыми, чужая лавка в выборку не попадает.
   const ids = byDate['2026-10-14'].map((p) => Number(p.id));
   assert.deepEqual(ids, [...ids].sort((a, b) => a - b));
