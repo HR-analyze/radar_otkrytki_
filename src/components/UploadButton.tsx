@@ -39,6 +39,8 @@ type FileResult =
       ok: true;
       name: string;
       savedAs: string;
+      /** Тип файла: у книги витрин ('showcase') файл никуда не сохраняется. */
+      kind: string;
       summary: string;
       /** Должности, которых радар не знает: они ни на какой критерий не влияют. */
       unknownRoles: { role: string; rows: number }[];
@@ -369,7 +371,11 @@ export function UploadButton() {
                           {r.ok ? (
                             <>
                               <p className="mt-1">{r.summary}</p>
-                              <p className="mt-0.5 text-xs muted">Сохранён как {r.savedAs}</p>
+                              <p className="mt-0.5 text-xs muted">
+                                {r.kind === 'showcase'
+                                  ? 'Значения — сразу в базе витрин, сам файл не сохраняется'
+                                  : `Сохранён как ${r.savedAs}`}
+                              </p>
 
                               {/* Незнакомая должность — не «предупреждение парсера», а
                                   пробел в настройке: её строки молча не считаются

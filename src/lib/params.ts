@@ -12,7 +12,7 @@ export interface ResolvedParams {
   status?: Status | 'all';
   /** Поиск по лавке: код или часть названия. */
   shop?: string;
-  /** Замер витрины: на 08:00 или на 16:00; пусто — итог дня (среднее двух). */
+  /** Замер витрины: на 08:00, 16:00 или 18:30; пусто — итог дня (среднее замеров). */
   slot?: FillSlot;
   dates: string[];
 }
@@ -78,7 +78,7 @@ export function resolveCriterion(
 }
 
 /**
- * Замер витрины из URL: `morning` (на 08:00) или `afternoon` (на 16:00).
+ * Замер витрины из URL: `morning` (на 08:00), `afternoon` (на 16:00) или `evening` (на 18:30).
  * Всё остальное — не ошибка, а итог дня: так страница и открывается без фильтра.
  */
 export function resolveSlot(raw: string | undefined): FillSlot | undefined {

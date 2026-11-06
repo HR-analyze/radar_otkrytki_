@@ -1,7 +1,8 @@
-import type { DepartureShop, DepartureSummary, DepartureTrip } from '@/lib/queries';
+import type { DepartureSummary } from '@/lib/queries';
 import { formatClock, formatDuration, shortDate } from '@/lib/time';
 import { plural } from '@/lib/plural';
-import { StatusBadge, STATUS_TEXT } from '@/components/Status';
+import { StatusBadge } from '@/components/Status';
+import { DriverTable } from '@/components/DriverTable';
 
 /**
  * Выезд с РЦ — сетевой показатель.
@@ -137,8 +138,8 @@ export function DepartureBlock({
  * Детализация по водителям — кто какой балл получил.
  *
  * Свёрнута в <details>: на сводке нужен итог, а разбор «с кем разговаривать»
- * открывают отдельно. Без JS — раскрытие делает сам браузер, страница
- * серверная.
+ * открывают отдельно. Раскрытие делает сам браузер; таблица с фильтром —
+ * клиентская (см. DriverTable).
  */
 function DriverDetails({ data }: { data: DepartureSummary }) {
   const dates = data.days.map((d) => d.date);
@@ -154,80 +155,7 @@ function DriverDetails({ data }: { data: DepartureSummary }) {
         </span>
       </summary>
 
-      <div className="radar-scroll mt-2">
-        <table className="radar-table w-full text-sm">
-          <thead>
-            <tr>
-              <th className="radar-sticky px-3 py-2 text-left text-xs font-medium muted">
-                Водитель
-              </th>
-              <th
-                className="px-2 py-2 text-left text-xs font-medium muted"
-                title="Где за период стоит его отметка водителя — по полному ФИО. Чаще всего — первой"
-              >
-                Лавки
-              </th>
-              <th className="px-2 py-2 text-right text-xs font-medium muted">Балл</th>
-              <th className="px-2 py-2 text-right text-xs font-medium muted">Выездов</th>
-              <th
-                className="px-2 py-2 text-right text-xs font-medium muted"
-                title="Строки, где приход на РЦ есть, а отметки об уходе нет: во сколько человек выехал — неизвестно, балл по ним не ставится"
-              >
-                Без ухода
-              </th>
-              <th className="hidden px-2 py-2 text-right text-xs font-medium muted sm:table-cell">
-                На фабрике
-              </th>
-              {dates.map((d) => (
-                <th key={d} className="px-1 py-2 text-center text-xs font-medium muted">
-                  {shortDate(d)}
-                </th>
-              ))}
-              <th className="w-full" aria-hidden />
-            </tr>
-          </thead>
-          <tbody>
-            {data.drivers.map((dr) => (
-              <tr key={dr.employeeName}>
-                <td className="radar-sticky px-3 py-1 whitespace-nowrap" title={dr.employeeName}>
-                  {dr.employeeName}
-                </td>
-                <ShopsCell shops={dr.shops} />
-                <td className="px-2 py-1 text-right whitespace-nowrap">
-                  {dr.score == null ? (
-                    <span className="muted">—</span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 tabular-nums">
-                      <span className={`dot-${dr.status} inline-block size-2 rounded-full`} />
-                      {dr.score.toFixed(2).replace('.', ',')}
-                    </span>
-                  )}
-                </td>
-                <td className="px-2 py-1 text-right text-xs whitespace-nowrap tabular-nums muted">
-                  {dr.trips}
-                </td>
-                <td
-                  className="px-2 py-1 text-right text-xs whitespace-nowrap tabular-nums muted"
-                  title={
-                    dr.unknown > 0
-                      ? `${dr.unknown} ${plural(dr.unknown, 'отметка', 'отметки', 'отметок')} прихода на РЦ без ухода — балл по ним не ставится`
-                      : undefined
-                  }
-                >
-                  {dr.unknown || ''}
-                </td>
-                <td className="hidden px-2 py-1 text-right text-xs whitespace-nowrap tabular-nums muted sm:table-cell">
-                  {formatDuration(dr.medianStay)}
-                </td>
-                {dates.map((d) => (
-                  <TripCell key={d} name={dr.employeeName} date={d} trips={dr.days[d]} />
-                ))}
-                <td aria-hidden />
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DriverTable drivers={data.drivers} dates={dates} />
       <p className="mt-1.5 text-xs muted">
         Сверху — худший балл. «Лавки» — где за период стоит его отметка водителя (по полному
         ФИО), чаще всего — первой; в выгрузке по РЦ лавок нет, поэтому прочерк значит «в лавках
@@ -238,72 +166,6 @@ function DriverDetails({ data }: { data: DepartureSummary }) {
       </p>
     </details>
   );
-}
-
-/** Лавки водителя: коды через запятую, названия и число дней — в подсказке. */
-function ShopsCell({ shops }: { shops: DepartureShop[] }) {
-  if (shops.length === 0) {
-    return (
-      <td
-        className="px-2 py-1 text-xs muted"
-        title="За период в лавках не отмечался: в выгрузке по РЦ лавок нет, а других данных о маршруте нет"
-      >
-        —
-      </td>
-    );
-  }
-
-  return (
-    <td
-      className="px-2 py-1 text-xs whitespace-nowrap"
-      title={shops
-        .map((s) => `${s.name} — ${s.days} ${plural(s.days, 'день', 'дня', 'дней')}`)
-        .join('\n')}
-    >
-      {shops.map((s) => s.code).join(', ')}
-    </td>
-  );
-}
-
-/** Клетка дня: обычно один выезд, но иногда водитель выезжает дважды. */
-function TripCell({
-  name,
-  date,
-  trips,
-}: {
-  name: string;
-  date: string;
-  trips: DepartureTrip[] | undefined;
-}) {
-  if (!trips || trips.length === 0) return <td className="px-1 py-0.5" />;
-
-  return (
-    <td className="px-1 py-0.5">
-      <span className="flex flex-col items-center gap-0.5">
-        {trips.map((t, i) => (
-          <span
-            key={i}
-            className={`st-${t.status} block w-full rounded px-1 py-0.5 text-center text-[11px] font-semibold tabular-nums whitespace-nowrap`}
-            title={tripTitle(name, date, t)}
-          >
-            {t.minutes == null ? '·' : formatClock(t.minutes)}
-          </span>
-        ))}
-      </span>
-    </td>
-  );
-}
-
-function tripTitle(name: string, date: string, t: DepartureTrip): string {
-  const parts = [`${name} · ${shortDate(date)}`];
-  parts.push(
-    t.minutes == null
-      ? 'приход на РЦ есть, отметки об уходе нет'
-      : `выезд ${formatClock(t.minutes)} · ${STATUS_TEXT[t.status]} · ${t.score} ` +
-        `${plural(t.score ?? 0, 'балл', 'балла', 'баллов')}`,
-  );
-  if (t.stay != null) parts.push(`на фабрике ${formatDuration(t.stay)}`);
-  return parts.join(' · ');
 }
 
 function Count({

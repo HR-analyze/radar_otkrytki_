@@ -30,7 +30,7 @@ export interface RosterRow {
   shopName: string;
   /** Региональный менеджер или null, если ячейка пустая либо это не имя. */
   manager: string | null;
-  /** Территориальный директор — пока не используется, но в файле есть. */
+  /** Территориальный директор — для вкладки «КПИ»; null — у лавки свой директор. */
   director: string | null;
 }
 
@@ -115,7 +115,7 @@ export function parseRoster(buffer: Buffer, sheetName = ROSTER_SHEET): RosterPar
  * верхнем углу. Раскладываем его по всему блоку — иначе у 9 лавок из 10 РМ
  * окажется пустым.
  */
-function expandMerges(grid: unknown[][], merges: readonly XLSX.Range[]): void {
+export function expandMerges(grid: unknown[][], merges: readonly XLSX.Range[]): void {
   for (const m of merges) {
     const value = grid[m.s.r]?.[m.s.c] ?? null;
     if (value == null) continue;

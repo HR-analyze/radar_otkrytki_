@@ -5,6 +5,10 @@ import { parseDeliveryTimes } from './parsers/delivery';
 import { parseDepartures } from './parsers/departure';
 import { parseLegacyVitriny } from './parsers/legacy-vitriny';
 import { parseRoster } from './parsers/roster';
+import { parseShowcaseSheets, type ShowcaseSheetCell } from './parsers/showcase-sheets';
+import { parseShopNorms } from './parsers/shop-norms';
+import { normsSeedJson, readNormsSeed } from './shop-norms-store';
+import type { ShopNorms } from './types';
 import { plural } from './plural';
 import { isIgnoredRole } from './status';
 import { formatDuration, shortDate } from './time';
@@ -44,15 +48,34 @@ export interface UploadInspection {
    */
   unknownRoles: { role: string; rows: number }[];
   /**
-   * Наполнение витрин из книги «Все данные» — только у kind='legacy'. Роут
-   * загрузки применяет их в базу ручных данных тем же способом, что и
-   * правка на вкладке «Витрины» (см. saveShowcaseEdits).
+   * Наполнение витрин — у kind='legacy' (книга «Все данные») и 'showcase'
+   * (Google-таблица). Роут загрузки применяет их в базу ручных данных тем же
+   * способом, что и правка на вкладке «Витрины» (см. saveShowcaseEdits):
+   * поле, которого нет, в базе не трогается.
    */
-  showcase: { date: string; shopCode: string; fill: number }[];
+  showcase: ShowcaseUploadEdit[];
+  /**
+   * Файлы, которые кладутся рядом с загруженным, — у справочника норм это
+   * разобранный shop-norms.json: снимок читает нормы из него.
+   */
+  extraFiles?: { fileName: string; buffer: Buffer }[];
   /** Что парсер пропустил или посчитал странным — короткими фразами для UI. */
   notes: string[];
   /** Предупреждения парсера целиком — для логов и отладки. */
   warnings: string[];
+}
+
+export interface ShowcaseUploadEdit {
+  date: string;
+  shopCode: string;
+  /** Замер на 08:00, доля 0–1. */
+  fill?: number;
+  /** Замер на 16:00, доля 0–1. */
+  afternoonFill?: number;
+  /** Замер на 18:30, доля 0–1. */
+  eveningFill?: number;
+  /** Комментарий дня — текст, который вписали в ячейку вместо числа. */
+  note?: string;
 }
 
 export type InspectResult =
@@ -98,6 +121,10 @@ export function canonicalFixtureName(
 ): string {
   const ext = extensionOf(originalName);
   if (kind === 'legacy') return `vitriny.${ext}`;
+  // В fixtures/ не кладётся: имя нужно только журналу загрузок.
+  if (kind === 'showcase') return `vitriny-google.${ext}`;
+  // Тот же стебель, что у прежнего normy-lavok.csv: новый справочник его вытесняет.
+  if (kind === 'norms') return `normy-lavok.${ext}`;
   if (kind === 'delivery') return `vremya-postavki.${ext}`;
   if (kind === 'roster') return `spravochnik-lavok.${ext}`;
   if (kind === 'departure') {
@@ -119,7 +146,9 @@ export function canonicalFixtureName(
 
 /** Тот же файл, но с другим расширением: vitriny.xls рядом с vitriny.xlsx. */
 export function isSupersededBy(existingName: string, newName: string): boolean {
-  const stem = (n: string) => n.replace(/\.(xls|xlsx)$/i, '').toLowerCase();
+  // csv — ради справочника норм: прежний normy-lavok.csv вытесняется загруженным
+  // normy-lavok.xlsx, иначе в fixtures/ лежали бы два исходника одних норм.
+  const stem = (n: string) => n.replace(/\.(xls|xlsx|csv)$/i, '').toLowerCase();
   return existingName !== newName && stem(existingName) === stem(newName);
 }
 
@@ -159,6 +188,8 @@ export function inspectUpload(
     const byName = detectFixtureKind(sheetNames);
     const kind = byName === 'attendance' ? detectFixtureKind(sheetNames, peekGrid(buffer)) : byName;
 
+    if (kind === 'showcase') return inspectShowcaseBook(displayName, buffer);
+    if (kind === 'norms') return inspectNorms(displayName, buffer);
     if (kind === 'legacy') return inspectLegacy(displayName, buffer, config);
     if (kind === 'delivery') return inspectDelivery(displayName, buffer);
     if (kind === 'roster') return inspectRoster(displayName, buffer);
@@ -427,6 +458,193 @@ function inspectLegacy(name: string, buffer: Buffer, config: ThresholdConfig): I
       warnings: parsed.warnings,
     },
   };
+}
+
+/** Сколько строк про ячейки показывать в панели: дальше — «и ещё N». */
+const MAX_CELL_NOTES = 40;
+
+/**
+ * Книга витрин из Google-таблицы (см. parsers/showcase-sheets.ts).
+ *
+ * В fixtures/ она не кладётся: снимок её не читает, а коммит на каждую
+ * заливку перезапускал бы деплой ради данных, которые и так уходят в базу.
+ * Поэтому в панели — не «сохранён как», а что именно радар понял из ячеек:
+ * каждая ячейка с текстом названа поимённо, чтобы её можно было сверить.
+ */
+function inspectShowcaseBook(name: string, buffer: Buffer): InspectResult {
+  const parsed = parseShowcaseSheets(buffer);
+  const edits = showcaseEditsFromCells(parsed.cells);
+
+  if (edits.length === 0) {
+    return {
+      ok: false,
+      originalName: name,
+      error:
+        'Листы «Витрины 0800» / «Витрины 1600» / «Витрины 1830» есть, но заполненных ячеек в них не нашлось.' +
+        (parsed.warnings.length ? ` ${parsed.warnings.slice(0, 3).join('; ')}` : ''),
+    };
+  }
+
+  const count = (slot: ShowcaseSheetCell['slot']) =>
+    parsed.cells.filter((c) => c.slot === slot && c.fill != null).length;
+  const morning = count('morning');
+  const afternoon = count('afternoon');
+  const evening = count('evening');
+  const values = (n: number) => `${n} ${plural(n, 'значение', 'значения', 'значений')}`;
+  const shops = new Set(edits.map((e) => e.shopCode)).size;
+
+  const texts = parsed.cells.filter((c) => c.text);
+  const lines = [
+    ...texts.map(
+      (c) =>
+        `${c.cell} · ${c.shopCode} · ${shortDate(c.date)}: «${c.text}» → ` +
+        (c.fill == null ? 'процента нет, только комментарий' : `${Math.round(c.fill * 100)}% и комментарий`),
+    ),
+    ...parsed.warnings,
+  ];
+
+  return {
+    ok: true,
+    file: {
+      originalName: name,
+      kind: 'showcase',
+      fileName: canonicalFixtureName('showcase', parsed.dates, name),
+      summary:
+        `Витрины из Google-таблицы · ${describeDates(parsed.dates)} · ` +
+        `${shops} ${plural(shops, 'лавка', 'лавки', 'лавок')}: ` +
+        `на 08:00 — ${values(morning)}, на 16:00 — ${values(afternoon)}` +
+        (evening ? `, на 18:30 — ${values(evening)}` : ''),
+      dates: parsed.dates,
+      rows: morning + afternoon + evening,
+      shops,
+      unknownRoles: [],
+      showcase: edits,
+      notes: [
+        'Значения уходят в базу, как правка на вкладке «Витрины»; пустые ячейки ничего не затирают. ' +
+          'Сам файл в репозиторий не кладётся.',
+        ...(texts.length
+          ? [
+              `В ${texts.length} ${plural(texts.length, 'ячейке', 'ячейках', 'ячейках')} текст вместо числа — ` +
+                'процент взят, только если он однозначен (со знаком «%» или первым словом), текст сохранён комментарием дня:',
+            ]
+          : []),
+        ...lines.slice(0, MAX_CELL_NOTES),
+        ...(lines.length > MAX_CELL_NOTES ? [`…и ещё ${lines.length - MAX_CELL_NOTES}`] : []),
+      ],
+      warnings: parsed.warnings,
+    },
+  };
+}
+
+/**
+ * Ячейки листов → правки базы: одна на лавку и день, все замеры вместе.
+ * Тексты всех замеров сливаются в один комментарий дня — он в базе один.
+ */
+export function showcaseEditsFromCells(cells: readonly ShowcaseSheetCell[]): ShowcaseUploadEdit[] {
+  const byKey = new Map<string, ShowcaseUploadEdit & { texts: string[] }>();
+  for (const c of cells) {
+    const key = `${c.date}|${c.shopCode}`;
+    let edit = byKey.get(key);
+    if (!edit) byKey.set(key, (edit = { date: c.date, shopCode: c.shopCode, texts: [] }));
+    if (c.fill != null) {
+      if (c.slot === 'morning') edit.fill = c.fill;
+      else if (c.slot === 'afternoon') edit.afternoonFill = c.fill;
+      else edit.eveningFill = c.fill;
+    }
+    if (c.text) {
+      edit.texts.push(
+        c.slot === 'afternoon' ? `16:00: ${c.text}` : c.slot === 'evening' ? `18:30: ${c.text}` : c.text,
+      );
+    }
+  }
+  return [...byKey.values()].map(({ texts, ...edit }) => (texts.length ? { ...edit, note: texts.join('; ') } : edit));
+}
+
+/**
+ * Справочник нормативов лавок (лист «Лавки»): приезд водителя, тайминг
+ * поваров, выезд с РЦ.
+ *
+ * Кладётся в fixtures/ вместе с пересобранным shop-norms.json — так же, как
+ * `npm run norms:build`, — и действует со следующей сборки снимка. В панели —
+ * не просто «принято», а что именно поменяется по сравнению с действующими
+ * нормами: справочник правят руками, и опечатку в часе видно сразу.
+ *
+ * Правки с вкладки «Пороги» главнее справочника: лавки с ними роут перечислит
+ * отдельно (см. normsOverrideNote).
+ */
+function inspectNorms(name: string, buffer: Buffer): InspectResult {
+  const { norms, warnings } = parseShopNorms(buffer);
+  if (norms.length === 0) {
+    return { ok: false, originalName: name, error: 'Справочник норм опознан, но лавок в нём не нашлось.' };
+  }
+
+  const fileName = canonicalFixtureName('norms', [], name);
+  const { lines: changes, changed } = normsChanges(readNormsSeed(), norms);
+  const count = (pick: (n: ShopNorms) => boolean) => norms.filter(pick).length;
+  const shops = (n: number) => `${n} ${plural(n, 'лавка', 'лавки', 'лавок')}`;
+
+  const lines = [
+    ...changes,
+    ...warnings,
+    ...norms.flatMap((n) => n.warnings.map((w) => `${n.code}: ${w}`)),
+  ];
+
+  return {
+    ok: true,
+    file: {
+      originalName: name,
+      kind: 'norms',
+      fileName,
+      summary:
+        `Нормы лавок · ${shops(norms.length)}: приезд водителя у ${count((n) => !!n.driverAt)}, ` +
+        `повара у ${count((n) => n.cookAt.length > 0)}, выезд с РЦ у ${count((n) => !!n.departureAt)}`,
+      dates: [],
+      rows: norms.length,
+      shops: norms.length,
+      unknownRoles: [],
+      showcase: [],
+      extraFiles: [{ fileName: 'shop-norms.json', buffer: Buffer.from(normsSeedJson(norms, fileName), 'utf8') }],
+      notes: [
+        changes.length === 0
+          ? 'Нормы совпадают с теми, по которым радар считает сейчас, — ничего не поменяется.'
+          : `Поменяется у ${shops(changed)} — действует со следующей сборки снимка:`,
+        ...lines.slice(0, MAX_CELL_NOTES),
+        ...(lines.length > MAX_CELL_NOTES ? [`…и ещё ${lines.length - MAX_CELL_NOTES}`] : []),
+      ],
+      warnings,
+    },
+  };
+}
+
+/**
+ * «М13: повара 06:30 → 06:20» — по строке на лавку, где норма меняется, и
+ * строка про лавки, которых в новом справочнике нет. `changed` — сколько
+ * лавок затронуто.
+ */
+export function normsChanges(
+  before: readonly ShopNorms[],
+  after: readonly ShopNorms[],
+): { lines: string[]; changed: number } {
+  const old = new Map(before.map((n) => [n.code, n]));
+  const fields: [string, (n: ShopNorms) => string][] = [
+    ['водитель', (n) => n.driverAt ?? '—'],
+    ['повара', (n) => (n.cookAt.length ? n.cookAt.join(', ') : '—')],
+    ['выезд с РЦ', (n) => n.departureAt ?? '—'],
+  ];
+
+  const out: string[] = [];
+  for (const n of after) {
+    const o = old.get(n.code);
+    const diff = fields
+      .filter(([, get]) => !o || get(o) !== get(n))
+      .filter(([, get]) => o || get(n) !== '—')
+      .map(([title, get]) => (o ? `${title} ${get(o)} → ${get(n)}` : `${title} ${get(n)}`));
+    if (diff.length) out.push(`${n.code}${o ? '' : ' (новая)'}: ${diff.join(', ')}`);
+  }
+  const gone = before.filter((o) => !after.some((n) => n.code === o.code)).map((o) => o.code);
+  const changed = out.length + gone.length;
+  if (gone.length) out.push(`Нет в справочнике — нормы снимутся: ${gone.join(', ')}`);
+  return { lines: out, changed };
 }
 
 function inspectRoster(name: string, buffer: Buffer): InspectResult {

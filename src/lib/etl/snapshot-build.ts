@@ -140,13 +140,16 @@ export function buildSnapshot(
     warnings.push(...parsed.warnings.map((w) => `[${files.roster!.name}] ${w}`));
 
     const managers = new Map(parsed.rows.map((r) => [r.shopCode, r.manager]));
+    const directors = new Map(parsed.rows.map((r) => [r.shopCode, r.director]));
     rosterAssignments = new Map([...managers].filter((e): e is [string, string] => e[1] != null));
 
     let matched = 0;
     for (const [code, shop] of shops) {
       if (!managers.has(code)) continue;
       matched++;
-      shops.set(code, { ...shop, region: managers.get(code) ?? null });
+      // ТД нужен только вкладке «КПИ»: истории у него, в отличие от РМ, нет —
+      // берётся тот, кто записан в справочнике сейчас.
+      shops.set(code, { ...shop, region: managers.get(code) ?? null, director: directors.get(code) ?? null });
     }
 
     rosterStats =

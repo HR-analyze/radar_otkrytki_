@@ -2,13 +2,14 @@ import * as XLSX from 'xlsx';
 import { dayFill, type ShowcaseStore } from './showcase-store';
 
 /**
- * Наполнение витрин таблицей для Excel: одна строка — лавка за день, оба замера
+ * Наполнение витрин таблицей для Excel: одна строка — лавка за день, все замеры
  * рядом.
  *
- *   Номер лавки | Дата | Утро | 16:00 | Средний результат
+ *   Номер лавки | Дата | Утро | 16:00 | 18:30 | Средний результат
  *
- * Средний результат — среднее двух замеров (утром 100%, в 16:00 50% → 75%), а
- * если мерили один раз — он сам. С 06.10.2026 это и есть итог дня радара:
+ * Средний результат — среднее заполненных замеров (утром 100%, в 16:00 50% →
+ * 75%), а если мерили один раз — он сам. 18:30 меряют с 26.10.2026, раньше
+ * ячейка пустая. С 06.10.2026 это и есть итог дня радара:
  * считается той же функцией (dayFill), что радар, карточка лавки и балл, —
  * до целого процента, половинка вверх. Цифра в выгрузке и на дашборде одна.
  *
@@ -26,11 +27,12 @@ export interface ShowcaseXlsxRow {
   /** Доля 0–1 или null — не мерили. */
   morning: number | null;
   afternoon: number | null;
-  /** Среднее двух замеров; null — не мерили вовсе. */
+  evening: number | null;
+  /** Среднее заполненных замеров; null — не мерили вовсе. */
   average: number | null;
 }
 
-export const SHOWCASE_XLSX_HEADER = ['Номер лавки', 'Дата', 'Утро', '16:00', 'Средний результат'] as const;
+export const SHOWCASE_XLSX_HEADER = ['Номер лавки', 'Дата', 'Утро', '16:00', '18:30', 'Средний результат'] as const;
 
 /**
  * Строки выгрузки: каждая лавка за каждый день окна, в который она работала.
@@ -40,7 +42,7 @@ export const SHOWCASE_XLSX_HEADER = ['Номер лавки', 'Дата', 'Ут�
  * был бы ложным.
  */
 export function showcaseXlsxRows(
-  store: Pick<ShowcaseStore, 'days' | 'afternoon'>,
+  store: Pick<ShowcaseStore, 'days' | 'afternoon'> & Partial<Pick<ShowcaseStore, 'evening'>>,
   shopCodes: readonly string[],
   dates: readonly string[],
   isOpen: (shopCode: string, date: string) => boolean = () => true,
@@ -51,7 +53,15 @@ export function showcaseXlsxRows(
       if (!isOpen(shopCode, date)) continue;
       const morning = store.days[date]?.[shopCode] ?? null;
       const afternoon = store.afternoon[date]?.[shopCode] ?? null;
-      rows.push({ shopCode, date, morning, afternoon, average: dayFill(morning, afternoon) });
+      const evening = store.evening?.[date]?.[shopCode] ?? null;
+      rows.push({
+        shopCode,
+        date,
+        morning,
+        afternoon,
+        evening,
+        average: dayFill(morning, afternoon, evening),
+      });
     }
   }
   return rows;
@@ -64,7 +74,7 @@ export function showcaseXlsxRows(
 export function showcaseXlsx(rows: readonly ShowcaseXlsxRow[]): Buffer {
   const aoa: (string | number | null)[][] = [
     [...SHOWCASE_XLSX_HEADER],
-    ...rows.map((r) => [r.shopCode, excelSerial(r.date), r.morning, r.afternoon, r.average]),
+    ...rows.map((r) => [r.shopCode, excelSerial(r.date), r.morning, r.afternoon, r.evening, r.average]),
   ];
 
   const sheet = XLSX.utils.aoa_to_sheet(aoa);
@@ -78,10 +88,11 @@ export function showcaseXlsx(rows: readonly ShowcaseXlsxRow[]): Buffer {
     format(r, 2, '0%');
     format(r, 3, '0%');
     format(r, 4, '0%');
+    format(r, 5, '0%');
   }
 
-  sheet['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 18 }];
-  sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ r: 0, c: 0 }, { r: rows.length, c: 4 }) };
+  sheet['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 18 }];
+  sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ r: 0, c: 0 }, { r: rows.length, c: 5 }) };
 
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, 'Наполнение витрин');

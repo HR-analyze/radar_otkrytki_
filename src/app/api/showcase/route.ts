@@ -14,6 +14,7 @@ import {
   dayFill,
   type ShowcaseEdit,
 } from '@/lib/showcase-store';
+import { photoCounts } from '@/lib/showcase-photos';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,8 +41,10 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
  * Правки в обоих случаях уходят одним и тем же POST: у каждой правки своя
  * дата, и серверу всё равно, из какого разреза она пришла.
  *
- * Замеров в день два: `percent` — утренний, `afternoonPercent` — в 16:00.
- * `status` — статус итога дня, среднего двух замеров (см. dayFill).
+ * Замеры за день: `percent` — утренний, `afternoonPercent` — в 16:00,
+ * `eveningPercent` — в 18:30 (с 26.10.2026). `status` — статус итога дня,
+ * среднего заполненных замеров (см. dayFill). Показывать ли поле 18:30,
+ * редактор решает сам по дате (см. hasEvening).
  */
 export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
@@ -57,10 +60,12 @@ export async function GET(req: Request) {
   const store = await readShowcase();
   const values = store.days[date] ?? {};
   const afternoon = store.afternoon[date] ?? {};
+  const evening = store.evening[date] ?? {};
   const notes = store.notes[date] ?? {};
   // Лавки на этот день: закрытая в список заполнения не попадает, но её
   // прошлые дни открываются как прежде (см. shopClosures).
   const shops = await listShops(date);
+  const photos = await photoCounts({ date });
 
   return NextResponse.json({
     ok: true,
@@ -82,6 +87,9 @@ export async function GET(req: Request) {
     afternoonFilledByDate: Object.fromEntries(
       Object.entries(store.afternoon).map(([d, v]) => [d, Object.keys(v).length]),
     ),
+    eveningFilledByDate: Object.fromEntries(
+      Object.entries(store.evening).map(([d, v]) => [d, Object.keys(v).length]),
+    ),
     shops: shops.map((s) => ({
       code: s.code,
       name: s.name,
@@ -92,8 +100,13 @@ export async function GET(req: Request) {
       opensAt: scheduleFor(config, s.code)?.opensAt ?? null,
       percent: toPercent(values[s.code]),
       afternoonPercent: toPercent(afternoon[s.code]),
-      status: statusForFill(dayFill(values[s.code] ?? null, afternoon[s.code] ?? null), config),
+      eveningPercent: toPercent(evening[s.code]),
+      status: statusForFill(
+        dayFill(values[s.code] ?? null, afternoon[s.code] ?? null, evening[s.code] ?? null),
+        config,
+      ),
       note: notes[s.code] ?? '',
+      photos: photos[`${date}|${s.code}`] ?? 0,
     })),
   });
 }
@@ -132,17 +145,21 @@ async function shopSlice(rawShop: string, rawFrom: string, rawTo: string): Promi
     );
   }
 
+  const photos = await photoCounts({ shopCode: shop.code, from, to });
   const days = dateRange(from, to)
     .filter((date) => isOpenOn(config, shop.code, date))
     .map((date) => {
       const fill = store.days[date]?.[shop.code] ?? null;
       const afternoon = store.afternoon[date]?.[shop.code] ?? null;
+      const evening = store.evening[date]?.[shop.code] ?? null;
       return {
         date,
         percent: toPercent(fill),
         afternoonPercent: toPercent(afternoon),
-        status: statusForFill(dayFill(fill, afternoon), config),
+        eveningPercent: toPercent(evening),
+        status: statusForFill(dayFill(fill, afternoon, evening), config),
         note: store.notes[date]?.[shop.code] ?? '',
+        photos: photos[`${date}|${shop.code}`] ?? 0,
         updatedAt: store.touched[date] ?? null,
       };
     })
@@ -214,15 +231,17 @@ export async function POST(req: NextRequest) {
     saved: edits.value.map((e) => {
       // Значения берём из базы после записи, а не из правки: правка могла
       // трогать только один замер или только комментарий, а статус итога
-      // зависит от обоих замеров.
+      // зависит от всех замеров.
       const fill = store.days[e.date]?.[e.shopCode] ?? null;
       const afternoon = store.afternoon[e.date]?.[e.shopCode] ?? null;
+      const evening = store.evening[e.date]?.[e.shopCode] ?? null;
       return {
         date: e.date,
         shopCode: e.shopCode,
         percent: toPercent(fill),
         afternoonPercent: toPercent(afternoon),
-        status: statusForFill(dayFill(fill, afternoon), config),
+        eveningPercent: toPercent(evening),
+        status: statusForFill(dayFill(fill, afternoon, evening), config),
         note: store.notes[e.date]?.[e.shopCode] ?? '',
       };
     }),
@@ -263,6 +282,7 @@ function parseEdits(raw: unknown): ParsedEdits {
       shopCode?: unknown;
       percent?: unknown;
       afternoonPercent?: unknown;
+      eveningPercent?: unknown;
       note?: unknown;
     };
     const date = String(e.date ?? '');
@@ -290,6 +310,13 @@ function parseEdits(raw: unknown): ParsedEdits {
       }
       edit.afternoonFill = fill;
     }
+    if ('eveningPercent' in e) {
+      const fill = parsePercent(e.eveningPercent);
+      if (typeof fill === 'string') {
+        return { ok: false, error: `${shopCode}: наполнение в 18:30 должно быть числом от 0 до 100` };
+      }
+      edit.eveningFill = fill;
+    }
 
     if ('note' in e) {
       const note = e.note == null ? '' : String(e.note);
@@ -299,7 +326,12 @@ function parseEdits(raw: unknown): ParsedEdits {
       edit.note = note;
     }
 
-    if (edit.fill === undefined && edit.afternoonFill === undefined && edit.note === undefined) {
+    if (
+      edit.fill === undefined &&
+      edit.afternoonFill === undefined &&
+      edit.eveningFill === undefined &&
+      edit.note === undefined
+    ) {
       return { ok: false, error: `${shopCode}: в правке нет ни процента, ни комментария` };
     }
     value.push(edit);

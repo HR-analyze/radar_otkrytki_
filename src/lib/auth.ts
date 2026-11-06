@@ -3,7 +3,7 @@
  *
  * Сам радар открыт: цифры смотрит вся команда, и лишний барьер на входе только
  * мешает. Закрыты «Витрины» и «История» — там данные меняют, и доступ туда
- * нужен не всем.
+ * нужен не всем, — и «Конкурс» с «КПИ»: рейтинг лавок и РМ смотрят не все.
  *
  * Пароль лежит в переменной окружения, а не в репозитории: пароль в git — это
  * пароль, который видит каждый, у кого есть доступ к коду, и который нельзя
@@ -26,10 +26,29 @@ export const COOKIE = 'radar_manage';
  * «Пороги» закрыты с 10.09.2026: со вкладки правятся нормативы лавок, а правка
  * нормы перекрашивает статусы лавки за все дни. Раньше страница была только
  * для чтения и висела открытой.
+ *
+ * «Конкурс» закрыт с 13.10.2026 целиком, вместе с PDF-отчётом и нарушениями
+ * (`/api/contest/*`): иначе рейтинг утекал бы по ссылке «Скачать PDF».
+ *
+ * «КПИ» заменил «Конкурс» в шапке и закрыт по той же причине: там средний
+ * процент витрин с раскладкой по ТД и РМ — тот же рейтинг.
+ *
+ * «График пиков» открыт нарочно, хотя под нормами там заработок в рублях: его
+ * закрывали 27.10.2026 и в тот же день открыли обратно — смотреть его должны
+ * все, без пароля.
  */
-const MANAGED = ['/showcase', '/history', '/settings', '/api/showcase', '/api/norms', '/api/contest/violations'];
+const MANAGED = [
+  '/showcase',
+  '/history',
+  '/settings',
+  '/contest',
+  '/kpi',
+  '/api/showcase',
+  '/api/norms',
+  '/api/contest',
+];
 
-export const MANAGED_TITLE = 'Витрины, История, Пороги и внесение нарушений';
+export const MANAGED_TITLE = 'Витрины, История, Пороги, Конкурс и КПИ';
 
 export function password(): string | undefined {
   return process.env.RADAR_MANAGE_PASSWORD || undefined;
@@ -48,9 +67,21 @@ export function passwordSet(): boolean {
  */
 export function isPublic(pathname: string): boolean {
   return (
-    pathname === '/login' || pathname === '/api/login' || pathname.startsWith('/api/cron/')
+    pathname === '/login' ||
+    pathname === '/api/login' ||
+    pathname.startsWith('/api/cron/') ||
+    PHOTO_FILE.test(pathname)
   );
 }
+
+/**
+ * Файл фото витрины — /api/showcase/photos/<id>. Его показывает карточка
+ * лавки, а она открыта всем, как и процент наполнения на ней же: закрой файл
+ * паролем — у всех без входа вместо снимков будут битые картинки. Удаление
+ * по тому же адресу проверяет пароль само (см. роут), список и загрузка —
+ * /api/showcase/photos без id — остаются под паролем.
+ */
+const PHOTO_FILE = /^\/api\/showcase\/photos\/\d+$/;
 
 /** Нужен ли для пути пароль. */
 export function isManaged(pathname: string): boolean {
@@ -61,8 +92,8 @@ export function isManaged(pathname: string): boolean {
  * Значение куки — SHA-256 от пароля с солью. Считается через Web Crypto:
  * проверка пароля выполняется в proxy — там, где node:crypto может быть недоступен.
  */
-export async function tokenFor(value: string): Promise<string> {
-  const data = new TextEncoder().encode(`radar:manage:${value}`);
+export async function tokenFor(value: string, scope = 'manage'): Promise<string> {
+  const data = new TextEncoder().encode(`radar:${scope}:${value}`);
   const digest = await crypto.subtle.digest('SHA-256', data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -74,6 +105,28 @@ export async function isUnlocked(cookieValue: string | undefined): Promise<boole
   if (!cookieValue) return false;
 
   return cookieValue === (await tokenFor(expected));
+}
+
+/* -------------------------- правка «Графика пиков» -------------------------- */
+
+/**
+ * Правка «Графика пиков» — под своим паролем, не под паролем «Витрин»:
+ * смотреть вкладку должны все, а править нормы и расстановку — те, кому
+ * дали этот пароль. Пароль — в переменной окружения RADAR_STAFFING_PASSWORD.
+ *
+ * В отличие от пароля «Витрин», не задан — значит править нельзя никому, а
+ * не «открыто всем»: открытая без пароля правка норм была бы тихой дырой.
+ */
+export const STAFFING_COOKIE = 'radar_staffing';
+
+export function staffingPassword(): string | undefined {
+  return process.env.RADAR_STAFFING_PASSWORD || undefined;
+}
+
+export async function isStaffingUnlocked(cookieValue: string | undefined): Promise<boolean> {
+  const expected = staffingPassword();
+  if (!expected || !cookieValue) return false;
+  return timingSafeEqual(cookieValue, await tokenFor(expected, 'staffing'));
 }
 
 /* ------------------------------ крон-роуты ------------------------------ */
@@ -91,7 +144,7 @@ export function checkCronSecret(req: Request): { ok: true } | { ok: false; reaso
   return { ok: true };
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
+export function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);

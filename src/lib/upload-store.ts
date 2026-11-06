@@ -133,6 +133,9 @@ async function saveToDisk(
 
   for (const { inspection, buffer } of files) {
     fs.writeFileSync(path.join(/* turbopackIgnore: true */ dir, inspection.fileName), buffer);
+    for (const extra of inspection.extraFiles ?? []) {
+      fs.writeFileSync(path.join(/* turbopackIgnore: true */ dir, extra.fileName), extra.buffer);
+    }
 
     // Тот же файл с другим расширением иначе останется лежать рядом, и в папке
     // окажутся две легаси-книги — см. commitFixtures.
@@ -175,7 +178,10 @@ async function saveToGithub(
 
   const result = await commitFixtures(
     target,
-    files.map((f) => ({ name: f.inspection.fileName, buffer: f.buffer })),
+    files.flatMap((f) => [
+      { name: f.inspection.fileName, buffer: f.buffer },
+      ...(f.inspection.extraFiles ?? []).map((e) => ({ name: e.fileName, buffer: e.buffer })),
+    ]),
     commitMessage(files.map((f) => f.inspection)),
   );
 

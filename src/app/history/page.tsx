@@ -20,6 +20,8 @@ export const dynamic = 'force-dynamic';
 const KIND_TITLE: Record<string, string> = {
   attendance: 'Выгрузка отметок',
   legacy: 'Книга «Витрины»',
+  showcase: 'Витрины из Google-таблицы',
+  norms: 'Нормы лавок',
   delivery: 'Журнал отгрузок',
   roster: 'Справочник лавок',
 };
@@ -146,7 +148,7 @@ export default async function HistoryPage({
                   <tr key={date} className="border-t" style={{ borderColor: 'var(--border)' }}>
                     <td className="py-1.5 tabular-nums">{shortDate(date)}</td>
                     <td className="py-1.5 text-xs muted">
-                      {countShops(showcase.days[date], showcase.afternoon[date])}
+                      {countShops(showcase.days[date], showcase.afternoon[date], showcase.evening[date])}
                     </td>
                     <td className="py-1.5 text-right text-xs tabular-nums muted">{stamp(at)}</td>
                   </tr>
@@ -288,6 +290,7 @@ function AuditFilter({ shop, date }: { shop: string; date: string }) {
 const FIELD_TITLE: Record<ShowcaseAuditEntry['field'], string> = {
   fill: 'Наполнение, утро',
   fill_afternoon: 'Наполнение, 16:00',
+  fill_evening: 'Наполнение, 18:30',
   note: 'Комментарий',
 };
 
@@ -440,12 +443,9 @@ function readFixtureFiles(): FixtureFile[] {
   }
 }
 
-/** Лавка считается, если у неё есть хоть один замер: утренний или в 16:00. */
-function countShops(
-  morning: Record<string, number> | undefined,
-  afternoon: Record<string, number> | undefined,
-): string {
-  const n = new Set([...Object.keys(morning ?? {}), ...Object.keys(afternoon ?? {})]).size;
+/** Лавка считается, если у неё есть хоть один замер: утро, 16:00 или 18:30. */
+function countShops(...slots: (Record<string, number> | undefined)[]): string {
+  const n = new Set(slots.flatMap((s) => Object.keys(s ?? {}))).size;
   return `${n} ${plural(n, 'лавка', 'лавки', 'лавок')}`;
 }
 

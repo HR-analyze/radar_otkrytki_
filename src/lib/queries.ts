@@ -14,7 +14,12 @@ import {
 import { aggregateStatuses, isOpenOn, roundScore, statusForFill, statusFromScore } from './status';
 import { parseClock } from './time';
 import { compareShopNumber, findShops, isExactCode, matchesShop, shopNumber } from './shops';
-import { rateShopDay, type RatedPerson, type ShopRating } from './rating';
+import {
+  rateShopDay,
+  type RatedPerson,
+  type RatingComponentKey,
+  type ShopRating,
+} from './rating';
 import {
   analyzeDepartures,
   analyzeViolations,
@@ -35,6 +40,19 @@ import {
 } from './contest';
 import { readContestViolations, type ContestViolation } from './contest-violations-store';
 import { contestArchiveDays } from './contest-archive';
+import {
+  addFill,
+  averagePercent,
+  emptyAverage,
+  leaderKey,
+  leaderOf,
+  leaderOptions,
+  mergeAverages,
+  type FillAverage,
+  type LeaderOptions,
+  type ShopLeader,
+} from './kpi';
+import { readShopDirectors } from './shop-directors-store';
 
 /**
  * Чтение для дашборда поверх снимка в памяти (см. snapshot.ts).
@@ -48,6 +66,8 @@ export interface ShopRow {
   code: string;
   name: string;
   region: string | null;
+  /** Территориальный директор — см. Shop.director. */
+  director?: string | null;
 }
 
 /** Порядок справочника — общее правило, см. shops.ts. */
@@ -133,15 +153,16 @@ async function showcaseIndex(slot?: FillSlot): Promise<Map<string, Status>> {
 export function slotFill(s: ShowcaseRow, slot: FillSlot): number | null {
   // Нет поля morning — строка из источника с одним замером: он и утренний.
   if (slot === 'morning') return s.morning === undefined ? s.fill : s.morning;
-  return s.afternoon ?? null;
+  if (slot === 'afternoon') return s.afternoon ?? null;
+  return s.evening ?? null;
 }
 
 /**
  * Снимок, в котором витрина — выбранный замер, а не итог дня.
  *
- * В снимке у витрины итог — среднее утра и 16:00 (см. dayFill), и по нему же
+ * В снимке у витрины итог — среднее замеров (см. dayFill), и по нему же
  * стоит статус критерия «витрина» в `criteria`. Чтобы сводка и радар могли показать
- * «наполнение на 08:00» или «на 16:00», подменяем и строки наполнения, и
+ * «наполнение на 08:00», «на 16:00» или «на 18:30», подменяем и строки наполнения, и
  * статусы критерия разом — так же, как их подмешивает withShowcase в
  * snapshot.ts. Тогда плитки, топ, анти-топ и фильтр по статусу считаются
  * обычным кодом и разъехаться между собой не могут.
@@ -439,8 +460,8 @@ export interface SummaryFilters {
   /** Оставить лавки, у которых за период есть день в этом статусе. */
   status?: Status | 'all';
   /**
-   * Витрина по одному замеру — на 08:00 или на 16:00. Пусто — итог дня,
-   * среднее двух (см. withFillSlot).
+   * Витрина по одному замеру — на 08:00, 16:00 или 18:30. Пусто — итог дня,
+   * среднее замеров (см. withFillSlot).
    */
   slot?: FillSlot;
 }
@@ -594,6 +615,55 @@ export async function radar(
   }
 
   return { dates, rows };
+}
+
+/* ------------------------------ API для 1С -------------------------------- */
+
+export interface KpiDay {
+  date: string;
+  shop: ShopRow;
+  /** Итог лавки за день — ровно то, что в ячейке радара при критерии «Все». */
+  status: Status;
+  /**
+   * Слагаемые итога «Водитель + Сотрудники + Витрина». null — итог в конфиге
+   * считается не по этой формуле, и раскладывать его не на что.
+   */
+  components: Record<RatingComponentKey, Status> | null;
+}
+
+/**
+ * Итоги лавок по дням для выгрузки в 1С (см. onec.ts).
+ *
+ * Итог берётся у самого радара, а не считается здесь заново: число, ушедшее в
+ * KPI, обязано совпадать с цветом, который сотрудник видит на экране, — иначе
+ * спорить о премии придётся с двумя разными цифрами.
+ */
+export async function kpiDays(from: string, to: string): Promise<KpiDay[]> {
+  const { dates, rows } = await radar({ from, to, criterion: 'all' });
+  const config = loadConfig();
+  const byComponents = useComponents(config);
+  const people = byComponents ? await peopleIndex() : null;
+  const fills = byComponents ? await showcaseIndex() : null;
+
+  const out: KpiDay[] = [];
+  for (const date of dates) {
+    for (const row of rows) {
+      const cell = row.cells[date];
+      if (!cell) continue;
+
+      let components: KpiDay['components'] = null;
+      if (people && fills) {
+        const key = `${date}|${row.shop.code}`;
+        const rating = rateShopDay(people.get(key) ?? [], fills.get(key) ?? null, config);
+        components = Object.fromEntries(rating.components.map((c) => [c.key, c.status])) as Record<
+          RatingComponentKey,
+          Status
+        >;
+      }
+      out.push({ date, shop: row.shop, status: cell.status, components });
+    }
+  }
+  return out;
 }
 
 /* ------------------------- нарушения открытия ----------------------------- */
@@ -841,6 +911,187 @@ function archiveRange(rows: readonly ContestRow[]): { from: string; to: string }
     .map(([date]) => date)
     .sort();
   return days.length ? { from: days[0], to: days[days.length - 1] } : null;
+}
+
+/* --------------------------------- КПИ ----------------------------------- */
+
+export interface KpiFilters {
+  from: string;
+  to: string;
+  region?: string;
+  /** Код или часть названия лавки — тот же поиск, что в радаре. */
+  shop?: string;
+  /** Руководитель — ключ «td:Имя» или «dir:Имя» (см. leaderKey). */
+  leader?: string;
+}
+
+/**
+ * Итог одного дня лавки — по нему оценивают линейных сотрудников. Не путать
+ * с KpiDay выше: тот — итог лавки радара открытий для 1С.
+ */
+export interface KpiFillDay {
+  /** Итог дня в целых процентах: среднее заполненных замеров (dayFill). */
+  percent: number;
+  status: Status;
+  /** Замеры, из которых сложен итог, в целых процентах; null — не мерили. */
+  measures: Record<FillSlot, number | null>;
+}
+
+/** Среднее за период и его знаменатель — общая часть строк всех трёх блоков. */
+export interface KpiAverage {
+  /** Средний процент с одним знаком: 94.6; null — за период не мерили. */
+  avg: number | null;
+  /** Статус того же округлённого числа, что на экране. */
+  status: Status;
+  /** Лавко-дней с замером — знаменатель среднего. */
+  measured: number;
+}
+
+export interface KpiShopRow extends KpiAverage {
+  shop: ShopRow;
+  /** дата → итог дня. Дни без замера сюда не попадают. */
+  days: Record<string, KpiFillDay>;
+}
+
+export interface KpiLeaderRow extends KpiAverage, ShopLeader {
+  shops: KpiShopRow[];
+  /** РМ этих лавок по справочнику. */
+  regions: string[];
+}
+
+export interface KpiRegionRow extends KpiAverage {
+  region: string;
+  /** Лавок с замерами у этого РМ за период. */
+  shops: number;
+}
+
+/**
+ * КПИ по наполнению витрин — правило в kpi.ts.
+ *
+ * Источник — `snap.showcase`, итог дня (среднее замеров 08:00, 16:00 и с
+ * 26.10 — 18:30), тот же, что у радара и сводки. Лавки без единого замера за период в блоки не попадают —
+ * их коды возвращаются отдельно (`unmeasured`), чтобы пропуск было видно.
+ *
+ * День лавки идёт тому РМ, который вёл её в этот день (regionAt), как в
+ * конкурсе. У директоров и ТД истории нет: лавки собираются по нынешней
+ * таблице «Лавки» (leaderOf).
+ *
+ * Фильтр «Руководитель» сужает набор лавок для всех трёх блоков: выбрали ТД —
+ * видно его лавки по дням, его строку и РМ, к которым эти лавки относятся.
+ * Варианты фильтра (`leaderOptions`) — руководители лавок под фильтром «РМ»:
+ * выбранный РМ сужает список так же, как в редакторе витрин.
+ */
+export async function kpi(filters: KpiFilters): Promise<{
+  dates: string[];
+  shops: KpiShopRow[];
+  leaders: KpiLeaderRow[];
+  regions: KpiRegionRow[];
+  network: KpiAverage & { shops: number };
+  unmeasured: ShopRow[];
+  leaderOptions: LeaderOptions;
+}> {
+  const snap = await loadSnapshot();
+  const config = loadConfig();
+
+  const table = new Map(readShopDirectors().shops.map((r) => [r.code, r]));
+  const leaderOfShop = (shop: ShopRow): ShopLeader => leaderOf(table.get(shop.code), shop.director);
+  const inRm = await shopsMatching(filters.region, undefined, filters.from, filters.to);
+  const options = leaderOptions(inRm.map(leaderOfShop));
+
+  const matching = (await shopsMatching(filters.region, filters.shop, filters.from, filters.to)).filter(
+    (shop) => !filters.leader || leaderKey(leaderOfShop(shop)) === filters.leader,
+  );
+  const allowed = new Set(matching.map((s) => s.code));
+  const inRegion = await regionDayMatcher(filters.region);
+  const history = regionIndexOf(snap);
+  const currentRegion = new Map(matching.map((s) => [s.code, s.region]));
+
+  const percentOf = (v: number | null) => (v == null ? null : Math.round(v * 100));
+  const finish = (acc: FillAverage): KpiAverage => {
+    const avg = averagePercent(acc);
+    return { avg, status: statusForFill(avg == null ? null : avg / 100, config), measured: acc.days };
+  };
+
+  const byShop = new Map<string, { days: Record<string, KpiFillDay>; acc: FillAverage }>();
+  const byRegion = new Map<string, { acc: FillAverage; shops: Set<string> }>();
+  const dates = new Set<string>();
+
+  for (const s of snap.showcase) {
+    if (s.date < filters.from || s.date > filters.to) continue;
+    if (!allowed.has(s.shopCode) || !inRegion(s.shopCode, s.date)) continue;
+
+    let shop = byShop.get(s.shopCode);
+    if (!shop) byShop.set(s.shopCode, (shop = { days: {}, acc: emptyAverage() }));
+    shop.days[s.date] = {
+      percent: Math.round(s.fill * 100),
+      status: s.status,
+      measures: {
+        morning: percentOf(slotFill(s, 'morning')),
+        afternoon: percentOf(slotFill(s, 'afternoon')),
+        evening: percentOf(slotFill(s, 'evening')),
+      },
+    };
+    addFill(shop.acc, s.fill);
+    dates.add(s.date);
+
+    const manager = regionAt(history.get(s.shopCode), s.date) ?? currentRegion.get(s.shopCode);
+    if (!manager) continue;
+    let region = byRegion.get(manager);
+    if (!region) byRegion.set(manager, (region = { acc: emptyAverage(), shops: new Set() }));
+    addFill(region.acc, s.fill);
+    region.shops.add(s.shopCode);
+  }
+
+  const shops: KpiShopRow[] = [];
+  const unmeasured: ShopRow[] = [];
+  for (const shop of matching) {
+    const data = byShop.get(shop.code);
+    if (!data) unmeasured.push(shop);
+    else shops.push({ shop, days: data.days, ...finish(data.acc) });
+  }
+
+  // Одна строка на руководителя: у ТД в ней две лавки, у директора — его
+  // лавка (или две, как у Абрамовой). Безымянный директор — строка лавки.
+  const groups = new Map<string, { leader: ShopLeader; rows: KpiShopRow[] }>();
+  for (const row of shops) {
+    const leader = leaderOfShop(row.shop);
+    const key = leaderKey(leader) ?? `лавка ${row.shop.code}`;
+    const group = groups.get(key);
+    if (group) group.rows.push(row);
+    else groups.set(key, { leader, rows: [row] });
+  }
+  const accOf = (row: KpiShopRow): FillAverage => byShop.get(row.shop.code)!.acc;
+  const leaders: KpiLeaderRow[] = [...groups.values()].map(({ leader, rows: list }) => ({
+    ...leader,
+    shops: list,
+    regions: [...new Set(list.map((r) => r.shop.region).filter((r): r is string => !!r))],
+    ...finish(mergeAverages(list.map(accOf))),
+  }));
+
+  const regions: KpiRegionRow[] = [...byRegion.entries()].map(([region, v]) => ({
+    region,
+    shops: v.shops.size,
+    ...finish(v.acc),
+  }));
+
+  // Выше — у кого витрина полнее; при равенстве — у кого больше замеров:
+  // 100% за один день и 100% за тридцать стоят разных усилий.
+  const byAverage = (a: KpiAverage, b: KpiAverage) =>
+    (b.avg ?? -1) - (a.avg ?? -1) || b.measured - a.measured;
+  leaders.sort(
+    (a, b) => byAverage(a, b) || byShopNumber(a.shops[0].shop, b.shops[0].shop),
+  );
+  regions.sort((a, b) => byAverage(a, b) || a.region.localeCompare(b.region, 'ru'));
+
+  return {
+    dates: [...dates].sort(),
+    shops,
+    leaders,
+    regions,
+    network: { ...finish(mergeAverages(shops.map(accOf))), shops: shops.length },
+    unmeasured,
+    leaderOptions: options,
+  };
 }
 
 /* ------------------------------- сводка ---------------------------------- */
@@ -1610,8 +1861,8 @@ export interface ShopDay {
   }[];
   /** Итог дня по витрине — среднее замеров. */
   fill: number | null;
-  /** Сами замеры: утро и 16:00; null — не мерили. */
-  fillSlots: { morning: number | null; afternoon: number | null };
+  /** Сами замеры: утро, 16:00 и 18:30; null — не мерили. */
+  fillSlots: { morning: number | null; afternoon: number | null; evening: number | null };
   shopStatus: Status;
   /** Итоговый балл лавки, если он считается по баллам. */
   shopScore: number | null;
@@ -1660,7 +1911,11 @@ export async function shopHistory(
   const slots = new Map(
     dayShowcase.map((s) => [
       s.date,
-      { morning: s.morning === undefined ? s.fill : s.morning, afternoon: s.afternoon ?? null },
+      {
+        morning: s.morning === undefined ? s.fill : s.morning,
+        afternoon: s.afternoon ?? null,
+        evening: s.evening ?? null,
+      },
     ]),
   );
   const showcaseStatuses = new Map(dayShowcase.map((s) => [s.date, s.status]));
@@ -1721,7 +1976,7 @@ export async function shopHistory(
         })),
       criteria: dayCriteria,
       fill: fills.get(date) ?? null,
-      fillSlots: slots.get(date) ?? { morning: null, afternoon: null },
+      fillSlots: slots.get(date) ?? { morning: null, afternoon: null, evening: null },
       shopStatus: shop.status,
       shopScore: shop.score,
       rating,

@@ -9,6 +9,7 @@ import {
   type ThresholdConfig,
 } from '@/lib/types';
 import { activePreset, periodPresets } from '@/lib/periods';
+import type { LeaderOptions } from '@/lib/kpi';
 import { ClearButton } from './ClearButton';
 import { DateRangePicker } from './DateRangePicker';
 import { ShopSearch, type ShopOption } from './ShopFilter';
@@ -21,8 +22,10 @@ export interface FilterState {
   criterion?: CriterionKey;
   status?: string;
   shop?: string;
-  /** Замер витрины: 'morning' — на 08:00, 'afternoon' — на 16:00; пусто — итог дня. */
+  /** Замер витрины: 'morning' — на 08:00, 'afternoon' — на 16:00, 'evening' — на 18:30; пусто — итог дня. */
   slot?: string;
+  /** Руководитель лавки: «td:Имя» — ТД, «dir:Имя» — директор (см. leaderKey). */
+  leader?: string;
 }
 
 export interface RegionOptions {
@@ -52,6 +55,7 @@ export function Filters({
   showSlot = false,
   slotDisabled,
   criterionDefault = DEFAULT_CRITERION,
+  leaders,
 }: {
   base: string;
   state: FilterState;
@@ -63,7 +67,7 @@ export function Filters({
   showCriterion?: boolean;
   showStatus?: boolean;
   /**
-   * Поле «Витрина»: итог дня, наполнение на 08:00 или на 16:00. Только там,
+   * Поле «Витрина»: итог дня или наполнение на 08:00, 16:00, 18:30. Только там,
    * где страница умеет считать по одному замеру: сводка и радар.
    */
   showSlot?: boolean;
@@ -79,6 +83,11 @@ export function Filters({
    * какое значение в URL не писать, — см. apply.
    */
   criterionDefault?: CriterionKey;
+  /**
+   * Поле «Руководитель» — директора и ТД лавок. Только на КПИ: там у лавки
+   * есть руководитель, остальные страницы его не считают.
+   */
+  leaders?: LeaderOptions;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -147,6 +156,7 @@ export function Filters({
     criterion: showCriterion && criterion !== criterionDefault,
     status: showStatus && !!state.status && state.status !== 'all',
     slot: showSlot && !slotDisabled && !!state.slot,
+    leader: !!leaders && !!state.leader,
   };
   const activeCount = Object.values(active).filter(Boolean).length;
 
@@ -162,7 +172,7 @@ export function Filters({
    */
   const resetAll = useCallback(() => {
     const q = new URLSearchParams(searchParams.toString());
-    for (const key of ['from', 'to', 'region', 'shop', 'criterion', 'status', 'slot']) q.delete(key);
+    for (const key of ['from', 'to', 'region', 'shop', 'criterion', 'status', 'slot', 'leader']) q.delete(key);
     go(q);
   }, [go, searchParams]);
 
@@ -228,6 +238,49 @@ export function Filters({
         </select>
       </Field>
 
+      {leaders && (
+        <Field
+          label="Руководитель"
+          onClear={active.leader ? () => apply({ leader: undefined }) : undefined}
+        >
+          <select
+            value={state.leader ?? ''}
+            onChange={(e) => apply({ leader: e.target.value || undefined })}
+          >
+            <option value="">Все</option>
+            {leaders.territorial.length > 0 && (
+              <optgroup label="Территориальные директора">
+                {leaders.territorial.map((name) => (
+                  <option key={name} value={`td:${name}`}>
+                    {name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {leaders.directors.length > 0 && (
+              <optgroup label="Директора">
+                {leaders.directors.map((name) => (
+                  <option key={name} value={`dir:${name}`}>
+                    {name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {/* Выбранный руководитель мог выпасть из списка, когда сменили РМ:
+                оставляем его видимым, иначе поле показывало бы «Все» при
+                отфильтрованной таблице. */}
+            {state.leader &&
+              ![...leaders.territorial.map((n) => `td:${n}`), ...leaders.directors.map((n) => `dir:${n}`)].includes(
+                state.leader,
+              ) && (
+                <optgroup label="Не у выбранного РМ">
+                  <option value={state.leader}>{state.leader.replace(/^(td|dir):/, '')}</option>
+                </optgroup>
+              )}
+          </select>
+        </Field>
+      )}
+
       {shops && (
         <Field label="Лавка">
           <ShopSearch
@@ -277,7 +330,7 @@ export function Filters({
         </Field>
       )}
 
-      {/* Замеров два, утром и в 16:00, а итог дня — их среднее. По итогу
+      {/* Замеров три — утром, в 16:00 и (с 26.10) в 18:30, итог дня — их среднее. По итогу
           не видно, когда витрина просела: полная с утра и пустая к вечеру
           лавка выглядит так же, как наполовину пустая весь день. */}
       {showSlot && (
@@ -291,9 +344,10 @@ export function Filters({
             disabled={!!slotDisabled}
             title={slotDisabled}
           >
-            <option value="all">Итог дня (среднее 08:00 и 16:00)</option>
+            <option value="all">Итог дня (среднее замеров)</option>
             <option value="morning">{SLOT_FILTER_TITLE.morning}</option>
             <option value="afternoon">{SLOT_FILTER_TITLE.afternoon}</option>
+            <option value="evening">{SLOT_FILTER_TITLE.evening}</option>
           </select>
         </Field>
       )}

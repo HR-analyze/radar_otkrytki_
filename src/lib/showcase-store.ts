@@ -27,11 +27,11 @@ import type { CriterionStatusRow, ShowcaseRow } from './types';
  * Здесь лежит только текущее значение. «Было 95%, стало 90%, в 13:40» —
  * в журнале правок, см. showcase-audit.ts: он пишется этой же транзакцией.
  *
- * Замеров в день два: утренний (`days`, как было всегда) и в 16:00
- * (`afternoon`). Итог дня для радара, статусов и балла лавки — среднее двух
- * (см. dayFill): утром 100%, в 16:00 50% — значит, 75%. Конкурс по витринам
- * считается только по утреннему замеру, как и до появления второго (см.
- * contest в queries.ts).
+ * Замеров в день три: утренний (`days`, как было всегда), в 16:00
+ * (`afternoon`) и с 26.10.2026 в 18:30 (`evening`). Итог дня для радара,
+ * статусов и балла лавки — среднее заполненных (см. dayFill): утром 100%, в
+ * 16:00 50% — значит, 75%. Конкурс по витринам считается только по утреннему
+ * замеру, как и до появления остальных (см. contest в queries.ts).
  */
 
 export interface ShowcaseStore {
@@ -39,6 +39,8 @@ export interface ShowcaseStore {
   days: Record<string, Record<string, number>>;
   /** Замер в 16:00: дата → код лавки → доля 0–1. */
   afternoon: Record<string, Record<string, number>>;
+  /** Замер в 18:30 (с 26.10.2026): дата → код лавки → доля 0–1. */
+  evening: Record<string, Record<string, number>>;
   /** Дата → код лавки → комментарий. Хранится отдельно от процента. */
   notes: Record<string, Record<string, string>>;
   /** Дата → когда её последний раз правили. */
@@ -53,11 +55,13 @@ export interface ShowcaseEdit {
   shopCode: string;
   /**
    * Утренний замер: доля 0–1, null — стереть значение, undefined — не трогать
-   * (правят только комментарий или замер в 16:00).
+   * (правят только комментарий или другой замер).
    */
   fill?: number | null;
   /** Замер в 16:00 — то же самое: null стирает, undefined не трогает. */
   afternoonFill?: number | null;
+  /** Замер в 18:30 — так же. */
+  eveningFill?: number | null;
   /** Комментарий; пустая строка стирает, undefined — не трогать. */
   note?: string | null;
 }
@@ -65,6 +69,7 @@ export interface ShowcaseEdit {
 const EMPTY: ShowcaseStore = {
   days: {},
   afternoon: {},
+  evening: {},
   notes: {},
   touched: {},
   updatedAt: null,
@@ -72,7 +77,11 @@ const EMPTY: ShowcaseStore = {
 };
 
 /** Таблица базы под каждый замер: утренний жил в showcase_fill всегда. */
-const FILL_TABLE = { fill: 'showcase_fill', fill_afternoon: 'showcase_fill_afternoon' } as const;
+const FILL_TABLE = {
+  fill: 'showcase_fill',
+  fill_afternoon: 'showcase_fill_afternoon',
+  fill_evening: 'showcase_fill_evening',
+} as const;
 
 /** Закоммиченный сид: начальное наполнение базы и запасной вариант без диска. */
 export function showcaseSeedPath(): string {
@@ -102,7 +111,10 @@ export async function showcaseVersion(): Promise<string> {
   const db = await openManualDb();
   if (!db) {
     const seed = readSeed();
-    return `seed|${seed.updatedAt ?? ''}|${Object.keys(seed.days).length}|${Object.keys(seed.afternoon).length}`;
+    return (
+      `seed|${seed.updatedAt ?? ''}|${Object.keys(seed.days).length}|` +
+      `${Object.keys(seed.afternoon).length}|${Object.keys(seed.evening).length}`
+    );
   }
   seedOnce(db);
 
@@ -111,6 +123,7 @@ export async function showcaseVersion(): Promise<string> {
       `SELECT COUNT(*) AS n, COALESCE(MAX(updated_at), '') AS at FROM (
          SELECT updated_at FROM showcase_fill
          UNION ALL SELECT updated_at FROM showcase_fill_afternoon
+         UNION ALL SELECT updated_at FROM showcase_fill_evening
        )`,
     )
     .get() as { n: number; at: string };
@@ -137,6 +150,7 @@ export async function readShowcase(): Promise<ShowcaseStore> {
   };
   const days = readFills(FILL_TABLE.fill);
   const afternoon = readFills(FILL_TABLE.fill_afternoon);
+  const evening = readFills(FILL_TABLE.fill_evening);
 
   const notes: ShowcaseStore['notes'] = {};
   const noteRows = db
@@ -157,6 +171,7 @@ export async function readShowcase(): Promise<ShowcaseStore> {
   return {
     days,
     afternoon,
+    evening,
     notes,
     touched,
     updatedAt: latest[latest.length - 1] ?? null,
@@ -195,7 +210,7 @@ export async function saveShowcaseEdits(
   }
   seedOnce(db);
 
-  // Оба замера пишутся одинаково, различается только таблица и имя поля в
+  // Все замеры пишутся одинаково, различается только таблица и имя поля в
   // журнале — поэтому один набор запросов на замер, а не копия кода.
   const statements = (table: string) => ({
     put: db.prepare(
@@ -208,6 +223,7 @@ export async function saveShowcaseEdits(
   const slots = {
     fill: statements(FILL_TABLE.fill),
     fill_afternoon: statements(FILL_TABLE.fill_afternoon),
+    fill_evening: statements(FILL_TABLE.fill_evening),
   };
   const putNote = db.prepare(
     `INSERT INTO showcase_note (date, shop_code, note, updated_at) VALUES (?, ?, ?, ?)
@@ -261,6 +277,9 @@ export async function saveShowcaseEdits(
       if (e.afternoonFill !== undefined && applyFill(e, 'fill_afternoon', e.afternoonFill)) {
         touched = true;
       }
+      if (e.eveningFill !== undefined && applyFill(e, 'fill_evening', e.eveningFill)) {
+        touched = true;
+      }
 
       if (e.note !== undefined) {
         const was = (currentNote.get(e.date, e.shopCode) as { note: string } | undefined)?.note;
@@ -310,6 +329,9 @@ function seedOnce(db: Awaited<ReturnType<typeof openManualDb>>): void {
   const putAfternoon = db.prepare(
     `INSERT OR IGNORE INTO showcase_fill_afternoon (date, shop_code, fill, updated_at) VALUES (?, ?, ?, ?)`,
   );
+  const putEvening = db.prepare(
+    `INSERT OR IGNORE INTO showcase_fill_evening (date, shop_code, fill, updated_at) VALUES (?, ?, ?, ?)`,
+  );
   const putNote = db.prepare(
     `INSERT OR IGNORE INTO showcase_note (date, shop_code, note, updated_at) VALUES (?, ?, ?, ?)`,
   );
@@ -325,11 +347,14 @@ function seedOnce(db: Awaited<ReturnType<typeof openManualDb>>): void {
       for (const [shopCode, fill] of Object.entries(values)) put.run(date, shopCode, fill, at(date));
       touch.run(date, at(date));
     }
-    for (const [date, values] of Object.entries(seed.afternoon)) {
-      for (const [shopCode, fill] of Object.entries(values)) {
-        putAfternoon.run(date, shopCode, fill, at(date));
+    for (const [put, source] of [
+      [putAfternoon, seed.afternoon],
+      [putEvening, seed.evening],
+    ] as const) {
+      for (const [date, values] of Object.entries(source)) {
+        for (const [shopCode, fill] of Object.entries(values)) put.run(date, shopCode, fill, at(date));
+        touch.run(date, at(date));
       }
-      touch.run(date, at(date));
     }
     for (const [date, values] of Object.entries(seed.notes ?? {})) {
       for (const [shopCode, note] of Object.entries(values)) {
@@ -350,12 +375,13 @@ export function readSeed(): Omit<ShowcaseStore, 'source'> {
       days: raw.days ?? {},
       // В сидах до второго замера ключа нет — это «в 16:00 не мерили».
       afternoon: raw.afternoon ?? {},
+      evening: raw.evening ?? {},
       notes: raw.notes ?? {},
       touched: raw.touched ?? {},
       updatedAt: raw.updatedAt ?? null,
     };
   } catch {
-    return { days: {}, afternoon: {}, notes: {}, touched: {}, updatedAt: null };
+    return { days: {}, afternoon: {}, evening: {}, notes: {}, touched: {}, updatedAt: null };
   }
 }
 
@@ -378,6 +404,7 @@ export function writeSeed(store: Omit<ShowcaseStore, 'source'>): string {
   };
   const days = sorted(store.days);
   const afternoon = sorted(store.afternoon ?? {});
+  const evening = sorted(store.evening ?? {});
 
   // Комментарии тоже в копию: иначе единственное место, где они есть, — база,
   // а у неё по определению нет резервной копии в репозитории.
@@ -390,7 +417,9 @@ export function writeSeed(store: Omit<ShowcaseStore, 'source'>): string {
 
   const touched: ShowcaseStore['touched'] = {};
   for (const date of Object.keys(store.touched).sort()) {
-    if (days[date] || afternoon[date] || notes[date]) touched[date] = store.touched[date];
+    if (days[date] || afternoon[date] || evening[date] || notes[date]) {
+      touched[date] = store.touched[date];
+    }
   }
 
   fs.writeFileSync(
@@ -405,6 +434,7 @@ export function writeSeed(store: Omit<ShowcaseStore, 'source'>): string {
         touched,
         days,
         afternoon,
+        evening,
         notes,
       },
       null,
@@ -420,24 +450,32 @@ function round(fill: number): number {
 }
 
 /**
- * Итог дня по двум замерам, доля 0–1 — их среднее: утром 100%, в 16:00 50% —
- * это 75%. Незаполненный замер итог не трогает: если в 16:00 не мерили, итог
- * равен утреннему как есть, и наоборот. Формула среднего (до целого процента,
- * половинка вверх) — в day-fill.ts: по ней же превью статуса в редакторе.
+ * Итог дня по замерам, доля 0–1 — их среднее: утром 100%, в 16:00 50% — это
+ * 75%. Незаполненный замер итог не трогает: если в 16:00 не мерили, итог
+ * равен утреннему как есть, и наоборот; так же и с 18:30. Формула среднего (до
+ * целого процента, половинка вверх) — в day-fill.ts: по ней же превью статуса
+ * в редакторе.
  */
-export function dayFill(morning: number | null, afternoon: number | null): number | null {
-  if (morning == null) return afternoon;
-  if (afternoon == null) return morning;
-  return averagePercent(morning * 100, afternoon * 100) / 100;
+export function dayFill(
+  morning: number | null,
+  afternoon: number | null,
+  evening: number | null = null,
+): number | null {
+  const filled = [morning, afternoon, evening].filter((v): v is number => v != null);
+  if (filled.length === 0) return null;
+  // Один замер — он сам, без пересчёта через проценты: 0.955 не должно
+  // превращаться в 0.96 только оттого, что других замеров нет.
+  if (filled.length === 1) return filled[0];
+  return averagePercent(...filled.map((v) => v * 100)) / 100;
 }
 
 /**
  * Витрины в том виде, в каком их ждёт дашборд: строки наполнения плюс статусы
  * критерия «витрина», посчитанные по действующим порогам.
  *
- * `fill` и статус строки — итог дня (среднее двух замеров, см. dayFill), по
- * нему красится радар и считается балл лавки. Сами замеры лежат рядом: конкурсу
- * нужен утренний, фильтру «Витрина» — любой из двух.
+ * `fill` и статус строки — итог дня (среднее замеров, см. dayFill), по нему
+ * красится радар и считается балл лавки. Сами замеры лежат рядом: конкурсу
+ * нужен утренний, фильтру «Витрина» — любой из них.
  */
 export function showcaseRowsFromStore(store: Omit<ShowcaseStore, 'source'>): {
   showcase: ShowcaseRow[];
@@ -448,20 +486,27 @@ export function showcaseRowsFromStore(store: Omit<ShowcaseStore, 'source'>): {
   const criteria: CriterionStatusRow[] = [];
 
   const afternoonDays = store.afternoon ?? {};
-  const dates = new Set([...Object.keys(store.days), ...Object.keys(afternoonDays)]);
+  const eveningDays = store.evening ?? {};
+  const dates = new Set([
+    ...Object.keys(store.days),
+    ...Object.keys(afternoonDays),
+    ...Object.keys(eveningDays),
+  ]);
   for (const date of [...dates].sort()) {
     const codes = new Set([
       ...Object.keys(store.days[date] ?? {}),
       ...Object.keys(afternoonDays[date] ?? {}),
+      ...Object.keys(eveningDays[date] ?? {}),
     ]);
     for (const shopCode of [...codes].sort()) {
       const morning = store.days[date]?.[shopCode] ?? null;
       const afternoon = afternoonDays[date]?.[shopCode] ?? null;
+      const evening = eveningDays[date]?.[shopCode] ?? null;
       // Хотя бы один замер есть: иначе лавки не было бы в codes.
-      const fill = dayFill(morning, afternoon)!;
+      const fill = dayFill(morning, afternoon, evening)!;
       const status = statusForFill(fill, config);
 
-      showcase.push({ date, shopCode, fill, status, morning, afternoon });
+      showcase.push({ date, shopCode, fill, status, morning, afternoon, evening });
       criteria.push({
         date,
         shopCode,
@@ -479,5 +524,5 @@ export function showcaseRowsFromStore(store: Omit<ShowcaseStore, 'source'>): {
 
 /** Пустой стор — для тестов и для случая, когда данных нет вовсе. */
 export function emptyShowcaseStore(): ShowcaseStore {
-  return { ...EMPTY, days: {}, afternoon: {}, notes: {}, touched: {} };
+  return { ...EMPTY, days: {}, afternoon: {}, evening: {}, notes: {}, touched: {} };
 }
